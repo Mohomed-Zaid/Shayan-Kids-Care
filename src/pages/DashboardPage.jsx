@@ -20,7 +20,7 @@ function StatCard({ label, value, icon: Icon, color, iconBg, isCurrency }) {
         </div>
       </div>
       <div className="mt-3 text-2xl font-bold text-slate-900">
-        {isCurrency ? Number(value).toFixed(2) : value}
+        {isCurrency ? Number(value).toLocaleString(undefined, { minimumFractionDigits: 2 }) : value}
       </div>
     </div>
   )
@@ -142,7 +142,7 @@ export default function DashboardPage() {
                     <span className="font-medium text-slate-900">INV-{String(inv.invoice_number ?? '').padStart(4, '0')}</span>
                   </td>
                   <td className="px-5 py-3.5 text-slate-600">{inv.customers?.name ?? '-'}</td>
-                  <td className="px-5 py-3.5 font-medium text-slate-900">{Number(inv.total_amount ?? 0).toFixed(2)}</td>
+                  <td className="px-5 py-3.5 font-medium text-slate-900">{Number(inv.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                   <td className="px-5 py-3.5 text-slate-500">
                     {new Date(inv.created_at).toLocaleDateString()} {new Date(inv.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </td>

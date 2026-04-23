@@ -216,7 +216,7 @@ export default function InvoiceCreatePage() {
           <div className="flex items-end justify-end">
             <div className="text-right bg-slate-50 rounded-lg px-5 py-3 border border-slate-200/60">
               <div className="text-xs text-slate-500 uppercase tracking-wide font-medium">Grand Total</div>
-              <div className="text-2xl font-bold text-slate-900 mt-0.5">{grandTotal.toFixed(2)}</div>
+              <div className="text-2xl font-bold text-slate-900 mt-0.5">{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
             </div>
           </div>
         </div>
@@ -286,7 +286,7 @@ export default function InvoiceCreatePage() {
                     min={1}
                   />
                 </td>
-                <td className="px-5 py-3 font-medium text-slate-900">{Number(l.total ?? 0).toFixed(2)}</td>
+                <td className="px-5 py-3 font-medium text-slate-900">{Number(l.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                 <td className="px-5 py-3 text-right">
                   <button
                     onClick={() => removeLine(idx)}

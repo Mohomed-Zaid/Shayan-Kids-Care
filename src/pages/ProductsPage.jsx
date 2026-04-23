@@ -233,7 +233,7 @@ export default function ProductsPage() {
                 <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
                   <td className="px-5 py-3.5 font-medium text-slate-900">{row.name}</td>
                   <td className="px-5 py-3.5 text-slate-500">{row.code}</td>
-                  <td className="px-5 py-3.5 font-medium text-slate-900">{Number(row.price ?? 0).toFixed(2)}</td>
+                  <td className="px-5 py-3.5 font-medium text-slate-900">{Number(row.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                   <td className="px-5 py-3.5">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
                       (row.stock ?? 0) <= 0 ? 'bg-red-100 text-red-700' : (row.stock ?? 0) <= 5 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
