@@ -112,7 +112,20 @@ export default function OrderCreatePage() {
       return
     }
 
-    // No stock validation for orders
+    // Check stock availability
+    const stockErrors = []
+    for (const l of cleanedLines) {
+      const product = productById.get(l.product_id)
+      const available = product?.stock ?? 0
+      if (l.quantity > available) {
+        stockErrors.push(`${product?.name ?? 'Product'}: requested ${l.quantity}, only ${available} in stock`)
+      }
+    }
+    if (stockErrors.length > 0) {
+      setError('Insufficient stock: ' + stockErrors.join('; '))
+      return
+    }
+
     setSaving(true)
     try {
       const { data: order, error: ordErr } = await supabase
@@ -195,13 +208,6 @@ export default function OrderCreatePage() {
                 <option value="credit">Credit</option>
                 <option value="cash">Cash</option>
               </select>
-            </div>
-          </div>
-
-          <div className="flex items-end justify-end">
-            <div className="text-right bg-slate-50 rounded-lg px-5 py-3 border border-slate-200/60">
-              <div className="text-xs text-slate-500 uppercase tracking-wide font-medium">Grand Total</div>
-              <div className="text-2xl font-bold text-slate-900 mt-0.5">Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
             </div>
           </div>
         </div>
@@ -289,7 +295,13 @@ export default function OrderCreatePage() {
         </table>
       </div>
 
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex items-center justify-between">
+        <div className="bg-slate-50 rounded-lg px-5 py-3 border border-slate-200/60">
+          <div className="text-xs text-slate-500 uppercase tracking-wide font-medium">Grand Total</div>
+          <div className="text-2xl font-bold text-slate-900 mt-0.5">Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+        </div>
+
+        <div className="flex items-center gap-2">
         <button
           onClick={() => navigate('/orders')}
           className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors"
@@ -304,6 +316,7 @@ export default function OrderCreatePage() {
         >
           {saving ? 'Saving...' : 'Create Order'}
         </button>
+        </div>
       </div>
     </div>
   )

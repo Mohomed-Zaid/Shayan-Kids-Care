@@ -264,13 +264,6 @@ export default function InvoiceEditPage() {
               </select>
             </div>
           </div>
-
-          <div className="flex items-end justify-end">
-            <div className="text-right bg-slate-50 rounded-lg px-5 py-3 border border-slate-200/60">
-              <div className="text-xs text-slate-500 uppercase tracking-wide font-medium">Grand Total</div>
-              <div className="text-2xl font-bold text-slate-900 mt-0.5">Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-            </div>
-          </div>
         </div>
 
         {error ? (
@@ -356,7 +349,13 @@ export default function InvoiceEditPage() {
         </table>
       </div>
 
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex items-center justify-between">
+        <div className="bg-slate-50 rounded-lg px-5 py-3 border border-slate-200/60">
+          <div className="text-xs text-slate-500 uppercase tracking-wide font-medium">Grand Total</div>
+          <div className="text-2xl font-bold text-slate-900 mt-0.5">Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+        </div>
+
+        <div className="flex items-center gap-2">
         <button
           onClick={() => navigate(`/invoices/${id}`)}
           className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors"
@@ -372,6 +371,7 @@ export default function InvoiceEditPage() {
           <Save size={16} />
           {saving ? 'Saving...' : 'Update Invoice'}
         </button>
+        </div>
       </div>
     </div>
   )

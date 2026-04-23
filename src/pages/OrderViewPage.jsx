@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import html2pdf from 'html2pdf.js'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
-import { ArrowLeft, CheckCircle, XCircle, ArrowRightLeft, ShoppingCart, Printer, Download } from 'lucide-react'
+import { ArrowLeft, CheckCircle, XCircle, ArrowRightLeft, ShoppingCart, Printer, Download, Trash2 } from 'lucide-react'
 
 const statusConfig = {
   pending: { label: 'Pending', bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
@@ -87,6 +87,15 @@ export default function OrderViewPage() {
     if (error) { toast.error(error.message); return }
     toast.success('Order cancelled')
     setOrder({ ...order, status: 'cancelled' })
+  }
+
+  const onDelete = async () => {
+    if (!confirm('Delete this order and all its items?')) return
+    await supabase.from('order_items').delete().eq('order_id', id)
+    const { error: err } = await supabase.from('orders').delete().eq('id', id)
+    if (err) { toast.error(err.message); return }
+    toast.success('Order deleted')
+    navigate('/orders', { replace: true })
   }
 
   const onConvert = async () => {
@@ -214,6 +223,10 @@ export default function OrderViewPage() {
               Cancel
             </button>
           )}
+          <button onClick={onDelete} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">
+            <Trash2 size={15} />
+            Delete
+          </button>
         </div>
       </div>
 

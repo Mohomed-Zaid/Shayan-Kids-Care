@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
-import { Plus, Eye, ShoppingCart, CheckCircle, XCircle, ArrowRightLeft } from 'lucide-react'
+import { Plus, Eye, ShoppingCart, CheckCircle, XCircle, ArrowRightLeft, Trash2 } from 'lucide-react'
 
 const statusConfig = {
   pending: { label: 'Pending', bg: 'bg-slate-100', text: 'text-slate-700' },
@@ -49,6 +49,15 @@ export default function OrdersPage() {
     const { error } = await supabase.from('orders').update({ status: 'cancelled' }).eq('id', order.id)
     if (error) { toast.error(error.message); return }
     toast.success('Order cancelled')
+    await load()
+  }
+
+  const onDelete = async (order) => {
+    if (!confirm('Delete this order and all its items?')) return
+    await supabase.from('order_items').delete().eq('order_id', order.id)
+    const { error: err } = await supabase.from('orders').delete().eq('id', order.id)
+    if (err) { toast.error(err.message); return }
+    toast.success('Order deleted')
     await load()
   }
 
@@ -199,6 +208,9 @@ export default function OrdersPage() {
                             <XCircle size={15} />
                           </button>
                         )}
+                        <button onClick={() => onDelete(o)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete">
+                          <Trash2 size={15} />
+                        </button>
                       </div>
                     </td>
                   </tr>
