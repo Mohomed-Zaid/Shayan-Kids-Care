@@ -19,6 +19,7 @@ export default function InvoiceEditPage() {
 
   const [customerId, setCustomerId] = useState('')
   const [repId, setRepId] = useState('')
+  const [paymentType, setPaymentType] = useState('credit')
   const [lines, setLines] = useState([emptyLine()])
 
   const [originalItems, setOriginalItems] = useState([])
@@ -36,7 +37,7 @@ export default function InvoiceEditPage() {
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
         supabase.from('products').select('*').order('created_at', { ascending: false }),
         supabase.from('employees').select('*').order('created_at', { ascending: false }),
-        supabase.from('invoices').select('id, customer_id, rep_id, total_amount').eq('id', id).single(),
+        supabase.from('invoices').select('id, customer_id, rep_id, total_amount, payment_type').eq('id', id).single(),
         supabase.from('invoice_items').select('id, product_id, quantity, price, total').eq('invoice_id', id),
       ])
 
@@ -55,6 +56,7 @@ export default function InvoiceEditPage() {
       const inv = invRes.data
       setCustomerId(inv.customer_id ?? '')
       setRepId(inv.rep_id ?? '')
+      setPaymentType(inv.payment_type ?? 'credit')
 
       const items = itemsRes.data ?? []
       setOriginalItems(items)
@@ -169,7 +171,7 @@ export default function InvoiceEditPage() {
       // Update invoice header
       const { error: invErr } = await supabase
         .from('invoices')
-        .update({ customer_id: customerId, rep_id: repId || null, total_amount: grandTotal })
+        .update({ customer_id: customerId, rep_id: repId || null, total_amount: grandTotal, payment_type: paymentType })
         .eq('id', id)
 
       if (invErr) throw invErr
@@ -247,6 +249,18 @@ export default function InvoiceEditPage() {
                 {reps.filter((r) => r.is_rep).map((r) => (
                   <option key={r.id} value={r.id}>{r.name}</option>
                 ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Payment Type</label>
+              <select
+                value={paymentType}
+                onChange={(e) => setPaymentType(e.target.value)}
+                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+              >
+                <option value="credit">Credit</option>
+                <option value="cash">Cash</option>
               </select>
             </div>
           </div>

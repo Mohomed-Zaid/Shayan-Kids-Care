@@ -26,7 +26,7 @@ export default function InvoiceViewPage() {
 
       const invRes = await supabase
         .from('invoices')
-        .select('id, invoice_number, total_amount, created_at, customers(name, address, phone), employees(id, name, is_rep)')
+        .select('id, invoice_number, total_amount, created_at, payment_type, customers(name, address, phone), employees(id, name, is_rep)')
         .eq('id', id)
         .single()
 
@@ -269,7 +269,7 @@ export default function InvoiceViewPage() {
 
             <div className="px-8 py-2 border-t-2 border-slate-800 text-center text-xs text-slate-500">
               <div className="font-semibold text-slate-700">Shayan Kids Care &amp; Toys Store</div>
-              <div>Credit Bill — Total due in 30 days only.</div>
+              <div>{invoice?.payment_type === 'cash' ? 'Cash Bill — Payment received.' : 'Credit Bill — Total due in 30 days only.'}</div>
               <div>shayankidscare@gmail.com</div>
             </div>
           </div>
