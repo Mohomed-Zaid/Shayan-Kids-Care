@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import html2pdf from 'html2pdf.js'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
-import { ArrowLeft, Printer, Download, Trash2 } from 'lucide-react'
+import { ArrowLeft, Printer, Download, Trash2, Pencil } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 
 export default function InvoiceViewPage() {
@@ -146,6 +146,10 @@ export default function InvoiceViewPage() {
             <Download size={15} />
             Download PDF
           </button>
+          <Link to={`/invoices/${id}/edit`} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
+            <Pencil size={15} />
+            Edit
+          </Link>
           <button onClick={onDelete} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">
             <Trash2 size={15} />
             Delete

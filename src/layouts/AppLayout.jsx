@@ -21,6 +21,7 @@ function usePageTitle() {
     if (path.startsWith('/products')) return 'Products'
     if (path.startsWith('/customers')) return 'Customers'
     if (path === '/invoices/new') return 'Create Invoice'
+    if (path.endsWith('/edit')) return 'Edit Invoice'
     if (path.startsWith('/invoices/')) return 'Invoice'
     if (path.startsWith('/invoices')) return 'Invoices'
     if (path.startsWith('/reps')) return 'Employees'

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Calculator, UserCheck, Calendar, DollarSign, FileText, Download, TrendingUp } from 'lucide-react'
 
-const COMMISSION_RATE = 0.025
+const COMMISSION_RATES = { munzir: 0.025, default: 0.01 }
 
 const months = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -72,9 +72,9 @@ export default function CommissionPage() {
 
     const invoiceList = data ?? []
     const totalSales = invoiceList.reduce((sum, inv) => sum + (inv.total_amount ?? 0), 0)
-    const commission = totalSales * COMMISSION_RATE
-
     const repName = reps.find(r => String(r.id) === String(selectedRep))?.name ?? 'N/A'
+    const rate = repName.toLowerCase().includes('munzir') ? COMMISSION_RATES.munzir : COMMISSION_RATES.default
+    const commission = totalSales * rate
 
     setResult({
       repName,
@@ -83,6 +83,7 @@ export default function CommissionPage() {
       invoiceCount: invoiceList.length,
       totalSales,
       commission,
+      rate,
     })
 
     setInvoices(invoiceList)
@@ -97,7 +98,7 @@ export default function CommissionPage() {
       `INV-${String(inv.invoice_number ?? '').padStart(4, '0')},${inv.customers?.name ?? '-'},${inv.total_amount ?? 0},${new Date(inv.created_at).toLocaleDateString()}`
     )
 
-    const summary = `\n\nSummary\nRep,${result.repName}\nMonth,${result.month} ${result.year}\nInvoices,${result.invoiceCount}\nTotal Sales,Rs. ${result.totalSales.toFixed(2)}\nCommission (2.5%),Rs. ${result.commission.toFixed(2)}`
+    const summary = `\n\nSummary\nRep,${result.repName}\nMonth,${result.month} ${result.year}\nInvoices,${result.invoiceCount}\nTotal Sales,Rs. ${result.totalSales.toFixed(2)}\nCommission (${(result.rate * 100).toFixed(2)}%),Rs. ${result.commission.toFixed(2)}`
 
     const csv = header + '\n' + rows.join('\n') + summary
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -129,7 +130,7 @@ export default function CommissionPage() {
           </div>
           <div>
             <h1 className="text-2xl font-extrabold text-white">Commission Report</h1>
-            <p className="text-slate-400 text-sm mt-0.5">Calculate 2.5% commission for sales representatives</p>
+            <p className="text-slate-400 text-sm mt-0.5">Calculate commission for sales representatives (Munzir: 2.5%, Others: 1%)</p>
           </div>
         </div>
       </div>
@@ -227,11 +228,11 @@ export default function CommissionPage() {
             </div>
 
             <div className="bg-gradient-to-br from-amber-500 to-orange-500 rounded-2xl p-5 shadow-lg">
-              <div className="text-xs font-semibold text-white uppercase tracking-wider opacity-90">Commission (2.5%)</div>
+              <div className="text-xs font-semibold text-white uppercase tracking-wider opacity-90">Commission ({(result.rate * 100).toFixed(2)}%)</div>
               <div className="mt-3 text-2xl font-extrabold text-white">{fmt(result.commission)}</div>
               <div className="mt-1 flex items-center gap-1 text-xs text-amber-100 font-medium">
                 <TrendingUp size={12} />
-                <span>2.5% rate</span>
+                <span>{(result.rate * 100).toFixed(2)}% rate</span>
               </div>
             </div>
           </div>
