@@ -12,6 +12,7 @@ import InvoicesPage from './pages/InvoicesPage'
 import InvoiceCreatePage from './pages/InvoiceCreatePage'
 import InvoiceViewPage from './pages/InvoiceViewPage'
 import RepsPage from './pages/RepsPage'
+import CommissionPage from './pages/CommissionPage'
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="/invoices" element={<InvoicesPage />} />
             <Route path="/invoices/new" element={<InvoiceCreatePage />} />
             <Route path="/invoices/:id" element={<InvoiceViewPage />} />
+            <Route path="/commission" element={<CommissionPage />} />
           </Route>
         </Route>
 
