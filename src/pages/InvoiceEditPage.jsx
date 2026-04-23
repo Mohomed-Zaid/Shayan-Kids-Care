@@ -297,8 +297,8 @@ export default function InvoiceEditPage() {
           <thead className="bg-slate-50/50 border-b border-slate-200 text-slate-500">
             <tr>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Product</th>
-              <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Price</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Qty</th>
+              <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Price</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Total</th>
               <th className="px-5 py-3"></th>
             </tr>
@@ -323,19 +323,20 @@ export default function InvoiceEditPage() {
                 <td className="px-5 py-3">
                   <input
                     type="number"
-                    step="0.01"
-                    value={l.price}
-                    onChange={(e) => updateLine(idx, { price: e.target.value })}
-                    className="w-32 rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+                    value={l.quantity}
+                    onChange={(e) => updateLine(idx, { quantity: e.target.value })}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addLine() } }}
+                    className="w-24 rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+                    min={1}
                   />
                 </td>
                 <td className="px-5 py-3">
                   <input
                     type="number"
-                    value={l.quantity}
-                    onChange={(e) => updateLine(idx, { quantity: e.target.value })}
-                    className="w-24 rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
-                    min={1}
+                    step="0.01"
+                    value={l.price}
+                    onChange={(e) => updateLine(idx, { price: e.target.value })}
+                    className="w-32 rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
                   />
                 </td>
                 <td className="px-5 py-3 font-medium text-slate-900">Rs. {Number(l.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
