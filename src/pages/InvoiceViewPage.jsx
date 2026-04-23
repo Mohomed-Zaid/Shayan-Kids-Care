@@ -156,10 +156,10 @@ export default function InvoiceViewPage() {
       <div className="bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-sm">
         <div
           ref={printRef}
-          className="bg-white print-area"
+          className="bg-white print-area min-h-[260mm] flex flex-col"
         >
           {/* Header */}
-          <div className="px-8 pt-6 pb-4 flex items-start justify-between border-b-2 border-slate-800">
+          <div className="px-8 pt-3 pb-2 flex items-start justify-between border-b-2 border-slate-800">
             <div className="flex items-center gap-4">
               <img src={logo} alt="Logo" className="h-14 w-14 rounded-lg object-contain" />
               <div>
@@ -175,7 +175,7 @@ export default function InvoiceViewPage() {
           </div>
 
           {/* From / Bill To */}
-          <div className="px-8 py-4 grid grid-cols-2 gap-6 border-b border-slate-200">
+          <div className="px-8 py-2 flex justify-between border-b border-slate-200">
             <div>
               <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">From</div>
               <div className="text-sm text-slate-700 space-y-1">
@@ -188,7 +188,7 @@ export default function InvoiceViewPage() {
               </div>
             </div>
 
-            <div>
+            <div className="text-left">
               <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Bill To</div>
               <div className="text-sm text-slate-700 space-y-1">
                 <div className="font-bold text-slate-900">{customer?.name ?? '-'}</div>
@@ -202,7 +202,7 @@ export default function InvoiceViewPage() {
           </div>
 
           {/* Items Table */}
-          <div className="px-8 py-4">
+          <div className="px-8 py-2">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-800 text-white">
@@ -216,11 +216,11 @@ export default function InvoiceViewPage() {
               <tbody>
                 {items.map((it, idx) => (
                   <tr key={it.id} className={`border-b border-slate-100 ${idx % 2 !== 0 ? 'bg-slate-50' : ''}`}>
-                    <td className="px-3 py-2 text-slate-600">{it.products?.code ?? '-'}</td>
-                    <td className="px-3 py-2 text-slate-900 font-medium">{it.products?.name ?? '-'}</td>
-                    <td className="px-3 py-2 text-right text-slate-700">{it.quantity}</td>
-                    <td className="px-3 py-2 text-right text-slate-700">Rs. {Number(it.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                    <td className="px-3 py-2 text-right text-slate-900 font-semibold">Rs. {Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td className="px-3 py-1.5 text-slate-600">{it.products?.code ?? '-'}</td>
+                    <td className="px-3 py-1.5 text-slate-900 font-medium">{it.products?.name ?? '-'}</td>
+                    <td className="px-3 py-1.5 text-right text-slate-700">{it.quantity}</td>
+                    <td className="px-3 py-1.5 text-right text-slate-700">Rs. {Number(it.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td className="px-3 py-1.5 text-right text-slate-900 font-semibold">Rs. {Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                   </tr>
                 ))}
               </tbody>
@@ -228,9 +228,9 @@ export default function InvoiceViewPage() {
           </div>
 
           {/* Totals */}
-          <div className="px-8 pb-4 flex justify-end">
+          <div className="px-8 pb-2 flex justify-end">
             <div className="w-full max-w-xs border border-slate-200 rounded">
-              <div className="px-4 py-2 flex justify-between text-sm">
+              <div className="px-4 py-1.5 flex justify-between text-sm">
                 <span className="text-slate-500">Subtotal</span>
                 <span className="text-slate-800">Rs. {Number(invoice.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
               </div>
@@ -242,31 +242,32 @@ export default function InvoiceViewPage() {
                 <span className="text-slate-500">Disc. Amount</span>
                 <span className="text-slate-800">Rs. 0.00</span>
               </div>
-              <div className="px-4 py-3 bg-slate-800 flex justify-between items-center border-t-2 border-slate-800">
+              <div className="px-4 py-2 bg-slate-800 flex justify-between items-center border-t-2 border-slate-800">
                 <span className="text-white font-bold text-sm uppercase tracking-wider">Total</span>
                 <span className="text-white font-extrabold text-lg">Rs. {Number(invoice.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
               </div>
             </div>
           </div>
 
-          {/* Signature Section */}
-          <div className="px-8 py-5 grid grid-cols-3 gap-8 border-t border-slate-200">
-            <div>
-              <div className="border-b border-slate-300 pb-2 text-xs text-slate-500 uppercase tracking-wider font-medium">Checking</div>
+          {/* Signature Section + Footer pushed to bottom */}
+          <div className="mt-auto">
+            <div className="px-8 py-3 grid grid-cols-3 gap-8 border-t border-slate-200">
+              <div>
+                <div className="border-b border-slate-300 pb-2 text-xs text-slate-500 uppercase tracking-wider font-medium">Checking</div>
+              </div>
+              <div>
+                <div className="border-b border-slate-300 pb-2 text-xs text-slate-500 uppercase tracking-wider font-medium">Received</div>
+              </div>
+              <div>
+                <div className="border-b border-slate-300 pb-2 text-xs text-slate-500 uppercase tracking-wider font-medium">Customer Signature</div>
+              </div>
             </div>
-            <div>
-              <div className="border-b border-slate-300 pb-2 text-xs text-slate-500 uppercase tracking-wider font-medium">Received</div>
-            </div>
-            <div>
-              <div className="border-b border-slate-300 pb-2 text-xs text-slate-500 uppercase tracking-wider font-medium">Customer Signature</div>
-            </div>
-          </div>
 
-          {/* Footer */}
-          <div className="px-8 py-3 border-t-2 border-slate-800 text-center text-xs text-slate-500">
-            <div className="font-semibold text-slate-700">Shayan Kids Care &amp; Toys Store</div>
-            <div>Credit Bill — Total due in 30 days only.</div>
-            <div>shayankidscare@gmail.com</div>
+            <div className="px-8 py-2 border-t-2 border-slate-800 text-center text-xs text-slate-500">
+              <div className="font-semibold text-slate-700">Shayan Kids Care &amp; Toys Store</div>
+              <div>Credit Bill — Total due in 30 days only.</div>
+              <div>shayankidscare@gmail.com</div>
+            </div>
           </div>
         </div>
       </div>
