@@ -14,6 +14,9 @@ import InvoiceViewPage from './pages/InvoiceViewPage'
 import RepsPage from './pages/RepsPage'
 import CommissionPage from './pages/CommissionPage'
 import InvoiceEditPage from './pages/InvoiceEditPage'
+import OrdersPage from './pages/OrdersPage'
+import OrderCreatePage from './pages/OrderCreatePage'
+import OrderViewPage from './pages/OrderViewPage'
 
 export default function App() {
   return (
@@ -34,6 +37,9 @@ export default function App() {
             <Route path="/invoices/:id" element={<InvoiceViewPage />} />
             <Route path="/invoices/:id/edit" element={<InvoiceEditPage />} />
             <Route path="/commission" element={<CommissionPage />} />
+            <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/orders/new" element={<OrderCreatePage />} />
+            <Route path="/orders/:id" element={<OrderViewPage />} />
           </Route>
         </Route>
 

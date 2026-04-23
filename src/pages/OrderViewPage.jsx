@@ -1,0 +1,287 @@
+import React, { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { supabase } from '../lib/supabaseClient'
+import { useToast } from '../contexts/ToastContext'
+import { ArrowLeft, CheckCircle, XCircle, ArrowRightLeft, ShoppingCart } from 'lucide-react'
+
+const statusConfig = {
+  pending: { label: 'Pending', bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
+  confirmed: { label: 'Confirmed', bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
+  converted: { label: 'Converted', bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200' },
+  cancelled: { label: 'Cancelled', bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200' },
+}
+
+export default function OrderViewPage() {
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const toast = useToast()
+
+  const [order, setOrder] = useState(null)
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [converting, setConverting] = useState(false)
+
+  useEffect(() => {
+    let mounted = true
+
+    const load = async () => {
+      setLoading(true)
+
+      const [ordRes, itemsRes] = await Promise.all([
+        supabase
+          .from('orders')
+          .select('id, order_number, total, status, created_at, customer_id, rep_id, customers(name, address, phone), employees(name, is_rep)')
+          .eq('id', id)
+          .single(),
+        supabase
+          .from('order_items')
+          .select('id, product_id, quantity, price, total, products(name, code)')
+          .eq('order_id', id)
+          .order('id', { ascending: true }),
+      ])
+
+      if (!mounted) return
+
+      if (ordRes.error || !ordRes.data) {
+        toast.error('Order not found')
+        navigate('/orders', { replace: true })
+        return
+      }
+
+      setOrder(ordRes.data)
+      setItems(itemsRes.data ?? [])
+      setLoading(false)
+    }
+
+    load().catch(() => {
+      navigate('/orders', { replace: true })
+    })
+
+    return () => { mounted = false }
+  }, [id])
+
+  const customer = order?.customers
+  const rep = order?.employees
+  const orderNumber = `ORD-${String(order?.order_number ?? '').padStart(4, '0')}`
+  const st = statusConfig[order?.status] ?? statusConfig.pending
+
+  const createdAtLabel = useMemo(() => {
+    if (!order?.created_at) return ''
+    return new Date(order.created_at).toLocaleDateString() + ' ' + new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }, [order])
+
+  const fmt = (val) => `Rs. ${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+
+  const onConfirm = async () => {
+    const { error } = await supabase.from('orders').update({ status: 'confirmed' }).eq('id', id)
+    if (error) { toast.error(error.message); return }
+    toast.success('Order confirmed')
+    setOrder({ ...order, status: 'confirmed' })
+  }
+
+  const onCancel = async () => {
+    if (!confirm('Cancel this order?')) return
+    const { error } = await supabase.from('orders').update({ status: 'cancelled' }).eq('id', id)
+    if (error) { toast.error(error.message); return }
+    toast.success('Order cancelled')
+    setOrder({ ...order, status: 'cancelled' })
+  }
+
+  const onConvert = async () => {
+    if (order.status !== 'confirmed') {
+      toast.error('Only confirmed orders can be converted')
+      return
+    }
+
+    setConverting(true)
+
+    try {
+      // Check stock availability
+      const { data: products } = await supabase.from('products').select('id, name, stock')
+      const productMap = new Map((products ?? []).map(p => [p.id, p]))
+
+      const stockErrors = []
+      for (const it of items) {
+        const p = productMap.get(it.product_id)
+        if (!p || it.quantity > (p.stock ?? 0)) {
+          stockErrors.push(`${p?.name ?? 'Product'}: requested ${it.quantity}, only ${p?.stock ?? 0} in stock`)
+        }
+      }
+
+      if (stockErrors.length > 0) {
+        toast.error('Insufficient stock: ' + stockErrors.join('; '))
+        setConverting(false)
+        return
+      }
+
+      // Create invoice
+      const { data: invoice, error: invErr } = await supabase
+        .from('invoices')
+        .insert({ customer_id: order.customer_id, rep_id: order.rep_id || null, total_amount: order.total })
+        .select('id')
+        .single()
+
+      if (invErr) { toast.error(invErr.message); setConverting(false); return }
+
+      // Copy items
+      const invoiceItems = items.map(it => ({
+        invoice_id: invoice.id,
+        product_id: it.product_id,
+        quantity: it.quantity,
+        price: it.price,
+        total: it.total,
+      }))
+
+      const { error: iiErr } = await supabase.from('invoice_items').insert(invoiceItems)
+      if (iiErr) { toast.error(iiErr.message); setConverting(false); return }
+
+      // Deduct stock
+      const stockUpdates = items.map(it => {
+        const p = productMap.get(it.product_id)
+        const newStock = Math.max(0, (p?.stock ?? 0) - it.quantity)
+        return supabase.from('products').update({ stock: newStock }).eq('id', it.product_id)
+      })
+      await Promise.all(stockUpdates)
+
+      // Mark order as converted
+      const { error: updErr } = await supabase.from('orders').update({ status: 'converted' }).eq('id', id)
+      if (updErr) { toast.error(updErr.message); setConverting(false); return }
+
+      toast.success('Order converted to invoice successfully')
+      navigate(`/invoices/${invoice.id}`)
+    } catch (e) {
+      toast.error(e?.message ?? 'Conversion failed')
+    } finally {
+      setConverting(false)
+    }
+  }
+
+  if (loading || !order) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-900"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <Link to="/orders" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">
+          <ArrowLeft size={16} />
+          Back to Orders
+        </Link>
+        <div className="flex items-center gap-2">
+          {order.status === 'pending' && (
+            <button onClick={onConfirm} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
+              <CheckCircle size={15} />
+              Confirm
+            </button>
+          )}
+          {order.status === 'confirmed' && (
+            <button onClick={onConvert} disabled={converting} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm">
+              <ArrowRightLeft size={15} />
+              {converting ? 'Converting...' : 'Convert to Invoice'}
+            </button>
+          )}
+          {(order.status === 'pending' || order.status === 'confirmed') && (
+            <button onClick={onCancel} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">
+              <XCircle size={15} />
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-sm">
+        {/* Header */}
+        <div className="px-8 pt-3 pb-2 flex items-start justify-between border-b-2 border-slate-800">
+          <div className="flex items-center gap-4">
+            <div className="bg-slate-100 p-3 rounded-xl">
+              <ShoppingCart size={24} className="text-slate-600" />
+            </div>
+            <div>
+              <div className="text-xl font-bold text-slate-900 leading-tight">Sales Order</div>
+              <div className="text-sm text-slate-600 mt-1 font-medium">{orderNumber}</div>
+            </div>
+          </div>
+          <div className="text-right">
+            <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold ${st.bg} ${st.text} border ${st.border}`}>
+              {st.label}
+            </span>
+            <div className="text-sm text-slate-500 mt-2">{createdAtLabel}</div>
+          </div>
+        </div>
+
+        {/* From / Bill To */}
+        <div className="px-8 py-2 flex justify-between border-b border-slate-200">
+          <div>
+            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">From</div>
+            <div className="text-sm text-slate-700 space-y-1">
+              <div className="font-bold text-slate-900">REP — {rep?.name ?? 'N/A'}</div>
+              <div>10/3 B, Attidiya Road</div>
+              <div>Kawdana, Dehiwala</div>
+              <div>+94 77 11 93 121</div>
+              <div className="text-slate-500">shayankidscare@gmail.com</div>
+            </div>
+          </div>
+          <div className="text-left">
+            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Bill To</div>
+            <div className="text-sm text-slate-700 space-y-1">
+              <div className="font-bold text-slate-900">{customer?.name ?? '-'}</div>
+              <div>{customer?.address ?? '-'}</div>
+              <div>{customer?.phone ?? '-'}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Items Table */}
+        <div className="px-8 py-2">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-800 text-white">
+                <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Item #</th>
+                <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Description</th>
+                <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Qty</th>
+                <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Unit Price</th>
+                <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it, idx) => (
+                <tr key={it.id} className={`border-b border-slate-100 ${idx % 2 !== 0 ? 'bg-slate-50' : ''}`}>
+                  <td className="px-3 py-1.5 text-slate-600">{it.products?.code ?? '-'}</td>
+                  <td className="px-3 py-1.5 text-slate-900 font-medium">{it.products?.name ?? '-'}</td>
+                  <td className="px-3 py-1.5 text-right text-slate-700">{it.quantity}</td>
+                  <td className="px-3 py-1.5 text-right text-slate-700">{fmt(it.price ?? 0)}</td>
+                  <td className="px-3 py-1.5 text-right text-slate-900 font-semibold">{fmt(it.total ?? 0)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Totals */}
+        <div className="px-8 pb-2 flex justify-end">
+          <div className="w-full max-w-xs border border-slate-200 rounded">
+            <div className="px-4 py-1.5 flex justify-between text-sm">
+              <span className="text-slate-500">Subtotal</span>
+              <span className="text-slate-800">{fmt(order.total ?? 0)}</span>
+            </div>
+            <div className="px-4 py-2 bg-slate-800 flex justify-between items-center border-t-2 border-slate-800">
+              <span className="text-white font-bold text-sm uppercase tracking-wider">Total</span>
+              <span className="text-white font-extrabold text-lg">{fmt(order.total ?? 0)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer note */}
+        <div className="px-8 py-2 border-t-2 border-slate-800 text-center text-xs text-slate-500">
+          <div className="font-semibold text-slate-700">Shayan Kids Care &amp; Toys Store</div>
+          <div>This is a sales order. Stock will be deducted upon conversion to invoice.</div>
+          <div>shayankidscare@gmail.com</div>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LayoutDashboard, Package, Users, UserCheck, FileText, LogOut, Menu, X, Calculator } from 'lucide-react'
+import { LayoutDashboard, Package, Users, UserCheck, FileText, LogOut, Menu, X, Calculator, ShoppingCart } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
   { to: '/customers', label: 'Customers', icon: Users },
   { to: '/reps', label: 'Employees', icon: UserCheck },
   { to: '/invoices', label: 'Invoices', icon: FileText },
+  { to: '/orders', label: 'Orders', icon: ShoppingCart },
   { to: '/commission', label: 'Commission', icon: Calculator },
 ]
 
@@ -26,6 +27,9 @@ function usePageTitle() {
     if (path.startsWith('/invoices')) return 'Invoices'
     if (path.startsWith('/reps')) return 'Employees'
     if (path.startsWith('/commission')) return 'Commission'
+    if (path === '/orders/new') return 'Create Order'
+    if (path.startsWith('/orders/')) return 'Order'
+    if (path.startsWith('/orders')) return 'Orders'
     return 'Dashboard'
   }, [location.pathname])
 }
