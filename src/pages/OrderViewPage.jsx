@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import html2pdf from 'html2pdf.js'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
-import { ArrowLeft, CheckCircle, XCircle, ArrowRightLeft, ShoppingCart } from 'lucide-react'
+import { ArrowLeft, CheckCircle, XCircle, ArrowRightLeft, ShoppingCart, Printer, Download } from 'lucide-react'
 
 const statusConfig = {
   pending: { label: 'Pending', bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
@@ -20,6 +21,7 @@ export default function OrderViewPage() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [converting, setConverting] = useState(false)
+  const printRef = useRef(null)
 
   useEffect(() => {
     let mounted = true
@@ -30,7 +32,7 @@ export default function OrderViewPage() {
       const [ordRes, itemsRes] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, order_number, total, status, created_at, customer_id, rep_id, customers(name, address, phone), employees(name, is_rep)')
+          .select('id, order_number, total, status, created_at, customer_id, rep_id, payment_type, customers(name, address, phone), employees(name, is_rep)')
           .eq('id', id)
           .single(),
         supabase
@@ -117,7 +119,7 @@ export default function OrderViewPage() {
       // Create invoice
       const { data: invoice, error: invErr } = await supabase
         .from('invoices')
-        .insert({ customer_id: order.customer_id, rep_id: order.rep_id || null, total_amount: order.total })
+        .insert({ customer_id: order.customer_id, rep_id: order.rep_id || null, total_amount: order.total, payment_type: order.payment_type ?? 'credit' })
         .select('id')
         .single()
 
@@ -156,6 +158,20 @@ export default function OrderViewPage() {
     }
   }
 
+  const downloadPdf = async () => {
+    if (!printRef.current) return
+
+    const opt = {
+      margin: 10,
+      filename: `${orderNumber}-${customer?.name ?? 'Customer'}.pdf`,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2 },
+      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    }
+
+    await html2pdf().set(opt).from(printRef.current).save()
+  }
+
   if (loading || !order) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -166,12 +182,20 @@ export default function OrderViewPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between no-print">
         <Link to="/orders" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">
           <ArrowLeft size={16} />
           Back to Orders
         </Link>
         <div className="flex items-center gap-2">
+          <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors">
+            <Printer size={15} />
+            Print
+          </button>
+          <button onClick={downloadPdf} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
+            <Download size={15} />
+            Download PDF
+          </button>
           {order.status === 'pending' && (
             <button onClick={onConfirm} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
               <CheckCircle size={15} />
@@ -193,7 +217,7 @@ export default function OrderViewPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-sm print-area" ref={printRef}>
         {/* Header */}
         <div className="px-8 pt-3 pb-2 flex items-start justify-between border-b-2 border-slate-800">
           <div className="flex items-center gap-4">
@@ -278,7 +302,7 @@ export default function OrderViewPage() {
         {/* Footer note */}
         <div className="px-8 py-2 border-t-2 border-slate-800 text-center text-xs text-slate-500">
           <div className="font-semibold text-slate-700">Shayan Kids Care &amp; Toys Store</div>
-          <div>This is a sales order. Stock will be deducted upon conversion to invoice.</div>
+          <div>{order?.payment_type === 'cash' ? 'Cash Order — Payment received.' : 'Credit Order — Total due in 30 days only.'}</div>
           <div>shayankidscare@gmail.com</div>
         </div>
       </div>

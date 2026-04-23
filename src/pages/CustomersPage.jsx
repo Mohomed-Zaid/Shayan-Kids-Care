@@ -7,6 +7,7 @@ function CustomerForm({ initialValue, onCancel, onSave }) {
   const [name, setName] = useState(initialValue?.name ?? '')
   const [address, setAddress] = useState(initialValue?.address ?? '')
   const [phone, setPhone] = useState(initialValue?.phone ?? '')
+  const [phone2, setPhone2] = useState(initialValue?.phone2 ?? '')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
@@ -15,7 +16,7 @@ function CustomerForm({ initialValue, onCancel, onSave }) {
     setError(null)
     setLoading(true)
     try {
-      await onSave({ name: name.trim(), address: address.trim(), phone: phone.trim() })
+      await onSave({ name: name.trim(), address: address.trim(), phone: phone.trim(), phone2: phone2.trim() })
     } catch (err) {
       setError(err?.message ?? 'Failed to save')
     } finally {
@@ -63,6 +64,15 @@ function CustomerForm({ initialValue, onCancel, onSave }) {
               onChange={(e) => setPhone(e.target.value)}
               className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
               required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Phone 2</label>
+            <input
+              value={phone2}
+              onChange={(e) => setPhone2(e.target.value)}
+              className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
             />
           </div>
 
@@ -155,7 +165,7 @@ export default function CustomersPage() {
     if (editing) {
       const { error: err } = await supabase
         .from('customers')
-        .update({ name: values.name, address: values.address, phone: values.phone })
+        .update({ name: values.name, address: values.address, phone: values.phone, phone2: values.phone2 })
         .eq('id', editing.id)
       if (err) throw err
     } else {
@@ -170,7 +180,7 @@ export default function CustomersPage() {
 
       const { error: err } = await supabase
         .from('customers')
-        .insert({ name: values.name, address: values.address, phone: values.phone, customer_number: nextNum })
+        .insert({ name: values.name, address: values.address, phone: values.phone, phone2: values.phone2, customer_number: nextNum })
       if (err) throw err
     }
 
@@ -197,13 +207,14 @@ export default function CustomersPage() {
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Name</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Address</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Phone</th>
+              <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Phone 2</th>
               <th className="px-5 py-3"></th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-5 py-8">
+                <td colSpan={6} className="px-5 py-8">
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-900"></div>
                   </div>
@@ -211,11 +222,11 @@ export default function CustomersPage() {
               </tr>
             ) : error ? (
               <tr>
-                <td colSpan={5} className="px-5 py-4 text-red-600 text-center">{error}</td>
+                <td colSpan={6} className="px-5 py-4 text-red-600 text-center">{error}</td>
               </tr>
             ) : sortedRows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-5 py-8 text-slate-400 text-center">
+                <td colSpan={6} className="px-5 py-8 text-slate-400 text-center">
                   <Users size={24} className="mx-auto mb-2 opacity-40" />
                   No customers yet. Add your first customer!
                 </td>
@@ -227,6 +238,7 @@ export default function CustomersPage() {
                   <td className="px-5 py-3.5 font-medium text-slate-900">{row.name}</td>
                   <td className="px-5 py-3.5 text-slate-500">{row.address}</td>
                   <td className="px-5 py-3.5 text-slate-500">{row.phone}</td>
+                  <td className="px-5 py-3.5 text-slate-500">{row.phone2 || '—'}</td>
                   <td className="px-5 py-3.5 text-right">
                     <div className="inline-flex gap-1">
                       <button onClick={() => onEdit(row)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors" title="Edit">

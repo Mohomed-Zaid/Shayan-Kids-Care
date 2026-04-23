@@ -18,6 +18,7 @@ export default function OrderCreatePage() {
 
   const [customerId, setCustomerId] = useState('')
   const [repId, setRepId] = useState('')
+  const [paymentType, setPaymentType] = useState('credit')
   const [lines, setLines] = useState([emptyLine()])
 
   const [loading, setLoading] = useState(true)
@@ -116,7 +117,7 @@ export default function OrderCreatePage() {
     try {
       const { data: order, error: ordErr } = await supabase
         .from('orders')
-        .insert({ customer_id: customerId, rep_id: repId || null, total: grandTotal, status: 'pending' })
+        .insert({ customer_id: customerId, rep_id: repId || null, total: grandTotal, status: 'pending', payment_type: paymentType })
         .select('id, order_number')
         .single()
 
@@ -181,6 +182,18 @@ export default function OrderCreatePage() {
                 {reps.filter((r) => r.is_rep).map((r) => (
                   <option key={r.id} value={r.id}>{r.name}</option>
                 ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700">Payment Type</label>
+              <select
+                value={paymentType}
+                onChange={(e) => setPaymentType(e.target.value)}
+                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+              >
+                <option value="credit">Credit</option>
+                <option value="cash">Cash</option>
               </select>
             </div>
           </div>
