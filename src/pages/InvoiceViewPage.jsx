@@ -156,82 +156,71 @@ export default function InvoiceViewPage() {
       <div className="bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-sm">
         <div
           ref={printRef}
-          className="bg-white relative print-area"
+          className="bg-white print-area"
         >
-          {/* Left accent bar */}
-          <div className="absolute left-0 top-0 bottom-0 w-2 bg-gradient-to-b from-sky-500 via-blue-500 to-cyan-400"></div>
-
           {/* Header */}
-          <div className="pl-10 pr-8 pt-6 pb-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-5">
-                <div className="bg-sky-50 border-2 border-sky-100 rounded-2xl p-3">
-                  <img src={logo} alt="Logo" className="h-16 w-16 rounded-xl object-contain" />
-                </div>
-                <div>
-                  <div className="text-2xl font-extrabold text-slate-900 leading-tight tracking-tight">Shayan Kids Care</div>
-                  <div className="text-base font-semibold text-sky-500 mt-0.5">&amp; Toys Store</div>
-                  <div className="mt-2 flex items-center gap-2 text-xs text-slate-400">
-                    <span>Baby Items &amp; Toys</span>
-                    <span className="w-1 h-1 rounded-full bg-slate-300"></span>
-                    <span>Wholesale</span>
-                  </div>
-                </div>
+          <div className="px-8 pt-6 pb-4 flex items-start justify-between border-b-2 border-slate-800">
+            <div className="flex items-center gap-4">
+              <img src={logo} alt="Logo" className="h-14 w-14 rounded-lg object-contain" />
+              <div>
+                <div className="text-xl font-bold text-slate-900 leading-tight">Shayan Kids Care</div>
+                <div className="text-sm font-semibold text-slate-600">&amp; Toys Store</div>
               </div>
-              <div className="text-right">
-                <div className="inline-block bg-sky-600 text-white text-xs font-bold px-3 py-1 rounded-full tracking-widest uppercase mb-2">Invoice</div>
-                <div className="text-2xl font-extrabold text-slate-900 tracking-tight">{invoiceNumber}</div>
-                <div className="text-sm text-slate-500 mt-1">{new Date(invoice.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</div>
-              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-3xl font-bold text-slate-900 tracking-wide">INVOICE</div>
+              <div className="text-sm text-slate-600 mt-1 font-medium">{invoiceNumber}</div>
+              <div className="text-xs text-slate-500 mt-0.5">{new Date(invoice.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</div>
             </div>
           </div>
 
           {/* From / Bill To */}
-          <div className="pl-10 pr-8 pb-4 grid grid-cols-2 gap-6">
-            <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
-              <div className="text-[11px] font-bold text-sky-500 uppercase tracking-[0.15em] mb-3">From</div>
-              <div className="text-sm text-slate-700 space-y-1.5">
-                <div className="font-bold text-slate-900 text-base">REP — {rep?.name ?? 'N/A'}</div>
+          <div className="px-8 py-4 grid grid-cols-2 gap-6 border-b border-slate-200">
+            <div>
+              <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">From</div>
+              <div className="text-sm text-slate-700 space-y-1">
+                <div className="font-bold text-slate-900">REP — {rep?.name ?? 'N/A'}</div>
                 <div>10/3 B, Attidiya Road</div>
                 <div>Kawdana, Dehiwala</div>
-                <div className="pt-1 text-slate-500 text-xs space-y-0.5">
-                  <div>+94 77 11 93 121</div>
-                  <div>+94 75 38 41 599</div>
-                </div>
-                <div className="text-sky-500 font-medium pt-1">shayankidscare@gmail.com</div>
+                <div>+94 77 11 93 121</div>
+                <div>+94 75 38 41 599</div>
+                <div className="text-slate-500">shayankidscare@gmail.com</div>
               </div>
             </div>
 
-            <div className="bg-slate-50 rounded-xl p-5 border border-slate-100">
-              <div className="text-[11px] font-bold text-sky-500 uppercase tracking-[0.15em] mb-3">Bill To</div>
-              <div className="text-sm text-slate-700 space-y-1.5">
-                <div className="font-bold text-slate-900 text-base">{customer?.name ?? '-'}</div>
+            <div>
+              <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Bill To</div>
+              <div className="text-sm text-slate-700 space-y-1">
+                <div className="font-bold text-slate-900">{customer?.name ?? '-'}</div>
                 <div>{customer?.address ?? '-'}</div>
                 <div>{customer?.phone ?? '-'}</div>
+              </div>
+              <div className="mt-3 pt-2 border-t border-slate-100 text-xs text-slate-500 space-y-0.5">
+                <div><span className="font-medium text-slate-600">Job:</span> Baby Items &amp; Toys</div>
               </div>
             </div>
           </div>
 
           {/* Items Table */}
-          <div className="pl-10 pr-8 pb-4">
-            <table className="w-full text-sm border-collapse">
+          <div className="px-8 py-4">
+            <table className="w-full text-sm">
               <thead>
-                <tr>
-                  <th className="text-left font-bold text-white bg-sky-600 px-4 py-3 text-xs uppercase tracking-wider rounded-tl-lg">Item #</th>
-                  <th className="text-left font-bold text-white bg-sky-600 px-4 py-3 text-xs uppercase tracking-wider">Description</th>
-                  <th className="text-right font-bold text-white bg-sky-600 px-4 py-3 text-xs uppercase tracking-wider">Qty</th>
-                  <th className="text-right font-bold text-white bg-sky-600 px-4 py-3 text-xs uppercase tracking-wider">Unit Price</th>
-                  <th className="text-right font-bold text-white bg-sky-600 px-4 py-3 text-xs uppercase tracking-wider rounded-tr-lg">Amount</th>
+                <tr className="bg-slate-800 text-white">
+                  <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Item #</th>
+                  <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Description</th>
+                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Qty</th>
+                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Unit Price</th>
+                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Amount</th>
                 </tr>
               </thead>
               <tbody>
                 {items.map((it, idx) => (
-                  <tr key={it.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-sky-50/30'}>
-                    <td className="px-4 py-3 text-slate-500 font-mono text-xs">{it.products?.code ?? '-'}</td>
-                    <td className="px-4 py-3 text-slate-900 font-semibold">{it.products?.name ?? '-'}</td>
-                    <td className="px-4 py-3 text-right text-slate-700 font-medium">{it.quantity}</td>
-                    <td className="px-4 py-3 text-right text-slate-600">Rs. {Number(it.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                    <td className="px-4 py-3 text-right text-slate-900 font-bold">Rs. {Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <tr key={it.id} className={`border-b border-slate-100 ${idx % 2 !== 0 ? 'bg-slate-50' : ''}`}>
+                    <td className="px-3 py-2 text-slate-600">{it.products?.code ?? '-'}</td>
+                    <td className="px-3 py-2 text-slate-900 font-medium">{it.products?.name ?? '-'}</td>
+                    <td className="px-3 py-2 text-right text-slate-700">{it.quantity}</td>
+                    <td className="px-3 py-2 text-right text-slate-700">Rs. {Number(it.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td className="px-3 py-2 text-right text-slate-900 font-semibold">Rs. {Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                   </tr>
                 ))}
               </tbody>
@@ -239,47 +228,45 @@ export default function InvoiceViewPage() {
           </div>
 
           {/* Totals */}
-          <div className="pl-10 pr-8 pb-4 flex justify-end">
-            <div className="w-full max-w-sm">
-              <div className="bg-slate-50 rounded-xl border border-slate-100 overflow-hidden">
-                <div className="px-5 py-3 flex justify-between text-sm">
-                  <span className="text-slate-500">Subtotal</span>
-                  <span className="text-slate-800 font-medium">Rs. {Number(invoice.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div className="px-5 py-3 flex justify-between text-sm border-t border-slate-100">
-                  <span className="text-slate-500">Discount</span>
-                  <span className="text-slate-800 font-medium">0.00%</span>
-                </div>
-                <div className="px-5 py-3 flex justify-between text-sm border-t border-slate-100">
-                  <span className="text-slate-500">Disc. Amount</span>
-                  <span className="text-slate-800 font-medium">Rs. 0.00</span>
-                </div>
-                <div className="px-5 py-4 bg-sky-600 flex justify-between items-center">
-                  <span className="text-white font-bold text-sm uppercase tracking-wider">Total Due</span>
-                  <span className="text-white font-extrabold text-xl">Rs. {Number(invoice.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                </div>
+          <div className="px-8 pb-4 flex justify-end">
+            <div className="w-full max-w-xs border border-slate-200 rounded">
+              <div className="px-4 py-2 flex justify-between text-sm">
+                <span className="text-slate-500">Subtotal</span>
+                <span className="text-slate-800">Rs. {Number(invoice.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="px-4 py-2 flex justify-between text-sm border-t border-slate-100">
+                <span className="text-slate-500">Discount</span>
+                <span className="text-slate-800">0.00%</span>
+              </div>
+              <div className="px-4 py-2 flex justify-between text-sm border-t border-slate-100">
+                <span className="text-slate-500">Disc. Amount</span>
+                <span className="text-slate-800">Rs. 0.00</span>
+              </div>
+              <div className="px-4 py-3 bg-slate-800 flex justify-between items-center border-t-2 border-slate-800">
+                <span className="text-white font-bold text-sm uppercase tracking-wider">Total</span>
+                <span className="text-white font-extrabold text-lg">Rs. {Number(invoice.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
               </div>
             </div>
           </div>
 
           {/* Signature Section */}
-          <div className="pl-10 pr-8 py-6 grid grid-cols-3 gap-10">
+          <div className="px-8 py-5 grid grid-cols-3 gap-8 border-t border-slate-200">
             <div>
-              <div className="border-b-2 border-slate-200 pb-2 text-xs text-slate-400 uppercase tracking-wider font-semibold">Checking</div>
+              <div className="border-b border-slate-300 pb-2 text-xs text-slate-500 uppercase tracking-wider font-medium">Checking</div>
             </div>
             <div>
-              <div className="border-b-2 border-slate-200 pb-2 text-xs text-slate-400 uppercase tracking-wider font-semibold">Received</div>
+              <div className="border-b border-slate-300 pb-2 text-xs text-slate-500 uppercase tracking-wider font-medium">Received</div>
             </div>
             <div>
-              <div className="border-b-2 border-slate-200 pb-2 text-xs text-slate-400 uppercase tracking-wider font-semibold">Customer Signature</div>
+              <div className="border-b border-slate-300 pb-2 text-xs text-slate-500 uppercase tracking-wider font-medium">Customer Signature</div>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="ml-10 bg-gradient-to-r from-sky-600 via-blue-500 to-cyan-400 px-8 py-4 text-center">
-            <div className="text-white font-bold text-sm">Shayan Kids Care &amp; Toys Store</div>
-            <div className="text-white/70 text-xs mt-1">Credit Bill — Total due in 30 days only.</div>
-            <div className="text-white/80 text-xs mt-1 font-medium">shayankidscare@gmail.com</div>
+          <div className="px-8 py-3 border-t-2 border-slate-800 text-center text-xs text-slate-500">
+            <div className="font-semibold text-slate-700">Shayan Kids Care &amp; Toys Store</div>
+            <div>Credit Bill — Total due in 30 days only.</div>
+            <div>shayankidscare@gmail.com</div>
           </div>
         </div>
       </div>
