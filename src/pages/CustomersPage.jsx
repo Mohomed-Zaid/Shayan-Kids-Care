@@ -159,9 +159,18 @@ export default function CustomersPage() {
         .eq('id', editing.id)
       if (err) throw err
     } else {
+      // Get next customer number
+      const { data: lastCust } = await supabase
+        .from('customers')
+        .select('customer_number')
+        .order('customer_number', { ascending: false })
+        .limit(1)
+
+      const nextNum = lastCust && lastCust.length > 0 ? (Number(lastCust[0].customer_number ?? 0) + 1) : 1
+
       const { error: err } = await supabase
         .from('customers')
-        .insert({ name: values.name, address: values.address, phone: values.phone })
+        .insert({ name: values.name, address: values.address, phone: values.phone, customer_number: nextNum })
       if (err) throw err
     }
 
@@ -184,6 +193,7 @@ export default function CustomersPage() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50/50 border-b border-slate-200 text-slate-500">
             <tr>
+              <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">#</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Name</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Address</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Phone</th>
@@ -193,7 +203,7 @@ export default function CustomersPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={4} className="px-5 py-8">
+                <td colSpan={5} className="px-5 py-8">
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-900"></div>
                   </div>
@@ -201,11 +211,11 @@ export default function CustomersPage() {
               </tr>
             ) : error ? (
               <tr>
-                <td colSpan={4} className="px-5 py-4 text-red-600 text-center">{error}</td>
+                <td colSpan={5} className="px-5 py-4 text-red-600 text-center">{error}</td>
               </tr>
             ) : sortedRows.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-5 py-8 text-slate-400 text-center">
+                <td colSpan={5} className="px-5 py-8 text-slate-400 text-center">
                   <Users size={24} className="mx-auto mb-2 opacity-40" />
                   No customers yet. Add your first customer!
                 </td>
@@ -213,6 +223,7 @@ export default function CustomersPage() {
             ) : (
               sortedRows.map((row) => (
                 <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
+                  <td className="px-5 py-3.5 font-semibold text-slate-900">C-{String(row.customer_number ?? row.id ?? '').padStart(3, '0')}</td>
                   <td className="px-5 py-3.5 font-medium text-slate-900">{row.name}</td>
                   <td className="px-5 py-3.5 text-slate-500">{row.address}</td>
                   <td className="px-5 py-3.5 text-slate-500">{row.phone}</td>
