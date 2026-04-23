@@ -223,7 +223,7 @@ export default function CustomersPage() {
             ) : (
               sortedRows.map((row) => (
                 <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                  <td className="px-5 py-3.5 font-semibold text-slate-900">C-{String(row.customer_number ?? row.id ?? '').padStart(3, '0')}</td>
+                  <td className="px-5 py-3.5 font-semibold text-slate-900">{row.customer_number ? `C-${String(row.customer_number).padStart(3, '0')}` : '—'}</td>
                   <td className="px-5 py-3.5 font-medium text-slate-900">{row.name}</td>
                   <td className="px-5 py-3.5 text-slate-500">{row.address}</td>
                   <td className="px-5 py-3.5 text-slate-500">{row.phone}</td>
