@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
-import { Plus, Eye, ShoppingCart, CheckCircle, XCircle, ArrowRightLeft, Trash2, FileText, Filter, Pencil } from 'lucide-react'
+import { Plus, Eye, ShoppingCart, CheckCircle, XCircle, ArrowRightLeft, Trash2, FileText, Filter, Pencil, Search, ArrowUpDown } from 'lucide-react'
 
 const statusConfig = {
   pending: { label: 'Pending', bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300' },
@@ -25,6 +25,11 @@ export default function OrdersPage() {
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('all')
+  const [invSearch, setInvSearch] = useState('')
+  const [invPayFilter, setInvPayFilter] = useState('all')
+  const [invDateFrom, setInvDateFrom] = useState('')
+  const [invDateTo, setInvDateTo] = useState('')
+  const [invSort, setInvSort] = useState('newest')
   const navigate = useNavigate()
   const toast = useToast()
 
@@ -37,7 +42,7 @@ export default function OrdersPage() {
         .order('created_at', { ascending: false }),
       supabase
         .from('invoices')
-        .select('id, invoice_number, total_amount, created_at, customers(name), employees(name)')
+        .select('id, invoice_number, total_amount, created_at, payment_type, customers(name), employees(name)')
         .order('created_at', { ascending: false }),
     ])
 
@@ -176,6 +181,33 @@ export default function OrdersPage() {
   })
   const showInvoices = activeTab === 'invoices'
 
+  const filteredInvoices = useMemo(() => {
+    let list = [...invoices]
+    if (invSearch.trim()) {
+      const q = invSearch.toLowerCase()
+      list = list.filter((r) =>
+        (r.customers?.name ?? '').toLowerCase().includes(q) ||
+        String(r.invoice_number ?? '').includes(q) ||
+        String(r.total_amount ?? '').includes(q)
+      )
+    }
+    if (invPayFilter !== 'all') {
+      list = list.filter((r) => (r.payment_type ?? 'credit') === invPayFilter)
+    }
+    if (invDateFrom) {
+      list = list.filter((r) => new Date(r.created_at) >= new Date(invDateFrom))
+    }
+    if (invDateTo) {
+      const to = new Date(invDateTo); to.setHours(23, 59, 59, 999)
+      list = list.filter((r) => new Date(r.created_at) <= to)
+    }
+    list.sort((a, b) => {
+      const da = new Date(a.created_at), db = new Date(b.created_at)
+      return invSort === 'newest' ? db - da : da - db
+    })
+    return list
+  }, [invoices, invSearch, invPayFilter, invDateFrom, invDateTo, invSort])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -217,6 +249,53 @@ export default function OrdersPage() {
         </div>
       </div>
 
+      {showInvoices && (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={invSearch}
+              onChange={(e) => setInvSearch(e.target.value)}
+              placeholder="Search invoices..."
+              className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <Filter size={14} className="text-slate-400" />
+            <select
+              value={invPayFilter}
+              onChange={(e) => setInvPayFilter(e.target.value)}
+              className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+            >
+              <option value="all" className="text-slate-900">All Payment</option>
+              <option value="cash" className="text-slate-900">Cash</option>
+              <option value="credit" className="text-slate-900">Credit</option>
+            </select>
+            <input
+              type="date"
+              value={invDateFrom}
+              onChange={(e) => setInvDateFrom(e.target.value)}
+              className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+            />
+            <span className="text-xs text-slate-400">to</span>
+            <input
+              type="date"
+              value={invDateTo}
+              onChange={(e) => setInvDateTo(e.target.value)}
+              className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-slate-900/20"
+            />
+            <button
+              onClick={() => setInvSort((s) => s === 'newest' ? 'oldest' : 'newest')}
+              className="flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              title={invSort === 'newest' ? 'Newest first' : 'Oldest first'}
+            >
+              <ArrowUpDown size={14} />
+              {invSort === 'newest' ? 'Newest' : 'Oldest'}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">
         {showInvoices ? (
           <table className="w-full text-sm">
@@ -226,26 +305,32 @@ export default function OrdersPage() {
                 <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Customer</th>
                 <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Rep</th>
                 <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Total</th>
+                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Payment</th>
                 <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Date</th>
                 <th className="px-5 py-3"></th>
               </tr>
             </thead>
             <tbody>
-              {invoices.length === 0 ? (
+              {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-12 text-slate-400 dark:text-emerald-100/60 text-center">
+                  <td colSpan={7} className="px-5 py-12 text-slate-400 dark:text-emerald-100/60 text-center">
                     <FileText size={32} className="mx-auto text-slate-300 dark:text-emerald-200/30 mb-2" />
-                    No invoices yet.
+                    {invoices.length === 0 ? 'No invoices yet.' : 'No invoices match your filters.'}
                   </td>
                 </tr>
               ) : (
-                invoices.map((inv) => (
+                filteredInvoices.map((inv) => (
                   <tr key={inv.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors dark:border-emerald-900/30 dark:hover:bg-emerald-500/5">
                     <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-emerald-50">INV-{String(inv.invoice_number ?? '').padStart(4, '0')}</td>
                     <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-100/70">{inv.customers?.name ?? '-'}</td>
                     <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-100/70">{inv.employees?.name ?? '-'}</td>
                     <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-emerald-50">{fmt(inv.total_amount ?? 0)}</td>
-                    <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{new Date(inv.created_at).toLocaleDateString()}</td>
+                    <td className="px-5 py-3.5">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${(inv.payment_type ?? 'credit') === 'cash' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300' : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300'}`}>
+                        {(inv.payment_type ?? 'credit') === 'cash' ? 'Cash' : 'Credit'}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-101/60">{new Date(inv.created_at).toLocaleDateString()}</td>
                     <td className="px-5 py-3.5 text-right">
                       <div className="inline-flex items-center gap-1">
                         <Link to={`/invoices/${inv.id}`} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 dark:hover:text-emerald-50 dark:hover:bg-emerald-500/10 transition-colors" title="View">
