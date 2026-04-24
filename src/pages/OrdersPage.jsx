@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
-import { Plus, Eye, ShoppingCart, CheckCircle, XCircle, ArrowRightLeft, Trash2, FileText, Filter } from 'lucide-react'
+import { Plus, Eye, ShoppingCart, CheckCircle, XCircle, ArrowRightLeft, Trash2, FileText, Filter, Pencil } from 'lucide-react'
 
 const statusConfig = {
   pending: { label: 'Pending', bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300' },
@@ -302,6 +302,11 @@ export default function OrdersPage() {
                           <Link to={`/orders/${o.id}`} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors" title="View">
                             <Eye size={15} />
                           </Link>
+                          {(o.status === 'pending' || o.status === 'confirmed') && (
+                            <Link to={`/orders/${o.id}/edit`} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Edit">
+                              <Pencil size={15} />
+                            </Link>
+                          )}
                           {o.status === 'pending' && (
                             <button onClick={() => onConfirm(o)} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Confirm">
                               <CheckCircle size={15} />

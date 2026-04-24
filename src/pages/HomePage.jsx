@@ -276,7 +276,7 @@ export default function HomePage() {
                   <div className="mt-0.5 text-rose-600"><PhoneCall size={16} /></div>
                   <div>
                     <div className="font-semibold text-slate-900 dark:text-white">Phone</div>
-                    <div className="text-slate-600 dark:text-slate-300">+94 77 11 93 121</div>
+                    <div className="text-slate-600 dark:text-slate-300">+94 75 384 1599</div>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">

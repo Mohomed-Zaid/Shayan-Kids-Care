@@ -199,7 +199,7 @@ export default function InvoiceViewPage() {
                 <div className="font-bold text-slate-900 dark:text-white">REP — {rep?.name ?? 'N/A'}</div>
                 <div>10/3 B, Attidiya Road</div>
                 <div>Kawdana, Dehiwala</div>
-                <div>+94 77 11 93 121</div>
+                <div>+94 75 384 1599</div>
                 <div>+94 75 38 41 599</div>
                 <div className="text-slate-500 dark:text-slate-400">shayankidscare@gmail.com</div>
               </div>

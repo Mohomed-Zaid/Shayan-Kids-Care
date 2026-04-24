@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import html2pdf from 'html2pdf.js'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
-import { ArrowLeft, CheckCircle, XCircle, ArrowRightLeft, ShoppingCart, Printer, Download, Trash2, FileText } from 'lucide-react'
+import { ArrowLeft, CheckCircle, XCircle, ArrowRightLeft, ShoppingCart, Printer, Download, Trash2, FileText, Pencil } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 
 const statusConfig = {
@@ -211,6 +211,12 @@ export default function OrderViewPage() {
           Back to Orders
         </Link>
         <div className="flex items-center gap-2">
+          {(order.status === 'pending' || order.status === 'confirmed') && (
+            <Link to={`/orders/${id}/edit`} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              <Pencil size={15} />
+              Edit
+            </Link>
+          )}
           <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
             <Printer size={15} />
             Print
@@ -282,7 +288,7 @@ export default function OrderViewPage() {
                 <div className="font-bold text-slate-900 dark:text-white">REP — {rep?.name ?? 'N/A'}</div>
                 <div>10/3 B, Attidiya Road</div>
                 <div>Kawdana, Dehiwala</div>
-                <div>+94 77 11 93 121</div>
+                <div>+94 75 384 1599</div>
                 <div>+94 75 38 41 599</div>
                 <div className="text-slate-500 dark:text-slate-400">shayankidscare@gmail.com</div>
               </div>

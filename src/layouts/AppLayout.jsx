@@ -51,6 +51,7 @@ function usePageTitle() {
     if (path.startsWith('/inventory/purchase')) return 'New Purchase'
     if (path.startsWith('/inventory')) return 'Inventory'
     if (path === '/orders/new') return 'Create Order'
+    if (path.endsWith('/edit') && path.startsWith('/orders/')) return 'Edit Order'
     if (path.startsWith('/orders/')) return 'Order'
     if (path.startsWith('/orders')) return 'Orders & Invoices'
     return 'Dashboard'

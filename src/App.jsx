@@ -17,6 +17,7 @@ import InvoiceEditPage from './pages/InvoiceEditPage'
 import OrdersPage from './pages/OrdersPage'
 import OrderCreatePage from './pages/OrderCreatePage'
 import OrderViewPage from './pages/OrderViewPage'
+import OrderEditPage from './pages/OrderEditPage'
 import HomePage from './pages/HomePage'
 import PurchasePage from './pages/PurchasePage'
 import PurchaseListPage from './pages/PurchaseListPage'
@@ -44,6 +45,7 @@ export default function App() {
             <Route path="/commission" element={<CommissionPage />} />
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/orders/new" element={<OrderCreatePage />} />
+            <Route path="/orders/:id/edit" element={<OrderEditPage />} />
             <Route path="/orders/:id" element={<OrderViewPage />} />
             <Route path="/inventory/purchase" element={<PurchasePage />} />
             <Route path="/inventory/purchases" element={<PurchaseListPage />} />
