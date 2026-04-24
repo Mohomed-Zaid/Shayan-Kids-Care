@@ -211,6 +211,7 @@ export default function InvoiceViewPage() {
                 <div className="font-bold text-slate-900 dark:text-white">{customer?.name ?? '-'}</div>
                 <div>{customer?.address ?? '-'}</div>
                 <div>{customer?.phone ?? '-'}</div>
+                <div className="text-sm"><span className="font-medium text-slate-600 dark:text-slate-300">Type:</span> <span className="font-semibold text-slate-900 dark:text-white">{invoice?.payment_type === 'cash' ? 'Cash Customer' : 'Credit Customer'}</span></div>
               </div>
               <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
                 <div><span className="font-medium text-slate-600 dark:text-slate-300">Job:</span> Baby Items &amp; Toys</div>
@@ -289,7 +290,6 @@ export default function InvoiceViewPage() {
 
             <div className="px-8 py-1 border-t-2 border-slate-800 dark:border-slate-600 text-center text-xs text-slate-500 dark:text-slate-400">
               <div className="font-semibold text-slate-700 dark:text-slate-300">Shayan Kids Care &amp; Toys Store</div>
-              <div>{invoice?.payment_type === 'cash' ? 'Cash Bill — Payment received.' : 'Credit Bill — Total due in 30 days only.'}</div>
               <div>shayankidscare@gmail.com</div>
             </div>
           </div>

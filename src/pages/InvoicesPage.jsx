@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { Plus, Eye, Trash2, FileText } from 'lucide-react'
+import { Eye, Trash2, FileText } from 'lucide-react'
 import { useToast } from '../contexts/ToastContext'
 
 export default function InvoicesPage() {
@@ -53,14 +53,7 @@ export default function InvoicesPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div className="text-sm text-slate-500">Create and view invoices.</div>
-        <Link
-          to="/invoices/new"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm"
-        >
-          <Plus size={16} />
-          Create Invoice
-        </Link>
+        <div className="text-sm text-slate-500">View all invoices.</div>
       </div>
 
       <div className="bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">

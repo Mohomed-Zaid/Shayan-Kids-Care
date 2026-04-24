@@ -126,11 +126,11 @@ export default function DashboardPage() {
             <p className="text-slate-400 dark:text-emerald-100/60 text-sm mt-1">Welcome back to Shayan Kids Care &amp; Toys Store</p>
           </div>
           <Link
-            to="/invoices/new"
+            to="/orders/new"
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-white dark:bg-emerald-950/40 dark:text-emerald-50 dark:border dark:border-emerald-400/15 text-slate-900 hover:bg-slate-100 dark:hover:bg-emerald-500/10 transition-colors shadow-md"
           >
             <Plus size={16} />
-            Create Invoice
+            Create Order
           </Link>
         </div>
       </div>

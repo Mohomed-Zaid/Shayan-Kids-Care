@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText } from 'lucide-react'
+import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -16,6 +16,7 @@ const navItems = [
       { to: '/reps', label: 'Employees', icon: UserCheck },
       { to: '/products', label: 'Products', icon: Package },
       { to: '/vendors', label: 'Vendors', icon: Truck },
+      { to: '/journals', label: 'Journal', icon: BookOpen },
     ],
   },
   {
@@ -38,11 +39,12 @@ function usePageTitle() {
     const path = location.pathname
     if (path.startsWith('/products')) return 'Products'
     if (path.startsWith('/customers')) return 'Customers'
-    if (path === '/invoices/new') return 'Create Invoice'
+
     if (path.endsWith('/edit')) return 'Edit Invoice'
     if (path.startsWith('/invoices/')) return 'Invoice'
     if (path.startsWith('/invoices')) return 'Orders & Invoices'
     if (path.startsWith('/vendors')) return 'Vendors'
+    if (path.startsWith('/journals')) return 'Journal'
     if (path.startsWith('/reps')) return 'Employees'
     if (path.startsWith('/commission')) return 'Commission'
     if (path.startsWith('/inventory/purchases/') && path.endsWith('/edit')) return 'Edit Purchase'
