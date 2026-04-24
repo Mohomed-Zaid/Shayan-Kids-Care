@@ -173,7 +173,7 @@ export default function InvoiceViewPage() {
       <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
         <div
           ref={printRef}
-          className="bg-white dark:bg-slate-900 print-area min-h-[260mm] flex flex-col"
+          className="bg-white dark:bg-slate-900 print-area min-h-[297mm] flex flex-col"
         >
           {/* Header */}
           <div className="px-8 pt-3 pb-2 flex items-start justify-between border-b-2 border-slate-800 dark:border-slate-600">
@@ -219,7 +219,7 @@ export default function InvoiceViewPage() {
           </div>
 
           {/* Items Table */}
-          <div className="px-8 py-2">
+          <div className="px-8 py-2 flex-1 flex flex-col">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-slate-800 text-white">
@@ -238,6 +238,15 @@ export default function InvoiceViewPage() {
                     <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{it.quantity}</td>
                     <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">Rs. {Number(it.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     <td className="px-3 py-1.5 text-right text-slate-900 dark:text-white font-semibold">Rs. {Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  </tr>
+                ))}
+                {Array.from({ length: Math.max(0, 14 - items.length) }).map((_, i) => (
+                  <tr key={`empty-${i}`} className="border-b border-slate-100 dark:border-slate-700">
+                    <td className="px-3 py-1">&nbsp;</td>
+                    <td className="px-3 py-1"></td>
+                    <td className="px-3 py-1"></td>
+                    <td className="px-3 py-1"></td>
+                    <td className="px-3 py-1"></td>
                   </tr>
                 ))}
               </tbody>
@@ -266,7 +275,7 @@ export default function InvoiceViewPage() {
                 </div>
               </div>
             </div>
-            <div className="px-8 py-3 mt-20 grid grid-cols-3 gap-8 border-t border-slate-200 dark:border-slate-700">
+            <div className="px-8 py-2 grid grid-cols-3 gap-8 border-t border-slate-200 dark:border-slate-700">
               <div>
                 <div className="border-b border-slate-300 dark:border-slate-600 pb-2 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-medium">Checking</div>
               </div>
@@ -278,7 +287,7 @@ export default function InvoiceViewPage() {
               </div>
             </div>
 
-            <div className="px-8 py-2 mt-16 border-t-2 border-slate-800 dark:border-slate-600 text-center text-xs text-slate-500 dark:text-slate-400">
+            <div className="px-8 py-1 border-t-2 border-slate-800 dark:border-slate-600 text-center text-xs text-slate-500 dark:text-slate-400">
               <div className="font-semibold text-slate-700 dark:text-slate-300">Shayan Kids Care &amp; Toys Store</div>
               <div>{invoice?.payment_type === 'cash' ? 'Cash Bill — Payment received.' : 'Credit Bill — Total due in 30 days only.'}</div>
               <div>shayankidscare@gmail.com</div>
