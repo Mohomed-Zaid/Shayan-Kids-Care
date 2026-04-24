@@ -199,9 +199,9 @@ export default function CustomersPage() {
         </button>
       </div>
 
-      <div className="bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50/50 border-b border-slate-200 text-slate-500">
+          <thead className="bg-slate-50/50 border-b border-slate-200 text-slate-500 dark:bg-emerald-950/35 dark:border-emerald-900/40 dark:text-emerald-100/80">
             <tr>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">#</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Name</th>
@@ -226,19 +226,19 @@ export default function CustomersPage() {
               </tr>
             ) : sortedRows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-5 py-8 text-slate-400 text-center">
-                  <Users size={24} className="mx-auto mb-2 opacity-40" />
+                <td colSpan={6} className="px-5 py-8 text-slate-400 dark:text-emerald-100/60 text-center">
+                  <Users size={24} className="mx-auto mb-2 opacity-40 dark:text-emerald-200/30" />
                   No customers yet. Add your first customer!
                 </td>
               </tr>
             ) : (
               sortedRows.map((row) => (
-                <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                  <td className="px-5 py-3.5 font-semibold text-slate-900">{row.customer_number ? `C-${String(row.customer_number).padStart(3, '0')}` : '—'}</td>
-                  <td className="px-5 py-3.5 font-medium text-slate-900">{row.name}</td>
-                  <td className="px-5 py-3.5 text-slate-500">{row.address}</td>
-                  <td className="px-5 py-3.5 text-slate-500">{row.phone}</td>
-                  <td className="px-5 py-3.5 text-slate-500">{row.phone2 || '—'}</td>
+                <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors dark:border-emerald-900/30 dark:hover:bg-emerald-500/5">
+                  <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-emerald-50">{row.customer_number ? `C-${String(row.customer_number).padStart(3, '0')}` : '—'}</td>
+                  <td className="px-5 py-3.5 font-medium text-slate-900 dark:text-emerald-50">{row.name}</td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{row.address}</td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{row.phone}</td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{row.phone2 || '—'}</td>
                   <td className="px-5 py-3.5 text-right">
                     <div className="inline-flex gap-1">
                       <button onClick={() => onEdit(row)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors" title="Edit">

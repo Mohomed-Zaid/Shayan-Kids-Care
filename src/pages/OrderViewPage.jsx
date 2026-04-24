@@ -3,13 +3,15 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import html2pdf from 'html2pdf.js'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
-import { ArrowLeft, CheckCircle, XCircle, ArrowRightLeft, ShoppingCart, Printer, Download, Trash2 } from 'lucide-react'
+import { ArrowLeft, CheckCircle, XCircle, ArrowRightLeft, ShoppingCart, Printer, Download, Trash2, FileText } from 'lucide-react'
+import logo from '../pictures/logo.jpeg'
 
 const statusConfig = {
-  pending: { label: 'Pending', bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200' },
-  confirmed: { label: 'Confirmed', bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-200' },
-  converted: { label: 'Converted', bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200' },
-  cancelled: { label: 'Cancelled', bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200' },
+  pending: { label: 'Pending', bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-700' },
+  confirmed: { label: 'Confirmed', bg: 'bg-blue-100 dark:bg-blue-900/40', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
+  invoiced: { label: 'Invoiced', bg: 'bg-emerald-100 dark:bg-emerald-900/40', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800' },
+  converted: { label: 'Invoiced', bg: 'bg-emerald-100 dark:bg-emerald-900/40', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800' },
+  cancelled: { label: 'Cancelled', bg: 'bg-red-100 dark:bg-red-900/40', text: 'text-red-700 dark:text-red-300', border: 'border-red-200 dark:border-red-800' },
 }
 
 export default function OrderViewPage() {
@@ -32,7 +34,7 @@ export default function OrderViewPage() {
       const [ordRes, itemsRes] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, order_number, total, status, created_at, customer_id, rep_id, payment_type, customers(name, address, phone), employees(name, is_rep)')
+          .select('id, order_number, total, status, created_at, customer_id, rep_id, payment_type, invoice_id, customers(name, address, phone), employees(name, is_rep)')
           .eq('id', id)
           .single(),
         supabase
@@ -100,7 +102,7 @@ export default function OrderViewPage() {
 
   const onConvert = async () => {
     if (order.status !== 'confirmed') {
-      toast.error('Only confirmed orders can be converted')
+      toast.error('Only confirmed orders can be invoiced')
       return
     }
 
@@ -154,12 +156,12 @@ export default function OrderViewPage() {
       })
       await Promise.all(stockUpdates)
 
-      // Mark order as converted
-      const { error: updErr } = await supabase.from('orders').update({ status: 'converted' }).eq('id', id)
+      // Mark order as invoiced and link to invoice
+      const { error: updErr } = await supabase.from('orders').update({ status: 'invoiced', invoice_id: invoice.id }).eq('id', id)
       if (updErr) { toast.error(updErr.message); setConverting(false); return }
 
-      toast.success('Order converted to invoice successfully')
-      navigate(`/invoices/${invoice.id}`)
+      toast.success('Order invoiced successfully')
+      setOrder({ ...order, status: 'invoiced', invoice_id: invoice.id })
     } catch (e) {
       toast.error(e?.message ?? 'Conversion failed')
     } finally {
@@ -170,15 +172,27 @@ export default function OrderViewPage() {
   const downloadPdf = async () => {
     if (!printRef.current) return
 
+    const wrapper = document.createElement('div')
+    wrapper.className = 'pdf-export-wrapper'
+    const cloned = printRef.current.cloneNode(true)
+    wrapper.appendChild(cloned)
+    document.body.appendChild(wrapper)
+
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
     const opt = {
-      margin: 10,
+      margin: 0,
       filename: `${orderNumber}-${customer?.name ?? 'Customer'}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
+      html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
     }
 
-    await html2pdf().set(opt).from(printRef.current).save()
+    try {
+      await html2pdf().set(opt).from(cloned).save()
+    } finally {
+      wrapper.remove()
+    }
   }
 
   if (loading || !order) {
@@ -192,12 +206,12 @@ export default function OrderViewPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between no-print">
-        <Link to="/orders" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">
+        <Link to="/orders" className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium transition-colors">
           <ArrowLeft size={16} />
           Back to Orders
         </Link>
         <div className="flex items-center gap-2">
-          <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors">
+          <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
             <Printer size={15} />
             Print
           </button>
@@ -214,8 +228,14 @@ export default function OrderViewPage() {
           {order.status === 'confirmed' && (
             <button onClick={onConvert} disabled={converting} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm">
               <ArrowRightLeft size={15} />
-              {converting ? 'Converting...' : 'Convert to Invoice'}
+              {converting ? 'Invoicing...' : 'Convert to Invoice'}
             </button>
+          )}
+          {(order.status === 'invoiced' || order.status === 'converted') && order.invoice_id && (
+            <Link to={`/invoices/${order.invoice_id}`} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm">
+              <FileText size={15} />
+              View Invoice
+            </Link>
           )}
           {(order.status === 'pending' || order.status === 'confirmed') && (
             <button onClick={onCancel} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">
@@ -230,93 +250,125 @@ export default function OrderViewPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-sm print-area" ref={printRef}>
-        {/* Header */}
-        <div className="px-8 pt-3 pb-2 flex items-start justify-between border-b-2 border-slate-800">
-          <div className="flex items-center gap-4">
-            <div className="bg-slate-100 p-3 rounded-xl">
-              <ShoppingCart size={24} className="text-slate-600" />
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
+        <div
+          ref={printRef}
+          className="bg-white dark:bg-slate-900 print-area min-h-[260mm] flex flex-col"
+        >
+          {/* Header */}
+          <div className="px-8 pt-3 pb-2 flex items-start justify-between border-b-2 border-slate-800 dark:border-slate-600">
+            <div className="flex items-center gap-4">
+              <img src={logo} alt="Logo" className="h-14 w-14 rounded-lg object-contain" />
+              <div>
+                <div className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Shayan Kids Care</div>
+                <div className="text-sm font-semibold text-slate-600 dark:text-slate-400">&amp; Toys Store</div>
+              </div>
             </div>
+            <div className="text-right">
+              <div className="text-3xl font-bold text-slate-900 dark:text-white tracking-wide">SALES ORDER</div>
+              <div className="text-sm text-slate-600 dark:text-slate-400 mt-1 font-medium">{orderNumber}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{new Date(order.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</div>
+              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${st.bg} ${st.text} border ${st.border} mt-1`}>
+                {st.label}
+              </span>
+            </div>
+          </div>
+
+          {/* From / Bill To */}
+          <div className="px-8 py-2 flex justify-between border-b border-slate-200 dark:border-slate-700">
             <div>
-              <div className="text-xl font-bold text-slate-900 leading-tight">Sales Order</div>
-              <div className="text-sm text-slate-600 mt-1 font-medium">{orderNumber}</div>
+              <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">From</div>
+              <div className="text-sm text-slate-700 dark:text-slate-300 space-y-1">
+                <div className="font-bold text-slate-900 dark:text-white">REP — {rep?.name ?? 'N/A'}</div>
+                <div>10/3 B, Attidiya Road</div>
+                <div>Kawdana, Dehiwala</div>
+                <div>+94 77 11 93 121</div>
+                <div>+94 75 38 41 599</div>
+                <div className="text-slate-500 dark:text-slate-400">shayankidscare@gmail.com</div>
+              </div>
             </div>
-          </div>
-          <div className="text-right">
-            <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold ${st.bg} ${st.text} border ${st.border}`}>
-              {st.label}
-            </span>
-            <div className="text-sm text-slate-500 mt-2">{createdAtLabel}</div>
-          </div>
-        </div>
 
-        {/* From / Bill To */}
-        <div className="px-8 py-2 flex justify-between border-b border-slate-200">
-          <div>
-            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">From</div>
-            <div className="text-sm text-slate-700 space-y-1">
-              <div className="font-bold text-slate-900">REP — {rep?.name ?? 'N/A'}</div>
-              <div>10/3 B, Attidiya Road</div>
-              <div>Kawdana, Dehiwala</div>
-              <div>+94 77 11 93 121</div>
-              <div className="text-slate-500">shayankidscare@gmail.com</div>
+            <div className="text-left">
+              <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Bill To</div>
+              <div className="text-sm text-slate-700 dark:text-slate-300 space-y-1">
+                <div className="font-bold text-slate-900 dark:text-white">{customer?.name ?? '-'}</div>
+                <div>{customer?.address ?? '-'}</div>
+                <div>{customer?.phone ?? '-'}</div>
+              </div>
+              <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
+                <div><span className="font-medium text-slate-600 dark:text-slate-300">Job:</span> Baby Items &amp; Toys</div>
+              </div>
             </div>
           </div>
-          <div className="text-left">
-            <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Bill To</div>
-            <div className="text-sm text-slate-700 space-y-1">
-              <div className="font-bold text-slate-900">{customer?.name ?? '-'}</div>
-              <div>{customer?.address ?? '-'}</div>
-              <div>{customer?.phone ?? '-'}</div>
-            </div>
-          </div>
-        </div>
 
-        {/* Items Table */}
-        <div className="px-8 py-2">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-800 text-white">
-                <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Item #</th>
-                <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Description</th>
-                <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Qty</th>
-                <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Unit Price</th>
-                <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((it, idx) => (
-                <tr key={it.id} className={`border-b border-slate-100 ${idx % 2 !== 0 ? 'bg-slate-50' : ''}`}>
-                  <td className="px-3 py-1.5 text-slate-600">{it.products?.code ?? '-'}</td>
-                  <td className="px-3 py-1.5 text-slate-900 font-medium">{it.products?.name ?? '-'}</td>
-                  <td className="px-3 py-1.5 text-right text-slate-700">{it.quantity}</td>
-                  <td className="px-3 py-1.5 text-right text-slate-700">{fmt(it.price ?? 0)}</td>
-                  <td className="px-3 py-1.5 text-right text-slate-900 font-semibold">{fmt(it.total ?? 0)}</td>
+          {/* Items Table */}
+          <div className="px-8 py-2">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-800 text-white">
+                  <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Item #</th>
+                  <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Description</th>
+                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Qty</th>
+                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Unit Price</th>
+                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Amount</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {items.map((it, idx) => (
+                  <tr key={it.id} className={`border-b border-slate-100 dark:border-slate-700 ${idx % 2 !== 0 ? 'bg-slate-50 dark:bg-slate-800/50' : ''}`}>
+                    <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{it.products?.code ?? '-'}</td>
+                    <td className="px-3 py-1.5 text-slate-900 dark:text-white font-medium">{it.products?.name ?? '-'}</td>
+                    <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{it.quantity}</td>
+                    <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{fmt(it.price ?? 0)}</td>
+                    <td className="px-3 py-1.5 text-right text-slate-900 dark:text-white font-semibold">{fmt(it.total ?? 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-        {/* Totals */}
-        <div className="px-8 pb-2 flex justify-end">
-          <div className="w-full max-w-xs border border-slate-200 rounded">
-            <div className="px-4 py-1.5 flex justify-between text-sm">
-              <span className="text-slate-500">Subtotal</span>
-              <span className="text-slate-800">{fmt(order.total ?? 0)}</span>
-            </div>
-            <div className="px-4 py-2 bg-slate-800 flex justify-between items-center border-t-2 border-slate-800">
-              <span className="text-white font-bold text-sm uppercase tracking-wider">Total</span>
-              <span className="text-white font-extrabold text-lg">{fmt(order.total ?? 0)}</span>
+          {/* Totals */}
+          <div className="px-8 pb-2 flex justify-end">
+            <div className="w-full max-w-xs border border-slate-200 dark:border-slate-700 rounded">
+              <div className="px-4 py-1.5 flex justify-between text-sm">
+                <span className="text-slate-500 dark:text-slate-400">Subtotal</span>
+                <span className="text-slate-800 dark:text-slate-200">{fmt(order.total ?? 0)}</span>
+              </div>
+              <div className="px-4 py-2 flex justify-between text-sm border-t border-slate-100 dark:border-slate-700">
+                <span className="text-slate-500 dark:text-slate-400">Discount</span>
+                <span className="text-slate-800 dark:text-slate-200">0.00%</span>
+              </div>
+              <div className="px-4 py-2 flex justify-between text-sm border-t border-slate-100 dark:border-slate-700">
+                <span className="text-slate-500 dark:text-slate-400">Disc. Amount</span>
+                <span className="text-slate-800 dark:text-slate-200">Rs. 0.00</span>
+              </div>
+              <div className="px-4 py-2 bg-slate-800 flex justify-between items-center border-t-2 border-slate-800">
+                <span className="text-white font-bold text-sm uppercase tracking-wider">Total</span>
+                <span className="text-white font-extrabold text-lg">{fmt(order.total ?? 0)}</span>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Footer note */}
-        <div className="px-8 py-2 border-t-2 border-slate-800 text-center text-xs text-slate-500">
-          <div className="font-semibold text-slate-700">Shayan Kids Care &amp; Toys Store</div>
-          <div>{order?.payment_type === 'cash' ? 'Cash Order — Payment received.' : 'Credit Order — Total due in 30 days only.'}</div>
-          <div>shayankidscare@gmail.com</div>
+          {/* Signature Section + Footer pushed to bottom */}
+          <div className="mt-auto">
+            <div className="px-8 py-3 grid grid-cols-3 gap-8 border-t border-slate-200 dark:border-slate-700">
+              <div>
+                <div className="border-b border-slate-300 dark:border-slate-600 pb-2 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-medium">Checking</div>
+              </div>
+              <div>
+                <div className="border-b border-slate-300 dark:border-slate-600 pb-2 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-medium">Received</div>
+              </div>
+              <div>
+                <div className="border-b border-slate-300 dark:border-slate-600 pb-2 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-medium">Customer Signature</div>
+              </div>
+            </div>
+
+            <div className="px-8 py-2 border-t-2 border-slate-800 dark:border-slate-600 text-center text-xs text-slate-500 dark:text-slate-400">
+              <div className="font-semibold text-slate-700 dark:text-slate-300">Shayan Kids Care &amp; Toys Store</div>
+              <div>{order?.payment_type === 'cash' ? 'Cash Order — Payment received.' : 'Credit Order — Total due in 30 days only.'}</div>
+              <div>shayankidscare@gmail.com</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

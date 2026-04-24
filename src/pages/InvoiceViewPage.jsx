@@ -70,6 +70,7 @@ export default function InvoiceViewPage() {
 
   const onDelete = async () => {
     if (!confirm('Delete this invoice and all its items?')) return
+    await supabase.from('orders').update({ invoice_id: null }).eq('invoice_id', id)
     await supabase.from('invoice_items').delete().eq('invoice_id', id)
     const { error: err } = await supabase.from('invoices').delete().eq('id', id)
     if (err) {
@@ -83,15 +84,27 @@ export default function InvoiceViewPage() {
   const downloadPdf = async () => {
     if (!printRef.current) return
 
+    const wrapper = document.createElement('div')
+    wrapper.className = 'pdf-export-wrapper'
+    const cloned = printRef.current.cloneNode(true)
+    wrapper.appendChild(cloned)
+    document.body.appendChild(wrapper)
+
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
     const opt = {
-      margin: 10,
+      margin: 0,
       filename: `${invoiceNumber}-${customer?.name ?? 'Customer'}.pdf`,
       image: { type: 'jpeg', quality: 0.98 },
-      html2canvas: { scale: 2 },
+      html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
     }
 
-    await html2pdf().set(opt).from(printRef.current).save()
+    try {
+      await html2pdf().set(opt).from(cloned).save()
+    } finally {
+      wrapper.remove()
+    }
   }
 
   const createdAtLabel = useMemo(() => {
@@ -133,12 +146,12 @@ export default function InvoiceViewPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between no-print">
-        <Link to="/invoices" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">
+        <Link to="/invoices" className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium transition-colors">
           <ArrowLeft size={16} />
           Back to Invoices
         </Link>
         <div className="flex items-center gap-2">
-          <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors">
+          <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
             <Printer size={15} />
             Print
           </button>
@@ -157,50 +170,50 @@ export default function InvoiceViewPage() {
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
         <div
           ref={printRef}
-          className="bg-white print-area min-h-[260mm] flex flex-col"
+          className="bg-white dark:bg-slate-900 print-area min-h-[260mm] flex flex-col"
         >
           {/* Header */}
-          <div className="px-8 pt-3 pb-2 flex items-start justify-between border-b-2 border-slate-800">
+          <div className="px-8 pt-3 pb-2 flex items-start justify-between border-b-2 border-slate-800 dark:border-slate-600">
             <div className="flex items-center gap-4">
               <img src={logo} alt="Logo" className="h-14 w-14 rounded-lg object-contain" />
               <div>
-                <div className="text-xl font-bold text-slate-900 leading-tight">Shayan Kids Care</div>
-                <div className="text-sm font-semibold text-slate-600">&amp; Toys Store</div>
+                <div className="text-xl font-bold text-slate-900 dark:text-white leading-tight">Shayan Kids Care</div>
+                <div className="text-sm font-semibold text-slate-600 dark:text-slate-400">&amp; Toys Store</div>
               </div>
             </div>
             <div className="text-right">
-              <div className="text-3xl font-bold text-slate-900 tracking-wide">INVOICE</div>
-              <div className="text-sm text-slate-600 mt-1 font-medium">{invoiceNumber}</div>
-              <div className="text-xs text-slate-500 mt-0.5">{new Date(invoice.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</div>
+              <div className="text-3xl font-bold text-slate-900 dark:text-white tracking-wide">INVOICE</div>
+              <div className="text-sm text-slate-600 dark:text-slate-400 mt-1 font-medium">{invoiceNumber}</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{new Date(invoice.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}</div>
             </div>
           </div>
 
           {/* From / Bill To */}
-          <div className="px-8 py-2 flex justify-between border-b border-slate-200">
+          <div className="px-8 py-2 flex justify-between border-b border-slate-200 dark:border-slate-700">
             <div>
-              <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">From</div>
-              <div className="text-sm text-slate-700 space-y-1">
-                <div className="font-bold text-slate-900">REP — {rep?.name ?? 'N/A'}</div>
+              <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">From</div>
+              <div className="text-sm text-slate-700 dark:text-slate-300 space-y-1">
+                <div className="font-bold text-slate-900 dark:text-white">REP — {rep?.name ?? 'N/A'}</div>
                 <div>10/3 B, Attidiya Road</div>
                 <div>Kawdana, Dehiwala</div>
                 <div>+94 77 11 93 121</div>
                 <div>+94 75 38 41 599</div>
-                <div className="text-slate-500">shayankidscare@gmail.com</div>
+                <div className="text-slate-500 dark:text-slate-400">shayankidscare@gmail.com</div>
               </div>
             </div>
 
             <div className="text-left">
-              <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Bill To</div>
-              <div className="text-sm text-slate-700 space-y-1">
-                <div className="font-bold text-slate-900">{customer?.name ?? '-'}</div>
+              <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">Bill To</div>
+              <div className="text-sm text-slate-700 dark:text-slate-300 space-y-1">
+                <div className="font-bold text-slate-900 dark:text-white">{customer?.name ?? '-'}</div>
                 <div>{customer?.address ?? '-'}</div>
                 <div>{customer?.phone ?? '-'}</div>
               </div>
-              <div className="mt-3 pt-2 border-t border-slate-100 text-xs text-slate-500 space-y-0.5">
-                <div><span className="font-medium text-slate-600">Job:</span> Baby Items &amp; Toys</div>
+              <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
+                <div><span className="font-medium text-slate-600 dark:text-slate-300">Job:</span> Baby Items &amp; Toys</div>
               </div>
             </div>
           </div>
@@ -219,12 +232,12 @@ export default function InvoiceViewPage() {
               </thead>
               <tbody>
                 {items.map((it, idx) => (
-                  <tr key={it.id} className={`border-b border-slate-100 ${idx % 2 !== 0 ? 'bg-slate-50' : ''}`}>
-                    <td className="px-3 py-1.5 text-slate-600">{it.products?.code ?? '-'}</td>
-                    <td className="px-3 py-1.5 text-slate-900 font-medium">{it.products?.name ?? '-'}</td>
-                    <td className="px-3 py-1.5 text-right text-slate-700">{it.quantity}</td>
-                    <td className="px-3 py-1.5 text-right text-slate-700">Rs. {Number(it.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                    <td className="px-3 py-1.5 text-right text-slate-900 font-semibold">Rs. {Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <tr key={it.id} className={`border-b border-slate-100 dark:border-slate-700 ${idx % 2 !== 0 ? 'bg-slate-50 dark:bg-slate-800/50' : ''}`}>
+                    <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{it.products?.code ?? '-'}</td>
+                    <td className="px-3 py-1.5 text-slate-900 dark:text-white font-medium">{it.products?.name ?? '-'}</td>
+                    <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{it.quantity}</td>
+                    <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">Rs. {Number(it.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td className="px-3 py-1.5 text-right text-slate-900 dark:text-white font-semibold">Rs. {Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                   </tr>
                 ))}
               </tbody>
@@ -233,18 +246,18 @@ export default function InvoiceViewPage() {
 
           {/* Totals */}
           <div className="px-8 pb-2 flex justify-end">
-            <div className="w-full max-w-xs border border-slate-200 rounded">
+            <div className="w-full max-w-xs border border-slate-200 dark:border-slate-700 rounded">
               <div className="px-4 py-1.5 flex justify-between text-sm">
-                <span className="text-slate-500">Subtotal</span>
-                <span className="text-slate-800">Rs. {Number(invoice.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                <span className="text-slate-500 dark:text-slate-400">Subtotal</span>
+                <span className="text-slate-800 dark:text-slate-200">Rs. {Number(invoice.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
               </div>
-              <div className="px-4 py-2 flex justify-between text-sm border-t border-slate-100">
-                <span className="text-slate-500">Discount</span>
-                <span className="text-slate-800">0.00%</span>
+              <div className="px-4 py-2 flex justify-between text-sm border-t border-slate-100 dark:border-slate-700">
+                <span className="text-slate-500 dark:text-slate-400">Discount</span>
+                <span className="text-slate-800 dark:text-slate-200">0.00%</span>
               </div>
-              <div className="px-4 py-2 flex justify-between text-sm border-t border-slate-100">
-                <span className="text-slate-500">Disc. Amount</span>
-                <span className="text-slate-800">Rs. 0.00</span>
+              <div className="px-4 py-2 flex justify-between text-sm border-t border-slate-100 dark:border-slate-700">
+                <span className="text-slate-500 dark:text-slate-400">Disc. Amount</span>
+                <span className="text-slate-800 dark:text-slate-200">Rs. 0.00</span>
               </div>
               <div className="px-4 py-2 bg-slate-800 flex justify-between items-center border-t-2 border-slate-800">
                 <span className="text-white font-bold text-sm uppercase tracking-wider">Total</span>
@@ -255,20 +268,20 @@ export default function InvoiceViewPage() {
 
           {/* Signature Section + Footer pushed to bottom */}
           <div className="mt-auto">
-            <div className="px-8 py-3 grid grid-cols-3 gap-8 border-t border-slate-200">
+            <div className="px-8 py-3 grid grid-cols-3 gap-8 border-t border-slate-200 dark:border-slate-700">
               <div>
-                <div className="border-b border-slate-300 pb-2 text-xs text-slate-500 uppercase tracking-wider font-medium">Checking</div>
+                <div className="border-b border-slate-300 dark:border-slate-600 pb-2 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-medium">Checking</div>
               </div>
               <div>
-                <div className="border-b border-slate-300 pb-2 text-xs text-slate-500 uppercase tracking-wider font-medium">Received</div>
+                <div className="border-b border-slate-300 dark:border-slate-600 pb-2 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-medium">Received</div>
               </div>
               <div>
-                <div className="border-b border-slate-300 pb-2 text-xs text-slate-500 uppercase tracking-wider font-medium">Customer Signature</div>
+                <div className="border-b border-slate-300 dark:border-slate-600 pb-2 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-medium">Customer Signature</div>
               </div>
             </div>
 
-            <div className="px-8 py-2 border-t-2 border-slate-800 text-center text-xs text-slate-500">
-              <div className="font-semibold text-slate-700">Shayan Kids Care &amp; Toys Store</div>
+            <div className="px-8 py-2 border-t-2 border-slate-800 dark:border-slate-600 text-center text-xs text-slate-500 dark:text-slate-400">
+              <div className="font-semibold text-slate-700 dark:text-slate-300">Shayan Kids Care &amp; Toys Store</div>
               <div>{invoice?.payment_type === 'cash' ? 'Cash Bill — Payment received.' : 'Credit Bill — Total due in 30 days only.'}</div>
               <div>shayankidscare@gmail.com</div>
             </div>

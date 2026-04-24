@@ -31,44 +31,44 @@ export default function LoginPage() {
   if (user) return <Navigate to="/dashboard" replace />
 
   return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <img src={logo} alt="Logo" className="h-16 w-16 rounded-xl object-cover shadow-md mx-auto" />
-          <h1 className="mt-4 text-2xl font-bold text-slate-900">Shayan Kids Care</h1>
-          <p className="text-sm text-slate-500 mt-1">Management System</p>
+          <h1 className="mt-4 text-2xl font-bold text-slate-900 dark:text-white">Shayan Kids Care</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Management System</p>
         </div>
 
-        <div className="bg-white border border-slate-200/60 rounded-xl shadow-sm p-8">
-          <h2 className="text-lg font-semibold text-slate-900">Admin Login</h2>
-          <p className="text-sm text-slate-500 mt-1">Sign in to manage products, customers, and invoices.</p>
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700 rounded-xl shadow-sm p-8">
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Admin Login</h2>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Sign in to manage products, customers, and invoices.</p>
 
           <form className="mt-6 space-y-4" onSubmit={onSubmit}>
             <div>
-              <label className="block text-sm font-medium text-slate-700">Email</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+                className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
                 required
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Password</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Password</label>
               <div className="mt-1.5 relative">
                 <input
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+                  className="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPw((v) => !v)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 transition-colors"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition-colors"
                   tabIndex={-1}
                 >
                   {showPw ? <EyeOff size={16} /> : <Eye size={16} />}

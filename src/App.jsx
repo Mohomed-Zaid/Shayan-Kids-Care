@@ -17,17 +17,22 @@ import InvoiceEditPage from './pages/InvoiceEditPage'
 import OrdersPage from './pages/OrdersPage'
 import OrderCreatePage from './pages/OrderCreatePage'
 import OrderViewPage from './pages/OrderViewPage'
+import HomePage from './pages/HomePage'
+import PurchasePage from './pages/PurchasePage'
+import PurchaseListPage from './pages/PurchaseListPage'
+import PurchaseViewPage from './pages/PurchaseViewPage'
+import VendorsPage from './pages/VendorsPage'
 
 export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
       <Routes>
+        <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
 
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/products" element={<ProductsPage />} />
             <Route path="/customers" element={<CustomersPage />} />
@@ -40,6 +45,10 @@ export default function App() {
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/orders/new" element={<OrderCreatePage />} />
             <Route path="/orders/:id" element={<OrderViewPage />} />
+            <Route path="/inventory/purchase" element={<PurchasePage />} />
+            <Route path="/inventory/purchases" element={<PurchaseListPage />} />
+            <Route path="/inventory/purchases/:id" element={<PurchaseViewPage />} />
+            <Route path="/vendors" element={<VendorsPage />} />
           </Route>
         </Route>
 

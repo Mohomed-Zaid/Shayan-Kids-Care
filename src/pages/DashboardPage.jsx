@@ -1,18 +1,19 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Link } from 'react-router-dom'
-import { Package, Users, FileText, DollarSign, Plus, Eye, TrendingUp, ArrowUpRight } from 'lucide-react'
+import { Package, Users, FileText, DollarSign, Plus, Eye, TrendingUp, ArrowUpRight, Truck, ShoppingCart } from 'lucide-react'
 
 const statConfig = [
   { key: 'products', label: 'Total Products', icon: Package, gradient: 'from-blue-500 to-blue-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-blue-100' },
   { key: 'customers', label: 'Total Customers', icon: Users, gradient: 'from-emerald-500 to-emerald-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-emerald-100' },
-  { key: 'invoices', label: 'Total Invoices', icon: FileText, gradient: 'from-slate-700 to-slate-800', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-slate-300' },
-  { key: 'sales', label: 'Total Sales', icon: DollarSign, gradient: 'from-amber-500 to-orange-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-amber-100', isCurrency: true },
+  { key: 'vendors', label: 'Total Vendors', icon: Truck, gradient: 'from-slate-700 to-slate-800', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-slate-300' },
+  { key: 'todaySales', label: 'Today Sales', icon: DollarSign, gradient: 'from-amber-500 to-orange-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-amber-100', isCurrency: true },
+  { key: 'todayPurchases', label: 'Today Purchases', icon: ShoppingCart, gradient: 'from-indigo-500 to-indigo-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-indigo-100', isCurrency: true },
 ]
 
 function StatCard({ label, value, icon: Icon, gradient, iconBg, textColor, valueColor, subColor, isCurrency }) {
   return (
-    <div className={`bg-gradient-to-br ${gradient} rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5`}>
+    <div className={`bg-gradient-to-br ${gradient} dark:from-emerald-950/40 dark:via-slate-950/40 dark:to-emerald-950/40 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 dark:border dark:border-emerald-400/15`}>
       <div className="flex items-center justify-between">
         <div className={`text-xs font-semibold ${textColor} uppercase tracking-wider opacity-90`}>{label}</div>
         <div className={`${iconBg} p-2.5 rounded-xl`}>
@@ -34,10 +35,12 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({
     products: 0,
     customers: 0,
-    invoices: 0,
-    sales: 0,
+    vendors: 0,
+    todaySales: 0,
+    todayPurchases: 0,
   })
   const [recentInvoices, setRecentInvoices] = useState([])
+  const [recentPurchases, setRecentPurchases] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -46,30 +49,52 @@ export default function DashboardPage() {
     const load = async () => {
       setLoading(true)
 
-      const [productsRes, customersRes, invoicesRes, salesRes, recentRes] = await Promise.all([
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      const todayEnd = new Date()
+      todayEnd.setHours(23, 59, 59, 999)
+
+      const [productsRes, customersRes, vendorsRes, todaySalesRes, todayPurchasesRes, recentInvRes, recentPurRes] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }),
         supabase.from('customers').select('id', { count: 'exact', head: true }),
-        supabase.from('invoices').select('id', { count: 'exact', head: true }),
-        supabase.from('invoices').select('total_amount'),
+        supabase.from('vendors').select('id', { count: 'exact', head: true }),
+        supabase
+          .from('invoices')
+          .select('total_amount, created_at')
+          .gte('created_at', todayStart.toISOString())
+          .lte('created_at', todayEnd.toISOString()),
+        supabase
+          .from('purchases')
+          .select('total_amount, created_at')
+          .gte('created_at', todayStart.toISOString())
+          .lte('created_at', todayEnd.toISOString()),
         supabase
           .from('invoices')
           .select('id, invoice_number, total_amount, created_at, customers(name)')
+          .order('created_at', { ascending: false })
+          .limit(10),
+        supabase
+          .from('purchases')
+          .select('id, total_amount, created_at, vendors(name)')
           .order('created_at', { ascending: false })
           .limit(10),
       ])
 
       if (!mounted) return
 
-      const sales = (salesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
+      const todaySales = (todaySalesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
+      const todayPurchases = (todayPurchasesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
 
       setStats({
         products: productsRes.count ?? 0,
         customers: customersRes.count ?? 0,
-        invoices: invoicesRes.count ?? 0,
-        sales,
+        vendors: vendorsRes.count ?? 0,
+        todaySales,
+        todayPurchases,
       })
 
-      setRecentInvoices(recentRes.data ?? [])
+      setRecentInvoices(recentInvRes.data ?? [])
+      setRecentPurchases(recentPurRes.data ?? [])
       setLoading(false)
     }
 
@@ -94,15 +119,15 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Welcome Header */}
-      <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-6 shadow-lg">
+      <div className="bg-gradient-to-r from-slate-800 to-slate-900 dark:from-emerald-950/60 dark:via-slate-950/60 dark:to-emerald-950/60 rounded-2xl p-6 shadow-lg dark:border dark:border-emerald-400/15">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-extrabold text-white">Dashboard</h1>
-            <p className="text-slate-400 text-sm mt-1">Welcome back to Shayan Kids Care &amp; Toys Store</p>
+            <p className="text-slate-400 dark:text-emerald-100/60 text-sm mt-1">Welcome back to Shayan Kids Care &amp; Toys Store</p>
           </div>
           <Link
             to="/invoices/new"
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-white text-slate-900 hover:bg-slate-100 transition-colors shadow-md"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-white dark:bg-emerald-950/40 dark:text-emerald-50 dark:border dark:border-emerald-400/15 text-slate-900 hover:bg-slate-100 dark:hover:bg-emerald-500/10 transition-colors shadow-md"
           >
             <Plus size={16} />
             Create Invoice
@@ -111,7 +136,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
         {statConfig.map((cfg) => (
           <StatCard
             key={cfg.key}
@@ -128,64 +153,113 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      {/* Recent Invoices */}
-      <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-sm">
-        <div className="p-5 flex items-center justify-between border-b border-slate-100">
-          <div>
-            <div className="text-base font-bold text-slate-900">Recent Invoices</div>
-            <div className="text-xs text-slate-400 mt-0.5">Last 10 invoices</div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Invoices */}
+        <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">
+          <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-emerald-900/40">
+            <div>
+              <div className="text-base font-bold text-slate-900 dark:text-emerald-50">Recent Invoices</div>
+              <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">Last 10 invoices</div>
+            </div>
+            <Link
+              to="/invoices"
+              className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors dark:text-emerald-100/75 dark:hover:text-emerald-50"
+            >
+              View All
+              <ArrowUpRight size={14} />
+            </Link>
           </div>
-          <Link
-            to="/invoices"
-            className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors"
-          >
-            View All
-            <ArrowUpRight size={14} />
-          </Link>
-        </div>
 
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-200">
-              <th className="text-left font-semibold text-slate-600 px-5 py-3 text-xs uppercase tracking-wider">Invoice #</th>
-              <th className="text-left font-semibold text-slate-600 px-5 py-3 text-xs uppercase tracking-wider">Customer</th>
-              <th className="text-left font-semibold text-slate-600 px-5 py-3 text-xs uppercase tracking-wider">Total</th>
-              <th className="text-left font-semibold text-slate-600 px-5 py-3 text-xs uppercase tracking-wider">Created</th>
-              <th className="px-5 py-3"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {recentInvoices.length === 0 ? (
-              <tr>
-                <td className="px-5 py-12 text-slate-400 text-center" colSpan={5}>
-                  <div className="flex flex-col items-center gap-2">
-                    <FileText size={32} className="text-slate-300" />
-                    <span>No invoices yet. Create your first invoice!</span>
-                  </div>
-                </td>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 dark:bg-emerald-950/35 dark:border-emerald-900/40">
+                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Invoice #</th>
+                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Customer</th>
+                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Total</th>
+                <th className="px-5 py-3"></th>
               </tr>
-            ) : (
-              recentInvoices.map((inv) => (
-                <tr key={inv.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                  <td className="px-5 py-3.5">
-                    <span className="font-semibold text-slate-900">INV-{String(inv.invoice_number ?? '').padStart(4, '0')}</span>
-                  </td>
-                  <td className="px-5 py-3.5 text-slate-600">{inv.customers?.name ?? '-'}</td>
-                  <td className="px-5 py-3.5 font-semibold text-slate-900">Rs. {Number(inv.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                  <td className="px-5 py-3.5 text-slate-500">
-                    {new Date(inv.created_at).toLocaleDateString()} {new Date(inv.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </td>
-                  <td className="px-5 py-3.5 text-right">
-                    <Link to={`/invoices/${inv.id}`} className="inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors">
-                      <Eye size={14} />
-                      View
-                    </Link>
+            </thead>
+            <tbody>
+              {recentInvoices.length === 0 ? (
+                <tr>
+                  <td className="px-5 py-12 text-slate-400 dark:text-emerald-100/60 text-center" colSpan={4}>
+                    <div className="flex flex-col items-center gap-2">
+                      <FileText size={32} className="text-slate-300 dark:text-emerald-200/30" />
+                      <span>No invoices yet. Create your first invoice!</span>
+                    </div>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                recentInvoices.map((inv) => (
+                  <tr key={inv.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors dark:border-emerald-900/30 dark:hover:bg-emerald-500/5">
+                    <td className="px-5 py-3.5">
+                      <div className="font-semibold text-slate-900 dark:text-emerald-50">INV-{String(inv.invoice_number ?? '').padStart(4, '0')}</div>
+                      <div className="text-xs text-slate-400 dark:text-emerald-100/50">{new Date(inv.created_at).toLocaleString()}</div>
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-100/70">{inv.customers?.name ?? '-'}</td>
+                    <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-emerald-50">Rs. {Number(inv.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td className="px-5 py-3.5 text-right">
+                      <Link
+                        to={`/invoices/${inv.id}`}
+                        className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-emerald-100/75 hover:text-slate-900 dark:hover:text-emerald-50 font-medium transition-colors"
+                      >
+                        <Eye size={14} />
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Recent Purchases */}
+        <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">
+          <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-emerald-900/40">
+            <div>
+              <div className="text-base font-bold text-slate-900 dark:text-emerald-50">Recent Purchases</div>
+              <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">Last 10 purchases</div>
+            </div>
+            <Link
+              to="/inventory/purchase"
+              className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors dark:text-emerald-100/75 dark:hover:text-emerald-50"
+            >
+              Create
+              <ArrowUpRight size={14} />
+            </Link>
+          </div>
+
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 dark:bg-emerald-950/35 dark:border-emerald-900/40">
+                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Vendor</th>
+                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Total</th>
+                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentPurchases.length === 0 ? (
+                <tr>
+                  <td className="px-5 py-12 text-slate-400 dark:text-emerald-100/60 text-center" colSpan={3}>
+                    <div className="flex flex-col items-center gap-2">
+                      <ShoppingCart size={32} className="text-slate-300 dark:text-emerald-200/30" />
+                      <span>No purchases yet.</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                recentPurchases.map((p) => (
+                  <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors dark:border-emerald-900/30 dark:hover:bg-emerald-500/5">
+                    <td className="px-5 py-3.5 font-medium text-slate-900 dark:text-emerald-50">{p.vendors?.name ?? '-'}</td>
+                    <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-emerald-50">Rs. {Number(p.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{new Date(p.created_at).toLocaleString()}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   )

@@ -232,9 +232,9 @@ export default function RepsPage() {
         </button>
       </div>
 
-      <div className="bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50/50 border-b border-slate-200 text-slate-500">
+          <thead className="bg-slate-50/50 border-b border-slate-200 text-slate-500 dark:bg-emerald-950/35 dark:border-emerald-900/40 dark:text-emerald-100/80">
             <tr>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Name</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Address</th>
@@ -260,21 +260,21 @@ export default function RepsPage() {
               </tr>
             ) : sortedRows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-5 py-8 text-slate-400 text-center">
-                  <UserCheck size={24} className="mx-auto mb-2 opacity-40" />
+                <td colSpan={7} className="px-5 py-8 text-slate-400 dark:text-emerald-100/60 text-center">
+                  <UserCheck size={24} className="mx-auto mb-2 opacity-40 dark:text-emerald-200/30" />
                   No employees yet. Add your first employee!
                 </td>
               </tr>
             ) : (
               sortedRows.map((row) => (
-                <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                  <td className="px-5 py-3.5 font-medium text-slate-900">{row.name}</td>
-                  <td className="px-5 py-3.5 text-slate-500">{row.address || '-'}</td>
-                  <td className="px-5 py-3.5 text-slate-500">
+                <tr key={row.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors dark:border-emerald-900/30 dark:hover:bg-emerald-500/5">
+                  <td className="px-5 py-3.5 font-medium text-slate-900 dark:text-emerald-50">{row.name}</td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{row.address || '-'}</td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">
                     {row.phone1}{row.phone2 ? `, ${row.phone2}` : ''}
                   </td>
-                  <td className="px-5 py-3.5 text-slate-500">{row.email || '-'}</td>
-                  <td className="px-5 py-3.5 text-slate-500">{row.role || '-'}</td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{row.email || '-'}</td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{row.role || '-'}</td>
                   <td className="px-5 py-3.5">
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${row.is_rep ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                       {row.is_rep ? 'Rep' : 'Employee'}

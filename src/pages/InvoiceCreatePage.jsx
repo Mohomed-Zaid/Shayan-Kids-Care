@@ -178,15 +178,15 @@ export default function InvoiceCreatePage() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white border border-slate-200/60 rounded-xl p-5 space-y-4 shadow-sm">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700 rounded-xl p-5 space-y-4 shadow-sm">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-700">Customer</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Customer</label>
               <select
                 value={customerId}
                 onChange={(e) => setCustomerId(e.target.value)}
-                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+                className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
               >
                 <option value="">Select customer...</option>
                 {customers.map((c) => (
@@ -198,11 +198,11 @@ export default function InvoiceCreatePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Rep</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Rep</label>
               <select
                 value={repId}
                 onChange={(e) => setRepId(e.target.value)}
-                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+                className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
               >
                 <option value="">Select rep...</option>
                 {reps.filter((r) => r.is_rep).map((r) => (
@@ -214,11 +214,11 @@ export default function InvoiceCreatePage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-700">Payment Type</label>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Payment Type</label>
               <select
                 value={paymentType}
                 onChange={(e) => setPaymentType(e.target.value)}
-                className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+                className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
               >
                 <option value="credit">Credit</option>
                 <option value="cash">Cash</option>
@@ -235,20 +235,20 @@ export default function InvoiceCreatePage() {
         ) : null}
       </div>
 
-      <div className="bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-sm">
-        <div className="p-5 flex items-center justify-between border-b border-slate-100">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
+        <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-slate-700">
           <div>
-            <div className="text-sm font-semibold text-slate-900">Items</div>
-            <div className="text-xs text-slate-400 mt-0.5">Add products and quantities</div>
+            <div className="text-sm font-semibold text-slate-900 dark:text-white">Items</div>
+            <div className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">Add products and quantities</div>
           </div>
-          <button onClick={addLine} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors">
+          <button onClick={addLine} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
             <Plus size={16} />
             Add Line
           </button>
         </div>
 
         <table className="w-full text-sm">
-          <thead className="bg-slate-50/50 border-b border-slate-200 text-slate-500">
+          <thead className="bg-slate-50/50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400">
             <tr>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Product</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Qty</th>
@@ -259,12 +259,12 @@ export default function InvoiceCreatePage() {
           </thead>
           <tbody>
             {linesWithTotals.map((l, idx) => (
-              <tr key={idx} className="border-b border-slate-50 hover:bg-slate-50/30 transition-colors">
+              <tr key={idx} className="border-b border-slate-50 dark:border-slate-700 hover:bg-slate-50/30 dark:hover:bg-slate-800/50 transition-colors">
                 <td className="px-5 py-3">
                   <select
                     value={l.product_id}
                     onChange={(e) => onSelectProduct(idx, e.target.value)}
-                    className="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+                    className="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
                   >
                     <option value="">Select product...</option>
                     {products.map((p) => (
@@ -280,7 +280,7 @@ export default function InvoiceCreatePage() {
                     value={l.quantity}
                     onChange={(e) => updateLine(idx, { quantity: e.target.value })}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addLine() } }}
-                    className="w-24 rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+                    className="w-24 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
                     min={1}
                   />
                 </td>
@@ -290,15 +290,15 @@ export default function InvoiceCreatePage() {
                     step="0.01"
                     value={l.price}
                     onChange={(e) => updateLine(idx, { price: e.target.value })}
-                    className="w-32 rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+                    className="w-32 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
                   />
                 </td>
-                <td className="px-5 py-3 font-medium text-slate-900">{Number(l.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                <td className="px-5 py-3 font-medium text-slate-900 dark:text-white">{Number(l.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                 <td className="px-5 py-3 text-right">
                   <button
                     onClick={() => removeLine(idx)}
                     disabled={lines.length === 1}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 transition-colors"
+                    className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 disabled:opacity-30 transition-colors"
                     title="Remove line"
                   >
                     <X size={15} />
@@ -311,15 +311,15 @@ export default function InvoiceCreatePage() {
       </div>
 
       <div className="flex items-center justify-between">
-        <div className="bg-slate-50 rounded-lg px-5 py-3 border border-slate-200/60">
-          <div className="text-xs text-slate-500 uppercase tracking-wide font-medium">Grand Total</div>
-          <div className="text-2xl font-bold text-slate-900 mt-0.5">Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+        <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-5 py-3 border border-slate-200/60 dark:border-slate-700">
+          <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide font-medium">Grand Total</div>
+          <div className="text-2xl font-bold text-slate-900 dark:text-white mt-0.5">Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
         </div>
 
         <div className="flex items-center gap-2">
         <button
           onClick={() => navigate('/invoices')}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
         >
           <ArrowLeft size={16} />
           Cancel

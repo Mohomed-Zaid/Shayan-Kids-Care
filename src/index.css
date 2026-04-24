@@ -8,6 +8,68 @@
   }
 }
 
+.force-light,
+.force-light * {
+  background-color: white !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
+}
+
+.force-light .bg-slate-800,
+.force-light .bg-slate-900 {
+  background-color: #1e293b !important;
+  color: white !important;
+}
+
+.force-light .bg-slate-50,
+.force-light .bg-slate-100,
+.force-light .bg-slate-800\/50 {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+.force-light .text-white {
+  color: white !important;
+}
+
+ .pdf-export-wrapper {
+   position: fixed;
+   left: -10000px;
+   top: 0;
+   width: 210mm;
+   background: white;
+ }
+
+ .pdf-export-wrapper .print-area {
+   width: 210mm;
+   min-height: 297mm;
+   background: white !important;
+   color: #0f172a !important;
+   border-radius: 0 !important;
+   border: none !important;
+   box-shadow: none !important;
+ }
+
+ .pdf-export-wrapper .print-area * {
+   color: inherit !important;
+   border-color: #e2e8f0 !important;
+ }
+
+ .pdf-export-wrapper .print-area .bg-slate-800,
+ .pdf-export-wrapper .print-area .bg-slate-900 {
+   background-color: #1e293b !important;
+   color: white !important;
+ }
+
+ .pdf-export-wrapper .print-area .bg-slate-50,
+ .pdf-export-wrapper .print-area .bg-slate-100 {
+   background-color: #f8fafc !important;
+ }
+
+ .pdf-export-wrapper .print-area .text-white {
+   color: white !important;
+ }
+
 @keyframes slide-in {
   from {
     opacity: 0;
@@ -35,6 +97,24 @@
     left: 0;
     top: 0;
     width: 100%;
+    background: white !important;
+    color: #0f172a !important;
+  }
+
+  .print-area * {
+    color: inherit !important;
+    border-color: #e2e8f0 !important;
+  }
+
+  .print-area .bg-slate-800,
+  .print-area .bg-slate-900 {
+    background-color: #1e293b !important;
+    color: white !important;
+  }
+
+  .print-area .bg-slate-50,
+  .print-area .bg-slate-100 {
+    background-color: #f8fafc !important;
   }
 
   .no-print {

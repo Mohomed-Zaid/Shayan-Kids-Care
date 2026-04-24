@@ -136,7 +136,7 @@ export default function CommissionPage() {
       </div>
 
       {/* Input Card */}
-      <div className="bg-white border border-slate-200/60 rounded-2xl p-6 shadow-sm">
+      <div className="bg-white border border-slate-200/60 rounded-2xl p-6 shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
           <div>
             <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wider mb-2">
@@ -146,7 +146,7 @@ export default function CommissionPage() {
             <select
               value={selectedRep}
               onChange={(e) => setSelectedRep(e.target.value)}
-              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent bg-white"
+              className="w-full border border-slate-300 dark:border-emerald-800/60 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-emerald-50 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent bg-white dark:bg-emerald-950/40"
             >
               <option value="">Select Rep</option>
               {reps.map((r) => (
@@ -163,7 +163,7 @@ export default function CommissionPage() {
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(Number(e.target.value))}
-              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent bg-white"
+              className="w-full border border-slate-300 dark:border-emerald-800/60 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-emerald-50 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent bg-white dark:bg-emerald-950/40"
             >
               {months.map((m, i) => (
                 <option key={i} value={i}>{m}</option>
@@ -179,7 +179,7 @@ export default function CommissionPage() {
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent bg-white"
+              className="w-full border border-slate-300 dark:border-emerald-800/60 rounded-xl px-4 py-2.5 text-sm text-slate-900 dark:text-emerald-50 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:border-transparent bg-white dark:bg-emerald-950/40"
             >
               {yearOptions.map((y) => (
                 <option key={y} value={y}>{y}</option>
@@ -238,15 +238,15 @@ export default function CommissionPage() {
           </div>
 
           {/* Invoice List */}
-          <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-sm">
-            <div className="p-5 flex items-center justify-between border-b border-slate-100">
+          <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">
+            <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-emerald-900/40">
               <div>
-                <div className="text-base font-bold text-slate-900">Invoices Breakdown</div>
-                <div className="text-xs text-slate-400 mt-0.5">{result.invoiceCount} invoices for {result.month} {result.year}</div>
+                <div className="text-base font-bold text-slate-900 dark:text-emerald-50">Invoices Breakdown</div>
+                <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">{result.invoiceCount} invoices for {result.month} {result.year}</div>
               </div>
               <button
                 onClick={downloadCsv}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border border-slate-300 text-slate-700 hover:bg-slate-50 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border border-slate-300 dark:border-emerald-800/60 text-slate-700 dark:text-emerald-50 hover:bg-slate-50 dark:hover:bg-emerald-500/10 transition-colors"
               >
                 <Download size={15} />
                 Export CSV
@@ -254,27 +254,27 @@ export default function CommissionPage() {
             </div>
 
             {result.invoiceCount === 0 ? (
-              <div className="px-5 py-12 text-center text-slate-400">
-                <FileText size={32} className="mx-auto text-slate-300 mb-2" />
+              <div className="px-5 py-12 text-center text-slate-400 dark:text-emerald-100/60">
+                <FileText size={32} className="mx-auto text-slate-300 dark:text-emerald-200/30 mb-2" />
                 No invoices found for this period.
               </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left font-semibold text-slate-600 px-5 py-3 text-xs uppercase tracking-wider">Invoice #</th>
-                    <th className="text-left font-semibold text-slate-600 px-5 py-3 text-xs uppercase tracking-wider">Customer</th>
-                    <th className="text-left font-semibold text-slate-600 px-5 py-3 text-xs uppercase tracking-wider">Total</th>
-                    <th className="text-left font-semibold text-slate-600 px-5 py-3 text-xs uppercase tracking-wider">Date</th>
+                  <tr className="bg-slate-50 border-b border-slate-200 dark:bg-emerald-950/35 dark:border-emerald-900/40">
+                    <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Invoice #</th>
+                    <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Customer</th>
+                    <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Total</th>
+                    <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Date</th>
                   </tr>
                 </thead>
                 <tbody>
                   {invoices.map((inv) => (
-                    <tr key={inv.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors">
-                      <td className="px-5 py-3 font-semibold text-slate-900">INV-{String(inv.invoice_number ?? '').padStart(4, '0')}</td>
-                      <td className="px-5 py-3 text-slate-600">{inv.customers?.name ?? '-'}</td>
-                      <td className="px-5 py-3 font-semibold text-slate-900">{fmt(inv.total_amount ?? 0)}</td>
-                      <td className="px-5 py-3 text-slate-500">{new Date(inv.created_at).toLocaleDateString()}</td>
+                    <tr key={inv.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors dark:border-emerald-900/30 dark:hover:bg-emerald-500/5">
+                      <td className="px-5 py-3 font-semibold text-slate-900 dark:text-emerald-50">INV-{String(inv.invoice_number ?? '').padStart(4, '0')}</td>
+                      <td className="px-5 py-3 text-slate-600 dark:text-emerald-100/70">{inv.customers?.name ?? '-'}</td>
+                      <td className="px-5 py-3 font-semibold text-slate-900 dark:text-emerald-50">{fmt(inv.total_amount ?? 0)}</td>
+                      <td className="px-5 py-3 text-slate-500 dark:text-emerald-100/60">{new Date(inv.created_at).toLocaleDateString()}</td>
                     </tr>
                   ))}
                 </tbody>
