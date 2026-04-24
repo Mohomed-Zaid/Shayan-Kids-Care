@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { Search, Eye, ArrowUpDown } from 'lucide-react'
+import { Search, Eye, Trash2, ArrowUpDown } from 'lucide-react'
 
 export default function PurchaseListPage() {
   const [rows, setRows] = useState([])
@@ -55,6 +55,13 @@ export default function PurchaseListPage() {
   const toggleSort = () => setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))
 
   const fmt = (val) => `Rs. ${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this purchase?')) return
+    const { error: err } = await supabase.from('purchases').delete().eq('id', id)
+    if (err) { alert(err.message); return }
+    setRows((prev) => prev.filter((r) => r.id !== id))
+  }
 
   return (
     <div className="space-y-4">
@@ -125,7 +132,7 @@ export default function PurchaseListPage() {
                     </span>
                   </td>
                   <td className="px-5 py-3.5 text-right font-semibold text-slate-900 dark:text-white">{fmt(row.total_amount)}</td>
-                  <td className="px-5 py-3.5 text-right">
+                  <td className="px-5 py-3.5 text-right flex items-center justify-end gap-3">
                     <Link
                       to={`/inventory/purchases/${row.id}`}
                       className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium transition-colors"
@@ -133,6 +140,13 @@ export default function PurchaseListPage() {
                       <Eye size={14} />
                       View
                     </Link>
+                    <button
+                      onClick={() => handleDelete(row.id)}
+                      className="inline-flex items-center gap-1.5 text-sm text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 font-medium transition-colors"
+                    >
+                      <Trash2 size={14} />
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))
