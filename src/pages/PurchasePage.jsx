@@ -24,6 +24,8 @@ export default function PurchasePage() {
 
   const [qty, setQty] = useState('')
   const [cost, setCost] = useState('')
+  const [mrp, setMrp] = useState('')
+  const [description, setDescription] = useState('')
   const [remarks, setRemarks] = useState('')
   const [expDate, setExpDate] = useState('')
 
@@ -88,6 +90,8 @@ export default function PurchasePage() {
     }
 
     const total = q * c
+    const m = Number(mrp)
+    const profitPct = c > 0 && m > 0 ? ((m - c) / c * 100).toFixed(1) : null
 
     setItems((prev) => [
       ...prev,
@@ -98,6 +102,9 @@ export default function PurchasePage() {
         name: selectedProduct.name,
         quantity: q,
         cost: c,
+        mrp: m || null,
+        profit_pct: profitPct,
+        description: description.trim() || null,
         total,
         exp_date: expDate || null,
         remarks: remarks.trim() || null,
@@ -107,6 +114,8 @@ export default function PurchasePage() {
     setSelectedProductId('')
     setQty('')
     setCost('')
+    setMrp('')
+    setDescription('')
     setRemarks('')
     setExpDate('')
     setProductSearch('')
@@ -139,6 +148,8 @@ export default function PurchasePage() {
         product_id: it.product_id,
         quantity: it.quantity,
         cost: it.cost,
+        mrp: it.mrp,
+        description: it.description,
         total: it.total,
         exp_date: it.exp_date,
         remarks: it.remarks,
@@ -281,6 +292,27 @@ export default function PurchasePage() {
               </div>
 
               <div className="md:col-span-2">
+                <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-emerald-100/70">MRP</div>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={mrp}
+                  onChange={(e) => setMrp(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 dark:border-emerald-900/60 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-emerald-50"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-emerald-100/70">Description</div>
+                <input
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-slate-300 dark:border-emerald-900/60 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-emerald-50"
+                />
+              </div>
+
+              <div className="md:col-span-2">
                 <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-emerald-100/70">Exp Date</div>
                 <input
                   type="month"
@@ -299,6 +331,12 @@ export default function PurchasePage() {
                 />
               </div>
             </div>
+
+            {cost && mrp && Number(cost) > 0 && Number(mrp) > 0 ? (
+              <div className="mt-2 text-xs font-semibold text-emerald-600 dark:text-emerald-300">
+                Profit: {((Number(mrp) - Number(cost)) / Number(cost) * 100).toFixed(1)}% (Rs. {(Number(mrp) - Number(cost)).toFixed(2)} per unit)
+              </div>
+            ) : null}
 
             <div className="mt-3 flex items-center justify-between">
               <div className="text-xs text-slate-500 dark:text-emerald-100/60">
@@ -329,7 +367,10 @@ export default function PurchasePage() {
                     <th className="text-left font-medium px-3 py-2 text-xs uppercase tracking-wide">Product</th>
                     <th className="text-right font-medium px-3 py-2 text-xs uppercase tracking-wide">Qty</th>
                     <th className="text-right font-medium px-3 py-2 text-xs uppercase tracking-wide">Cost</th>
+                    <th className="text-right font-medium px-3 py-2 text-xs uppercase tracking-wide">MRP</th>
+                    <th className="text-right font-medium px-3 py-2 text-xs uppercase tracking-wide">Profit %</th>
                     <th className="text-right font-medium px-3 py-2 text-xs uppercase tracking-wide">Total</th>
+                    <th className="text-left font-medium px-3 py-2 text-xs uppercase tracking-wide">Description</th>
                     <th className="text-left font-medium px-3 py-2 text-xs uppercase tracking-wide">Exp</th>
                     <th className="text-left font-medium px-3 py-2 text-xs uppercase tracking-wide">Remarks</th>
                     <th className="px-3 py-2"></th>
@@ -338,7 +379,7 @@ export default function PurchasePage() {
                 <tbody>
                   {items.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-3 py-8 text-center text-slate-400 dark:text-emerald-100/60">
+                      <td colSpan={10} className="px-3 py-8 text-center text-slate-400 dark:text-emerald-100/60">
                         Add items to this purchase.
                       </td>
                     </tr>
@@ -348,7 +389,10 @@ export default function PurchasePage() {
                         <td className="px-3 py-2.5 font-medium text-slate-900 dark:text-emerald-50">{it.code} - {it.name}</td>
                         <td className="px-3 py-2.5 text-right text-slate-700 dark:text-emerald-100/80">{it.quantity}</td>
                         <td className="px-3 py-2.5 text-right text-slate-700 dark:text-emerald-100/80">{fmt(it.cost)}</td>
+                        <td className="px-3 py-2.5 text-right text-slate-700 dark:text-emerald-100/80">{it.mrp ? fmt(it.mrp) : '-'}</td>
+                        <td className="px-3 py-2.5 text-right font-semibold text-emerald-600 dark:text-emerald-300">{it.profit_pct ? `${it.profit_pct}%` : '-'}</td>
                         <td className="px-3 py-2.5 text-right font-semibold text-slate-900 dark:text-emerald-50">{fmt(it.total)}</td>
+                        <td className="px-3 py-2.5 text-slate-500 dark:text-emerald-100/60">{it.description ?? '-'}</td>
                         <td className="px-3 py-2.5 text-slate-500 dark:text-emerald-100/60">{it.exp_date ?? '-'}</td>
                         <td className="px-3 py-2.5 text-slate-500 dark:text-emerald-100/60">{it.remarks ?? '-'}</td>
                         <td className="px-3 py-2.5 text-right">

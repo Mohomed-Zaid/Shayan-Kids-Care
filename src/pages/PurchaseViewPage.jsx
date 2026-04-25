@@ -23,7 +23,7 @@ export default function PurchaseViewPage() {
           .single(),
         supabase
           .from('purchase_items')
-          .select('id, product_id, quantity, cost, total, exp_date, remarks, products(name, code)')
+          .select('id, product_id, quantity, cost, mrp, description, total, exp_date, remarks, products(name, code)')
           .eq('purchase_id', id),
       ])
 
@@ -117,7 +117,10 @@ export default function PurchaseViewPage() {
                 <th className="text-left font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Product</th>
                 <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Qty</th>
                 <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Cost</th>
+                <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">MRP</th>
+                <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Profit %</th>
                 <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Total</th>
+                <th className="text-left font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Description</th>
                 <th className="text-left font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Exp Date</th>
                 <th className="text-left font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Remarks</th>
               </tr>
@@ -130,7 +133,10 @@ export default function PurchaseViewPage() {
                   </td>
                   <td className="px-4 py-2.5 text-right text-slate-700 dark:text-slate-300">{it.quantity}</td>
                   <td className="px-4 py-2.5 text-right text-slate-700 dark:text-slate-300">{fmt(it.cost)}</td>
+                  <td className="px-4 py-2.5 text-right text-slate-700 dark:text-slate-300">{it.mrp ? fmt(it.mrp) : '-'}</td>
+                  <td className="px-4 py-2.5 text-right font-semibold text-emerald-600 dark:text-emerald-300">{it.mrp && it.cost && Number(it.cost) > 0 ? `${((Number(it.mrp) - Number(it.cost)) / Number(it.cost) * 100).toFixed(1)}%` : '-'}</td>
                   <td className="px-4 py-2.5 text-right font-semibold text-slate-900 dark:text-white">{fmt(it.total)}</td>
+                  <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{it.description ?? '-'}</td>
                   <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{it.exp_date ?? '-'}</td>
                   <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{it.remarks ?? '-'}</td>
                 </tr>
