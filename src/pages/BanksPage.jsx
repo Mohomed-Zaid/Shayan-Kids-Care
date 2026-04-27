@@ -61,10 +61,10 @@ export default function BanksPage() {
     if (!q) return rows
     return rows.filter(
       (r) =>
-        String(r.code ?? '').toLowerCase().includes(q) ||
+        String(r.code ?? '').toLowerCase() === q ||
         String(r.name ?? '').toLowerCase().includes(q) ||
         String(r.branch ?? '').toLowerCase().includes(q) ||
-        String(r.account_no ?? '').toLowerCase().includes(q)
+        String(r.account_no ?? '').toLowerCase().startsWith(q)
     )
   })()
 
