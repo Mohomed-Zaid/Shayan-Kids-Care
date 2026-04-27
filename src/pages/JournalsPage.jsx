@@ -534,6 +534,7 @@ export default function JournalsPage() {
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Name</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Type</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Category</th>
+              <th className="text-right font-medium px-5 py-3 text-xs uppercase tracking-wide">Budget</th>
               <th className="px-5 py-3"></th>
             </tr>
           </thead>
@@ -563,6 +564,7 @@ export default function JournalsPage() {
                   <td className="px-5 py-3.5 font-medium text-slate-900 dark:text-white">{row.description ?? '-'}</td>
                   <td className="px-5 py-3.5 text-slate-700 dark:text-slate-300">{row.account_type ?? '-'}</td>
                   <td className="px-5 py-3.5 text-slate-700 dark:text-slate-300">{row.journal_categories?.name ?? '-'}</td>
+                  <td className="px-5 py-3.5 text-right font-semibold text-slate-900 dark:text-white">{row.budget ? `Rs. ${Number(row.budget).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}</td>
                   <td className="px-5 py-3.5 text-right">
                     <button
                       onClick={() => onEdit(row)}

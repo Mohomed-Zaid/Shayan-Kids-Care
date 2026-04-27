@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { Search, Eye, Trash2, ArrowUpDown } from 'lucide-react'
+import { Search, Eye, Trash2, ArrowUpDown, Pencil, Check, X } from 'lucide-react'
 
 export default function PurchaseListPage() {
   const [rows, setRows] = useState([])
@@ -9,6 +9,8 @@ export default function PurchaseListPage() {
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
   const [sortDir, setSortDir] = useState('desc')
+  const [editingId, setEditingId] = useState(null)
+  const [editForm, setEditForm] = useState({})
 
   const load = async () => {
     setLoading(true)
@@ -66,6 +68,37 @@ export default function PurchaseListPage() {
     const { error: err } = await supabase.from('purchases').delete().eq('id', purchaseId)
     if (err) { alert(err.message); return }
     setRows((prev) => prev.filter((r) => r.purchase_id !== purchaseId))
+  }
+
+  const startEdit = (row) => {
+    setEditingId(row.id)
+    setEditForm({ quantity: row.quantity, cost: row.cost, mrp: row.mrp ?? '', description: row.description ?? '', remarks: row.remarks ?? '' })
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditForm({})
+  }
+
+  const saveEdit = async (row) => {
+    const qty = Number(editForm.quantity) || 0
+    const cst = Number(editForm.cost) || 0
+    const total = qty * cst
+    const { error: err } = await supabase
+      .from('purchase_items')
+      .update({
+        quantity: qty,
+        cost: cst,
+        mrp: editForm.mrp ? Number(editForm.mrp) : null,
+        description: editForm.description.trim() || null,
+        remarks: editForm.remarks.trim() || null,
+        total,
+      })
+      .eq('id', row.id)
+    if (err) { alert(err.message); return }
+    setRows((prev) => prev.map((r) => r.id === row.id ? { ...r, quantity: qty, cost: cst, mrp: editForm.mrp ? Number(editForm.mrp) : null, description: editForm.description.trim() || null, remarks: editForm.remarks.trim() || null, total } : r))
+    setEditingId(null)
+    setEditForm({})
   }
 
   return (
@@ -135,33 +168,81 @@ export default function PurchaseListPage() {
                 filteredRows.map((row) => {
                   const purchase = row.purchases ?? {}
                   const vendor = purchase.vendors ?? {}
-                  const profitPct = row.mrp && row.cost && Number(row.cost) > 0 ? ((Number(row.mrp) - Number(row.cost)) / Number(row.cost) * 100).toFixed(1) : null
+                  const isEditing = editingId === row.id
+                  const profitPct = (isEditing ? editForm.mrp : row.mrp) && (isEditing ? editForm.cost : row.cost) && Number(isEditing ? editForm.cost : row.cost) > 0
+                    ? ((Number(isEditing ? editForm.mrp : row.mrp) - Number(isEditing ? editForm.cost : row.cost)) / Number(isEditing ? editForm.cost : row.cost) * 100).toFixed(1)
+                    : null
+                  const editTotal = (Number(editForm.quantity) || 0) * (Number(editForm.cost) || 0)
                   return (
-                    <tr key={row.id} className="border-b border-slate-50 dark:border-slate-800 hover:bg-slate-50/50 dark:hover:bg-slate-800/50 transition-colors">
+                    <tr key={row.id} className={`border-b border-slate-50 dark:border-slate-800 transition-colors ${isEditing ? 'bg-sky-50/50 dark:bg-sky-900/20' : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/50'}`}>
                       <td className="px-4 py-3 text-slate-900 dark:text-white whitespace-nowrap">{new Date(purchase.date ?? purchase.created_at).toLocaleDateString()}</td>
                       <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{purchase.ref_no || '-'}</td>
                       <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{vendor.name ?? '-'}</td>
                       <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{row.products?.code ? `${row.products.code} - ` : ''}{row.products?.name ?? '-'}</td>
-                      <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300">{row.quantity}</td>
-                      <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300">{fmt(row.cost)}</td>
-                      <td className="px-4 py-3 text-right text-slate-700 dark:text-slate-300">{row.mrp ? fmt(row.mrp) : '-'}</td>
+                      <td className="px-4 py-3 text-right">
+                        {isEditing ? (
+                          <input type="text" inputMode="numeric" value={editForm.quantity} onChange={(e) => setEditForm((f) => ({ ...f, quantity: e.target.value.replace(/[^0-9]/g, '') }))} className="w-16 text-right rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white" />
+                        ) : (
+                          <span className="text-slate-700 dark:text-slate-300">{row.quantity}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {isEditing ? (
+                          <input type="text" inputMode="decimal" value={editForm.cost} onChange={(e) => setEditForm((f) => ({ ...f, cost: e.target.value }))} className="w-24 text-right rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white" />
+                        ) : (
+                          <span className="text-slate-700 dark:text-slate-300">{fmt(row.cost)}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {isEditing ? (
+                          <input type="text" inputMode="decimal" value={editForm.mrp} onChange={(e) => setEditForm((f) => ({ ...f, mrp: e.target.value }))} className="w-24 text-right rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white" />
+                        ) : (
+                          <span className="text-slate-700 dark:text-slate-300">{row.mrp ? fmt(row.mrp) : '-'}</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-300">{profitPct ? `${profitPct}%` : '-'}</td>
-                      <td className="px-4 py-3 text-right font-semibold text-slate-900 dark:text-white">{fmt(row.total)}</td>
-                      <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{row.description ?? '-'}</td>
-                      <td className="px-4 py-3 text-right flex items-center justify-end gap-2">
-                        <Link
-                          to={`/inventory/purchases/${purchase.id}`}
-                          className="inline-flex items-center gap-1 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium transition-colors"
-                        >
-                          <Eye size={14} />
-                        </Link>
-                        <button
-                          onClick={() => handleDelete(purchase.id)}
-                          className="inline-flex items-center p-1 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
-                          title="Delete purchase"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-900 dark:text-white">{isEditing ? fmt(editTotal) : fmt(row.total)}</td>
+                      <td className="px-4 py-3">
+                        {isEditing ? (
+                          <input value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white" />
+                        ) : (
+                          <span className="text-slate-500 dark:text-slate-400">{row.description ?? '-'}</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right flex items-center justify-end gap-1">
+                        {isEditing ? (
+                          <>
+                            <button onClick={() => saveEdit(row)} className="p-1 text-emerald-600 hover:text-emerald-800 dark:text-emerald-300 dark:hover:text-emerald-100 transition-colors" title="Save">
+                              <Check size={15} />
+                            </button>
+                            <button onClick={cancelEdit} className="p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors" title="Cancel">
+                              <X size={15} />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <Link
+                              to={`/inventory/purchases/${purchase.id}`}
+                              className="inline-flex items-center gap-1 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium transition-colors"
+                            >
+                              <Eye size={14} />
+                            </Link>
+                            <button
+                              onClick={() => startEdit(row)}
+                              className="inline-flex items-center p-1 text-sky-600 hover:text-sky-800 dark:text-sky-400 dark:hover:text-sky-200 transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(purchase.id)}
+                              className="inline-flex items-center p-1 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+                              title="Delete purchase"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   )

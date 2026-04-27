@@ -11,6 +11,12 @@
   }
 }
 
+@layer base {
+  :root:not(.dark) body {
+    color: #e2e8f0;
+  }
+}
+
 @layer utilities {
   .animate-slide-in {
     animation: slide-in 0.3s ease-out;
@@ -39,6 +45,74 @@
 
 .force-light .text-white {
   color: white !important;
+}
+
+/* Light theme (non-dark): blue/teal glass look */
+:root:not(.dark) .bg-white {
+  background-color: rgba(15, 23, 42, 0.35) !important;
+}
+
+:root:not(.dark) .bg-slate-50,
+:root:not(.dark) .bg-slate-100 {
+  background-color: rgba(15, 23, 42, 0.25) !important;
+}
+
+:root:not(.dark) .border-slate-200,
+:root:not(.dark) .border-slate-200\/60,
+:root:not(.dark) .border-slate-300 {
+  border-color: rgba(148, 163, 184, 0.35) !important;
+}
+
+/* Text overrides — exclude buttons so hover text stays visible */
+:root:not(.dark) .text-slate-900:not(button):not(a),
+:root:not(.dark) .text-slate-800:not(button):not(a),
+:root:not(.dark) .text-slate-700:not(button):not(a),
+:root:not(.dark) button .text-slate-900,
+:root:not(.dark) button .text-slate-800,
+:root:not(.dark) button .text-slate-700,
+:root:not(.dark) a .text-slate-900,
+:root:not(.dark) a .text-slate-800,
+:root:not(.dark) a .text-slate-700 {
+  color: #f8fafc !important;
+}
+
+:root:not(.dark) .text-slate-600:not(button):not(a),
+:root:not(.dark) .text-slate-500:not(button):not(a),
+:root:not(.dark) .text-slate-400:not(button):not(a),
+:root:not(.dark) button .text-slate-600,
+:root:not(.dark) button .text-slate-500,
+:root:not(.dark) button .text-slate-400,
+:root:not(.dark) a .text-slate-600,
+:root:not(.dark) a .text-slate-500,
+:root:not(.dark) a .text-slate-400 {
+  color: rgba(226, 232, 240, 0.75) !important;
+}
+
+/* Buttons in light theme: keep text readable on hover */
+:root:not(.dark) button,
+:root:not(.dark) a.inline-flex,
+:root:not(.dark) a.flex.items-center.gap-2 {
+  color: #f8fafc !important;
+}
+
+:root:not(.dark) button:hover,
+:root:not(.dark) a.inline-flex:hover,
+:root:not(.dark) a.flex.items-center.gap-2:hover {
+  background-color: rgba(15, 23, 42, 0.55) !important;
+  color: #f8fafc !important;
+}
+
+:root:not(.dark) input,
+:root:not(.dark) select,
+:root:not(.dark) textarea {
+  background-color: rgba(2, 6, 23, 0.20) !important;
+  color: #f8fafc !important;
+  border-color: rgba(148, 163, 184, 0.35) !important;
+}
+
+:root:not(.dark) input::placeholder,
+:root:not(.dark) textarea::placeholder {
+  color: rgba(226, 232, 240, 0.55) !important;
 }
 
  .pdf-export-wrapper {

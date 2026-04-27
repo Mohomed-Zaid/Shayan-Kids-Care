@@ -1,9 +1,20 @@
 import React, { useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen } from 'lucide-react'
+import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 import { useTheme } from '../contexts/ThemeContext'
+
+// ── User mapping: add new users here ──────────────────────────
+// email → { name, role }
+const USER_MAP = {
+  'zaidn2848@gmail.com':       { name: 'Zaid',   role: 'IT Developer' },
+  'shayankidscare@gmail.com':  { name: 'Niflan', role: 'Owner' },
+  // Add more users below:
+  // 'someone@example.com':     { name: 'Name',   role: 'Admin' },
+  // 'rep@example.com':         { name: 'RepName', role: 'Rep' },
+}
+// ─────────────────────────────────────────────────────────────
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -28,6 +39,15 @@ const navItems = [
       { to: '/inventory/purchases', label: 'Purchase History', icon: FileText },
     ],
   },
+  {
+    key: 'finance',
+    label: 'Finance',
+    icon: Wallet,
+    children: [
+      { to: '/finance/journal-entry', label: 'Journal Entry', icon: BookOpen },
+      { to: '/finance/receivables', label: 'Receivables', icon: FileText },
+    ],
+  },
   { to: '/orders', label: 'Orders & Invoices', icon: ShoppingCart },
   { to: '/commission', label: 'Commission', icon: Calculator },
 ]
@@ -45,6 +65,9 @@ function usePageTitle() {
     if (path.startsWith('/invoices')) return 'Orders & Invoices'
     if (path.startsWith('/vendors')) return 'Vendors'
     if (path.startsWith('/journals')) return 'Journal'
+    if (path.startsWith('/finance/journal-entry')) return 'Journal Entry'
+    if (path.startsWith('/finance/receivables')) return 'Receivables'
+    if (path.startsWith('/finance')) return 'Finance'
     if (path.startsWith('/reps')) return 'Employees'
     if (path.startsWith('/commission')) return 'Commission'
     if (path.startsWith('/inventory/purchases/') && path.endsWith('/edit')) return 'Edit Purchase'
@@ -63,10 +86,18 @@ function usePageTitle() {
 export default function AppLayout() {
   const title = usePageTitle()
   const navigate = useNavigate()
-  const { signOut } = useAuth()
+  const { signOut, user } = useAuth()
+
+  const displayName = (() => {
+    const email = user?.email ?? ''
+    const mapped = USER_MAP[email]
+    return mapped ?? { name: email.split('@')[0], role: 'User' }
+  })()
+
+  const isOwner = user?.email === 'shayankidscare@gmail.com'
   const { theme, toggleTheme } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [openGroups, setOpenGroups] = useState({ originate: true, inventory: true })
+  const [openGroups, setOpenGroups] = useState({ originate: true, inventory: true, finance: true })
 
   const onLogout = async () => {
     await signOut()
@@ -84,13 +115,13 @@ export default function AppLayout() {
         }`}
       >
         <div className="px-5 py-5 border-b border-slate-100 dark:border-emerald-900/40 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <NavLink to="/dashboard" onClick={closeMobile} className="flex items-center gap-3">
             <img src={logo} alt="Logo" className="h-10 w-10 rounded-lg object-cover shadow-sm" />
             <div>
               <div className="text-base font-bold text-slate-900 dark:text-white">Shayan Kids Care</div>
               <div className="text-[11px] text-slate-400 mt-0.5">Management System</div>
             </div>
-          </div>
+          </NavLink>
           <button onClick={closeMobile} className="text-slate-400 hover:text-slate-700 dark:hover:text-white">
             <X size={20} />
           </button>
@@ -163,7 +194,14 @@ export default function AppLayout() {
           })}
         </nav>
 
-        <div className="p-3 border-t border-slate-100 dark:border-emerald-900/40">
+        <div className="p-3 border-t border-slate-100 dark:border-emerald-900/40 space-y-1">
+          <div className="flex items-center gap-3 px-3 py-2.5">
+            <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-900 dark:bg-emerald-600 text-white text-xs font-bold">{displayName.name.charAt(0).toUpperCase()}</div>
+            <div>
+              <div className="text-sm font-semibold text-slate-900 dark:text-white">{displayName.name}</div>
+              <div className="text-[10px] text-slate-400 dark:text-emerald-100/60">{displayName.role}</div>
+            </div>
+          </div>
           <button
             onClick={() => { closeMobile(); onLogout() }}
             className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors dark:text-emerald-100/70 dark:hover:bg-red-500/10 dark:hover:text-red-200"
@@ -202,6 +240,13 @@ export default function AppLayout() {
               >
                 {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
               </button>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-900 dark:bg-emerald-600 text-white text-xs font-bold">{displayName.name.charAt(0).toUpperCase()}</div>
+                <div className="hidden sm:block">
+                  <div className="text-sm font-semibold text-slate-900 dark:text-white">{displayName.name}</div>
+                  <div className="text-[10px] text-slate-400 dark:text-emerald-100/60">{displayName.role}</div>
+                </div>
+              </div>
               <button
                 onClick={onLogout}
                 className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm"

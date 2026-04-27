@@ -5,6 +5,17 @@ import { Plus, Search, Trash2, Save, AlertTriangle } from 'lucide-react'
 
 const fmt = (val) => `Rs. ${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
+const withCommas = (val) => {
+  if (val === '' || val === undefined || val === null) return ''
+  const str = String(val).replace(/,/g, '')
+  if (!str) return ''
+  const parts = str.split('.')
+  parts[0] = Number(parts[0] || 0).toLocaleString()
+  return parts.join('.')
+}
+
+const stripCommas = (val) => String(val).replace(/,/g, '')
+
 export default function PurchasePage() {
   const toast = useToast()
 
@@ -271,10 +282,11 @@ export default function PurchasePage() {
               <div className="md:col-span-2">
                 <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-emerald-100/70">Qty</div>
                 <input
-                  type="number"
-                  min="0"
-                  value={qty}
-                  onChange={(e) => setQty(e.target.value)}
+                  type="text"
+                  inputMode="numeric"
+                  value={withCommas(qty)}
+                  onChange={(e) => setQty(stripCommas(e.target.value))}
+                  placeholder="0"
                   className="mt-1 w-full rounded-lg border border-slate-300 dark:border-emerald-900/60 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-emerald-50"
                 />
               </div>
@@ -282,11 +294,11 @@ export default function PurchasePage() {
               <div className="md:col-span-2">
                 <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-emerald-100/70">Cost</div>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={cost}
-                  onChange={(e) => setCost(e.target.value)}
+                  type="text"
+                  inputMode="decimal"
+                  value={withCommas(cost)}
+                  onChange={(e) => setCost(stripCommas(e.target.value))}
+                  placeholder="0"
                   className="mt-1 w-full rounded-lg border border-slate-300 dark:border-emerald-900/60 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-emerald-50"
                 />
               </div>
@@ -294,11 +306,11 @@ export default function PurchasePage() {
               <div className="md:col-span-2">
                 <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-emerald-100/70">MRP</div>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={mrp}
-                  onChange={(e) => setMrp(e.target.value)}
+                  type="text"
+                  inputMode="decimal"
+                  value={withCommas(mrp)}
+                  onChange={(e) => setMrp(stripCommas(e.target.value))}
+                  placeholder="0"
                   className="mt-1 w-full rounded-lg border border-slate-300 dark:border-emerald-900/60 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-emerald-50"
                 />
               </div>

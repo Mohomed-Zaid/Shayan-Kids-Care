@@ -1,14 +1,16 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Link } from 'react-router-dom'
-import { Package, Users, FileText, DollarSign, Plus, Eye, TrendingUp, ArrowUpRight, Truck, ShoppingCart } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
+import { Package, Users, FileText, DollarSign, Plus, Eye, TrendingUp, ArrowUpRight, Truck, ShoppingCart, BookOpen, Wallet, Calendar } from 'lucide-react'
 
 const statConfig = [
-  { key: 'products', label: 'Total Products', icon: Package, gradient: 'from-blue-500 to-blue-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-blue-100' },
-  { key: 'customers', label: 'Total Customers', icon: Users, gradient: 'from-emerald-500 to-emerald-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-emerald-100' },
-  { key: 'vendors', label: 'Total Vendors', icon: Truck, gradient: 'from-slate-700 to-slate-800', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-slate-300' },
   { key: 'todaySales', label: 'Today Sales', icon: DollarSign, gradient: 'from-amber-500 to-orange-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-amber-100', isCurrency: true },
+  { key: 'totalSales', label: 'Total Sales', icon: TrendingUp, gradient: 'from-rose-500 to-pink-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-rose-100', isCurrency: true },
   { key: 'todayPurchases', label: 'Today Purchases', icon: ShoppingCart, gradient: 'from-indigo-500 to-indigo-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-indigo-100', isCurrency: true },
+  { key: 'totalPurchases', label: 'Total Purchases', icon: Wallet, gradient: 'from-teal-500 to-cyan-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-teal-100', isCurrency: true },
+  { key: 'products', label: 'Products', icon: Package, gradient: 'from-blue-500 to-blue-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-blue-100' },
+  { key: 'customers', label: 'Customers', icon: Users, gradient: 'from-emerald-500 to-emerald-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-emerald-100' },
 ]
 
 function StatCard({ label, value, icon: Icon, gradient, iconBg, textColor, valueColor, subColor, isCurrency }) {
@@ -32,12 +34,27 @@ function StatCard({ label, value, icon: Icon, gradient, iconBg, textColor, value
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth()
+
+  const displayName = (() => {
+    const email = user?.email ?? ''
+    const USER_MAP = {
+      'zaidn2848@gmail.com': 'Zaid',
+      'shayankidscare@gmail.com': 'Niflan',
+    }
+    return USER_MAP[email] ?? email.split('@')[0]
+  })()
+
   const [stats, setStats] = useState({
     products: 0,
     customers: 0,
     vendors: 0,
     todaySales: 0,
     todayPurchases: 0,
+    totalSales: 0,
+    totalPurchases: 0,
+    journals: 0,
+    journalEntries: 0,
   })
   const [recentInvoices, setRecentInvoices] = useState([])
   const [recentPurchases, setRecentPurchases] = useState([])
@@ -54,7 +71,7 @@ export default function DashboardPage() {
       const todayEnd = new Date()
       todayEnd.setHours(23, 59, 59, 999)
 
-      const [productsRes, customersRes, vendorsRes, todaySalesRes, todayPurchasesRes, recentInvRes, recentPurRes] = await Promise.all([
+      const [productsRes, customersRes, vendorsRes, todaySalesRes, todayPurchasesRes, totalSalesRes, totalPurchasesRes, journalsRes, journalEntriesRes, recentInvRes, recentPurRes] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }),
         supabase.from('customers').select('id', { count: 'exact', head: true }),
         supabase.from('vendors').select('id', { count: 'exact', head: true }),
@@ -68,6 +85,10 @@ export default function DashboardPage() {
           .select('total_amount, created_at')
           .gte('created_at', todayStart.toISOString())
           .lte('created_at', todayEnd.toISOString()),
+        supabase.from('invoices').select('total_amount'),
+        supabase.from('purchases').select('total_amount'),
+        supabase.from('journals').select('id', { count: 'exact', head: true }),
+        supabase.from('journal_entries').select('id', { count: 'exact', head: true }),
         supabase
           .from('invoices')
           .select('id, invoice_number, total_amount, created_at, customers(name)')
@@ -84,6 +105,8 @@ export default function DashboardPage() {
 
       const todaySales = (todaySalesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
       const todayPurchases = (todayPurchasesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
+      const totalSales = (totalSalesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
+      const totalPurchases = (totalPurchasesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
 
       setStats({
         products: productsRes.count ?? 0,
@@ -91,6 +114,10 @@ export default function DashboardPage() {
         vendors: vendorsRes.count ?? 0,
         todaySales,
         todayPurchases,
+        totalSales,
+        totalPurchases,
+        journals: journalsRes.count ?? 0,
+        journalEntries: journalEntriesRes.count ?? 0,
       })
 
       setRecentInvoices(recentInvRes.data ?? [])
@@ -122,8 +149,12 @@ export default function DashboardPage() {
       <div className="bg-gradient-to-r from-slate-800 to-slate-900 dark:from-emerald-950/60 dark:via-slate-950/60 dark:to-emerald-950/60 rounded-2xl p-6 shadow-lg dark:border dark:border-emerald-400/15">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-extrabold text-white">Dashboard</h1>
-            <p className="text-slate-400 dark:text-emerald-100/60 text-sm mt-1">Welcome back to Shayan Kids Care &amp; Toys Store</p>
+            <h1 className="text-2xl font-extrabold text-white">Welcome back, {displayName}</h1>
+            <p className="text-slate-400 dark:text-emerald-100/60 text-sm mt-1">Shayan Kids Care &amp; Toys Store</p>
+            <div className="flex items-center gap-1.5 mt-2 text-xs text-slate-400 dark:text-emerald-100/50">
+              <Calendar size={12} />
+              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} &middot; {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+            </div>
           </div>
           <Link
             to="/orders/new"
@@ -136,7 +167,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {statConfig.map((cfg) => (
           <StatCard
             key={cfg.key}
@@ -162,7 +193,7 @@ export default function DashboardPage() {
               <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">Last 10 invoices</div>
             </div>
             <Link
-              to="/invoices"
+              to="/orders"
               className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors dark:text-emerald-100/75 dark:hover:text-emerald-50"
             >
               View All
@@ -222,10 +253,10 @@ export default function DashboardPage() {
               <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">Last 10 purchases</div>
             </div>
             <Link
-              to="/inventory/purchase"
+              to="/inventory/purchases"
               className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors dark:text-emerald-100/75 dark:hover:text-emerald-50"
             >
-              Create
+              View All
               <ArrowUpRight size={14} />
             </Link>
           </div>

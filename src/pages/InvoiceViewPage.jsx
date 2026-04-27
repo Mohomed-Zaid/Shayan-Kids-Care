@@ -78,7 +78,7 @@ export default function InvoiceViewPage() {
       return
     }
     toast.success('Invoice deleted')
-    navigate('/invoices', { replace: true })
+    navigate('/orders', { replace: true })
   }
 
   const downloadPdf = async () => {
@@ -131,9 +131,9 @@ export default function InvoiceViewPage() {
         <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">
           {error}
         </div>
-        <Link to="/invoices" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 font-medium">
+        <Link to="/orders" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 font-medium">
           <ArrowLeft size={16} />
-          Back to invoices
+          Back to Orders & Invoices
         </Link>
       </div>
     )
@@ -146,9 +146,9 @@ export default function InvoiceViewPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between no-print">
-        <Link to="/invoices" className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium transition-colors">
+        <Link to="/orders" className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium transition-colors">
           <ArrowLeft size={16} />
-          Back to Invoices
+          Back to Orders & Invoices
         </Link>
         <div className="flex items-center gap-2">
           <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
