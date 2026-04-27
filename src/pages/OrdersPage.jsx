@@ -21,6 +21,8 @@ const statusTabs = [
 ]
 
 export default function OrdersPage() {
+  const VAT_RATE = 0.18
+
   const [orders, setOrders] = useState([])
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)
@@ -125,10 +127,19 @@ export default function OrdersPage() {
       return
     }
 
-    // Create invoice
+    // Create invoice — carry VAT from order
+    const orderVatRate = Number(order.vat_rate ?? 0)
+    const orderVatAmount = Number(order.vat_amount ?? 0)
     const { data: invoice, error: invErr } = await supabase
       .from('invoices')
-      .insert({ customer_id: order.customer_id, rep_id: order.rep_id || null, total_amount: order.total, payment_type: order.payment_type ?? 'credit' })
+      .insert({
+        customer_id: order.customer_id,
+        rep_id: order.rep_id || null,
+        total_amount: order.total,
+        vat_rate: orderVatRate,
+        vat_amount: orderVatAmount,
+        payment_type: order.payment_type ?? 'credit',
+      })
       .select('id')
       .single()
 
@@ -238,10 +249,6 @@ export default function OrdersPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Link to="/invoices/new" className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-            <FileText size={16} />
-            Direct Invoice
-          </Link>
           <Link to="/orders/new" className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
             <Plus size={16} />
             Create Order

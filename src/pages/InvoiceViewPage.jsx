@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import html2pdf from 'html2pdf.js'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
@@ -9,6 +9,7 @@ import logo from '../pictures/logo.jpeg'
 export default function InvoiceViewPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const toast = useToast()
   const printRef = useRef(null)
 
@@ -26,7 +27,7 @@ export default function InvoiceViewPage() {
 
       const invRes = await supabase
         .from('invoices')
-        .select('id, invoice_number, total_amount, created_at, payment_type, customers(name, address, phone), employees(id, name, is_rep)')
+        .select('id, invoice_number, total_amount, vat_rate, vat_amount, created_at, payment_type, customers(name, address, phone), employees(id, name, is_rep)')
         .eq('id', id)
         .single()
 
@@ -67,6 +68,14 @@ export default function InvoiceViewPage() {
 
   const customer = invoice?.customers
   const rep = invoice?.employees
+
+  const subtotal = useMemo(() => {
+    return items.reduce((s, it) => s + Number(it.total ?? 0), 0)
+  }, [items])
+
+  const vatRate = Number(invoice?.vat_rate ?? 0.18)
+  const vatAmount = Number(invoice?.vat_amount ?? subtotal * vatRate)
+  const totalAmount = Number(invoice?.total_amount ?? subtotal + vatAmount)
 
   const onDelete = async () => {
     if (!confirm('Delete this invoice and all its items?')) return
@@ -131,9 +140,9 @@ export default function InvoiceViewPage() {
         <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">
           {error}
         </div>
-        <Link to="/orders" className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 font-medium">
+        <Link to={location.state?.from || '/orders'} className="inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 font-medium">
           <ArrowLeft size={16} />
-          Back to Orders & Invoices
+          {location.state?.from ? 'Back to Receivables' : 'Back to Orders & Invoices'}
         </Link>
       </div>
     )
@@ -146,9 +155,9 @@ export default function InvoiceViewPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between no-print">
-        <Link to="/orders" className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium transition-colors">
+        <Link to={location.state?.from || '/orders'} className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium transition-colors">
           <ArrowLeft size={16} />
-          Back to Orders & Invoices
+          {location.state?.from ? 'Back to Receivables' : 'Back to Orders & Invoices'}
         </Link>
         <div className="flex items-center gap-2">
           <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
@@ -260,7 +269,11 @@ export default function InvoiceViewPage() {
               <div className="w-full max-w-xs border border-slate-200 dark:border-slate-700 rounded">
                 <div className="px-4 py-1.5 flex justify-between text-sm">
                   <span className="text-slate-500 dark:text-slate-400">Subtotal</span>
-                  <span className="text-slate-800 dark:text-slate-200">Rs. {Number(invoice.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span className="text-slate-800 dark:text-slate-200">Rs. {Number(subtotal ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="px-4 py-2 flex justify-between text-sm border-t border-slate-100 dark:border-slate-700">
+                  <span className="text-slate-500 dark:text-slate-400">VAT ({Math.round(vatRate * 100)}%)</span>
+                  <span className="text-slate-800 dark:text-slate-200">Rs. {Number(vatAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="px-4 py-2 flex justify-between text-sm border-t border-slate-100 dark:border-slate-700">
                   <span className="text-slate-500 dark:text-slate-400">Discount</span>
@@ -272,7 +285,7 @@ export default function InvoiceViewPage() {
                 </div>
                 <div className="px-4 py-2 bg-slate-800 flex justify-between items-center border-t-2 border-slate-800">
                   <span className="text-white font-bold text-sm uppercase tracking-wider">Total</span>
-                  <span className="text-white font-extrabold text-lg">Rs. {Number(invoice.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                  <span className="text-white font-extrabold text-lg">Rs. {Number(totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>

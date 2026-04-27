@@ -19,6 +19,8 @@ export default function OrderViewPage() {
   const navigate = useNavigate()
   const toast = useToast()
 
+  const VAT_RATE = 0.18
+
   const [order, setOrder] = useState(null)
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -127,10 +129,19 @@ export default function OrderViewPage() {
         return
       }
 
-      // Create invoice
+      // Create invoice — carry VAT from order
+      const orderVatRate = Number(order.vat_rate ?? 0)
+      const orderVatAmount = Number(order.vat_amount ?? 0)
       const { data: invoice, error: invErr } = await supabase
         .from('invoices')
-        .insert({ customer_id: order.customer_id, rep_id: order.rep_id || null, total_amount: order.total, payment_type: order.payment_type ?? 'credit' })
+        .insert({
+          customer_id: order.customer_id,
+          rep_id: order.rep_id || null,
+          total_amount: order.total,
+          vat_rate: orderVatRate,
+          vat_amount: orderVatAmount,
+          payment_type: order.payment_type ?? 'credit',
+        })
         .select('id')
         .single()
 

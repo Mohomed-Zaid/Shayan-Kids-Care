@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User } from 'lucide-react'
+import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2 } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -46,6 +46,7 @@ const navItems = [
     children: [
       { to: '/finance/journal-entry', label: 'Journal Entry', icon: BookOpen },
       { to: '/finance/receivables', label: 'Receivables', icon: FileText },
+      { to: '/finance/banks', label: 'Banks', icon: Building2 },
     ],
   },
   { to: '/orders', label: 'Orders & Invoices', icon: ShoppingCart },
@@ -249,7 +250,7 @@ export default function AppLayout() {
               </div>
               <button
                 onClick={onLogout}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-rose-600 dark:bg-slate-900 text-white hover:bg-rose-700 dark:hover:bg-slate-800 transition-colors shadow-sm"
               >
                 <LogOut size={16} />
                 Logout

@@ -12,6 +12,8 @@ export default function InvoiceCreatePage() {
   const navigate = useNavigate()
   const toast = useToast()
 
+  const VAT_RATE = 0.18
+
   const [customers, setCustomers] = useState([])
   const [products, setProducts] = useState([])
   const [reps, setReps] = useState([])
@@ -19,6 +21,7 @@ export default function InvoiceCreatePage() {
   const [customerId, setCustomerId] = useState('')
   const [repId, setRepId] = useState('')
   const [paymentType, setPaymentType] = useState('credit')
+  const [vatEnabled, setVatEnabled] = useState(true)
   const [lines, setLines] = useState([emptyLine()])
 
   const [loading, setLoading] = useState(true)
@@ -69,6 +72,14 @@ export default function InvoiceCreatePage() {
   const grandTotal = useMemo(() => {
     return linesWithTotals.reduce((sum, l) => sum + (l.total ?? 0), 0)
   }, [linesWithTotals])
+
+  const vatAmount = useMemo(() => {
+    return vatEnabled ? grandTotal * VAT_RATE : 0
+  }, [grandTotal, vatEnabled])
+
+  const totalWithVat = useMemo(() => {
+    return grandTotal + vatAmount
+  }, [grandTotal, vatAmount])
 
   const productById = useMemo(() => {
     const map = new Map()
@@ -132,7 +143,14 @@ export default function InvoiceCreatePage() {
     try {
       const { data: invoice, error: invErr } = await supabase
         .from('invoices')
-        .insert({ customer_id: customerId, rep_id: repId || null, total_amount: grandTotal, payment_type: paymentType })
+        .insert({
+          customer_id: customerId,
+          rep_id: repId || null,
+          total_amount: totalWithVat,
+          vat_rate: vatEnabled ? VAT_RATE : 0,
+          vat_amount: vatAmount,
+          payment_type: paymentType,
+        })
         .select('id, invoice_number')
         .single()
 
@@ -311,9 +329,27 @@ export default function InvoiceCreatePage() {
       </div>
 
       <div className="flex items-center justify-between">
-        <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-5 py-3 border border-slate-200/60 dark:border-slate-700">
-          <div className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide font-medium">Grand Total</div>
-          <div className="text-2xl font-bold text-slate-900 dark:text-white mt-0.5">Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+        <div className="bg-slate-50 dark:bg-slate-900 rounded-lg px-5 py-3 border border-slate-200/60 dark:border-slate-700 space-y-1">
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide font-medium">Subtotal</span>
+            <span className="text-sm text-slate-700 dark:text-slate-300">Rs. {grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <label className="inline-flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={vatEnabled}
+                onChange={(e) => setVatEnabled(e.target.checked)}
+                className="rounded border-slate-300 dark:border-slate-600 text-slate-900 focus:ring-slate-900/20"
+              />
+              <span className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide font-medium">VAT (18%)</span>
+            </label>
+            <span className="text-sm text-slate-700 dark:text-slate-300">Rs. {vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+          </div>
+          <div className="border-t border-slate-200 dark:border-slate-700 pt-1 flex justify-between items-center">
+            <span className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide font-medium">Total</span>
+            <span className="text-2xl font-bold text-slate-900 dark:text-white">Rs. {totalWithVat.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">

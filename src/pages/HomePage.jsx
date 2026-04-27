@@ -72,7 +72,7 @@ export default function HomePage() {
               >
                 {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
               </button>
-              <Link to="/login" className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 transition-colors shadow-sm">
+              <Link to="/login" className="inline-flex items-center justify-center rounded-full bg-rose-600 dark:bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 dark:hover:bg-slate-800 transition-colors shadow-sm">
                 Admin Login
               </Link>
             </div>
@@ -203,7 +203,7 @@ export default function HomePage() {
                   <div>Our goal is to make wholesale purchasing simple, fast, and stress-free for your store.</div>
                 </div>
                 <div className="mt-6">
-                  <a href="#contact" className="inline-flex items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 transition-colors shadow-sm">
+                  <a href="#contact" className="inline-flex items-center justify-center rounded-xl bg-rose-600 dark:bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-rose-700 dark:hover:bg-slate-800 transition-colors shadow-sm">
                     Partner With Us
                   </a>
                 </div>
@@ -298,7 +298,7 @@ export default function HomePage() {
               <div className="mt-6 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 p-4">
                 <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Admin</div>
                 <div className="mt-2 text-sm text-slate-700 dark:text-slate-300">Manage products, customers, orders, and invoices.</div>
-                <Link to="/login" className="mt-3 inline-flex items-center justify-center rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 transition-colors w-full">
+                <Link to="/login" className="mt-3 inline-flex items-center justify-center rounded-xl bg-rose-600 dark:bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 dark:hover:bg-slate-800 transition-colors w-full">
                   Go to Login
                 </Link>
               </div>
