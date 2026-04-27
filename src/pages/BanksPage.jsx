@@ -68,9 +68,17 @@ export default function BanksPage() {
     )
   })()
 
+  const nextCode = (() => {
+    const maxNum = rows.reduce((max, r) => {
+      const n = parseInt(r.code, 10)
+      return !isNaN(n) && n > max ? n : max
+    }, 0)
+    return String(maxNum + 1).padStart(3, '0')
+  })()
+
   const openAdd = () => {
     setEditing(null)
-    setForm(emptyForm())
+    setForm({ ...emptyForm(), code: nextCode })
     setFormOpen(true)
   }
 
@@ -237,8 +245,9 @@ export default function BanksPage() {
                   <input
                     value={form.code}
                     onChange={(e) => setForm((p) => ({ ...p, code: e.target.value }))}
-                    placeholder="e.g. 7463"
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                    readOnly={!editing}
+                    placeholder="e.g. 001"
+                    className={`w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm text-slate-900 dark:text-white ${!editing ? 'bg-slate-100 dark:bg-slate-700 cursor-not-allowed' : 'bg-white dark:bg-slate-800'}`}
                   />
                 </div>
                 <div>
