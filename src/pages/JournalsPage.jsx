@@ -8,7 +8,27 @@ const BANK_OPTIONS = [
 ]
 
 const BRANCH_OPTIONS = [
-  { value: 'Head Office', label: 'Head Office' },
+  { value: 'Colombo', label: 'Colombo' },
+  { value: 'Kandy', label: 'Kandy' },
+  { value: 'Galle', label: 'Galle' },
+  { value: 'Gampola', label: 'Gampola' },
+  { value: 'Jaffna', label: 'Jaffna' },
+  { value: 'Negombo', label: 'Negombo' },
+  { value: 'Trincomalee', label: 'Trincomalee' },
+  { value: 'Anuradhapura', label: 'Anuradhapura' },
+  { value: 'Polonnaruwa', label: 'Polonnaruwa' },
+  { value: 'Nuwara Eliya', label: 'Nuwara Eliya' },
+  { value: 'Kurunegala', label: 'Kurunegala' },
+  { value: 'Matara', label: 'Matara' },
+  { value: 'Batticaloa', label: 'Batticaloa' },
+  { value: 'Ratnapura', label: 'Ratnapura' },
+  { value: 'Badulla', label: 'Badulla' },
+  { value: 'Kalutara', label: 'Kalutara' },
+  { value: 'Gampaha', label: 'Gampaha' },
+  { value: 'Hambantota', label: 'Hambantota' },
+  { value: 'Vavuniya', label: 'Vavuniya' },
+  { value: 'Kilinochchi', label: 'Kilinochchi' },
+  { value: 'Mannar', label: 'Mannar' },
 ]
 
 function JournalForm({ initialValue, onCancel, onSave }) {

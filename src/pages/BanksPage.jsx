@@ -3,6 +3,14 @@ import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { Plus, Pencil, Trash2, X, Search, Building2 } from 'lucide-react'
 
+const BRANCH_OPTIONS = [
+  'Colombo', 'Kandy', 'Galle', 'Gampola', 'Jaffna', 'Negombo',
+  'Trincomalee', 'Anuradhapura', 'Polonnaruwa', 'Nuwara Eliya',
+  'Kurunegala', 'Matara', 'Batticaloa', 'Ratnapura', 'Badulla',
+  'Kalutara', 'Gampaha', 'Hambantota', 'Vavuniya', 'Kilinochchi',
+  'Mannar',
+]
+
 const emptyForm = () => ({
   code: '',
   name: '',
@@ -244,12 +252,16 @@ export default function BanksPage() {
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Branch</div>
-                  <input
+                  <select
                     value={form.branch}
                     onChange={(e) => setForm((p) => ({ ...p, branch: e.target.value }))}
-                    placeholder="e.g. Head Office"
                     className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
-                  />
+                  >
+                    <option value="">Select branch</option>
+                    {BRANCH_OPTIONS.map((b) => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Account No</div>
