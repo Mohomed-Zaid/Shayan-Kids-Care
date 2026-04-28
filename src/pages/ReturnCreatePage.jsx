@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 import { Plus, ArrowLeft, AlertTriangle, X, RotateCcw } from 'lucide-react'
 
 function emptyLine() {
@@ -162,6 +163,7 @@ export default function ReturnCreatePage() {
       await Promise.all(stockUpdates)
 
       toast.success('Return note created successfully')
+      logAction({ action: 'create_return', targetType: 'return', targetId: ret.id })
       navigate(`/returns/${ret.id}`, { replace: true })
     } catch (e) {
       console.error(e)

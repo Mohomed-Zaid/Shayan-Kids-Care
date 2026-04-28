@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 import { Plus, Trash2, ArrowLeft, AlertTriangle, X, Save } from 'lucide-react'
 
 function emptyLine() {
@@ -221,6 +222,7 @@ export default function InvoiceEditPage() {
       await Promise.all(deductStocks)
 
       toast.success('Invoice updated successfully')
+      logAction({ action: 'edit_invoice', targetType: 'invoice', targetId: id })
       navigate(`/invoices/${id}`, { replace: true })
     } catch (e) {
       console.error(e)

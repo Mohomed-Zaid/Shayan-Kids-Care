@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { Eye, Trash2, FileText } from 'lucide-react'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 
 export default function InvoicesPage() {
   const [rows, setRows] = useState([])
@@ -47,7 +48,7 @@ export default function InvoicesPage() {
       return
     }
     toast.success('Invoice deleted')
-    await load()
+    logAction({ action: 'delete_invoice', targetType: 'invoice', targetId: inv.id })
   }
 
   return (

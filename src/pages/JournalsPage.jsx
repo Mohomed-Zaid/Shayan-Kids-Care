@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Plus, Pencil, Trash2, X, Search, AlertTriangle } from 'lucide-react'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 
 const BANK_OPTIONS = [
   { value: '7463 - Amana Bank PLC', label: '7463 - Amana Bank PLC' },
@@ -500,10 +501,12 @@ export default function JournalsPage() {
       const { error: err } = await supabase.from('journals').update(payload).eq('id', editing.id)
       if (err) throw err
       toast.success('Journal updated')
+      logAction({ action: 'edit_journal', targetType: 'journal', targetId: editing.id, targetLabel: payload.name })
     } else {
       const { error: err } = await supabase.from('journals').insert(payload)
       if (err) throw err
       toast.success('Journal created')
+      logAction({ action: 'create_journal', targetType: 'journal', targetLabel: payload.name })
     }
     setOpenForm(false)
     setEditing(null)
@@ -518,6 +521,7 @@ export default function JournalsPage() {
       return
     }
     toast.success('Journal deleted')
+    logAction({ action: 'delete_journal', targetType: 'journal', targetId: row.id, targetLabel: row.name })
     setRows((prev) => prev.filter((x) => x.id !== row.id))
   }
 

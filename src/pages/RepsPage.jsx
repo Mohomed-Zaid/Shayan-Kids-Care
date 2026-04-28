@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Plus, Pencil, Trash2, X, UserCheck, AlertTriangle } from 'lucide-react'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 
 function RepForm({ initialValue, onCancel, onSave }) {
   const [name, setName] = useState(initialValue?.name ?? '')
@@ -202,6 +203,7 @@ export default function RepsPage() {
       return
     }
     toast.success('Employee deleted')
+    logAction({ action: 'delete_employee', targetType: 'employee', targetId: row.id, targetLabel: row.name })
     await load()
   }
 

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw } from 'lucide-react'
+import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw, Shield, ScrollText } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -52,6 +52,15 @@ const navItems = [
   { to: '/orders', label: 'Orders & Invoices', icon: ShoppingCart },
   { to: '/returns', label: 'Returns', icon: RotateCcw },
   { to: '/commission', label: 'Commission', icon: Calculator },
+  {
+    key: 'admin',
+    label: 'Admin',
+    icon: Shield,
+    children: [
+      { to: '/backup', label: 'Backup & Safety', icon: Shield },
+      { to: '/audit-log', label: 'Audit Log', icon: ScrollText },
+    ],
+  },
 ]
 
 function usePageTitle() {
@@ -76,6 +85,9 @@ function usePageTitle() {
     if (path.startsWith('/returns/')) return 'Return Note'
     if (path.startsWith('/returns')) return 'Returns'
     if (path.startsWith('/commission')) return 'Commission'
+    if (path.startsWith('/backup')) return 'Backup & Safety'
+    if (path.startsWith('/audit-log')) return 'Audit Log'
+    if (path.startsWith('/admin')) return 'Admin'
     if (path.startsWith('/inventory/purchases/') && path.endsWith('/edit')) return 'Edit Purchase'
     if (path.startsWith('/inventory/purchases/')) return 'Purchase Details'
     if (path.startsWith('/inventory/purchases')) return 'Purchase History'

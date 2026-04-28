@@ -1,16 +1,21 @@
 # Shayan Kids Care — Wholesale Management System
 
-A modern admin dashboard for managing products, customers, orders, invoices, purchases, vendors, and journals for **Shayan Kids Care & Toys Store**.
+A modern admin dashboard for managing products, customers, orders, invoices, purchases, vendors, returns, commissions, and journals for **Shayan Kids Care & Toys Store**.
 
 ## Features
 
 - **Dashboard** — Personalized welcome, key stats (Today/Total Sales & Purchases, Products, Customers), recent invoices & purchases, date/time display
 - **Orders & Invoices** — Create orders, confirm, convert to invoice with stock validation & auto stock deduction; professional print/PDF layout with totals, signatures, and footer
+- **Delivery Tracking** — Mark invoiced orders as delivered with one click; delivery date/time recorded automatically; delivered orders separated into their own tab with "Delivered On" column
+- **Backup & Safety** — Full JSON backup export of all tables; restore from backup file with double confirmation; per-table CSV export; database overview with record counts and row preview; activity log showing recent orders, invoices, purchases, payments, returns & journal entries
 - **Products** — Add/edit/delete products with stock tracking, low-stock badges, and comma-formatted prices
 - **Customers** — Full CRUD with foreign-key protection on delete
 - **Vendors** — Manage vendor list for purchases
-- **Purchases** — Create purchases with vendor selection, multiple items, comma-formatted Qty/Cost/MRP; purchase history with inline editing
+- **Purchases** — Create purchases with vendor selection, multiple items, comma-formatted Qty/Cost/MRP; purchase history with inline editing and detail view
 - **Employees / Reps** — Manage staff with role field and "Is Rep" toggle for invoice assignment; commission tracking
+- **Commission** — Calculate and view rep commissions based on invoiced sales
+- **Returns** — Create return notes, view return details, track returned items
+- **Banks** — Manage bank accounts and track balances
 - **Journals** — Chart of accounts with code, name, type, category, and budget
 - **Journal Entries** — Double-entry bookkeeping with multi-line debit/credit entries, balance validation, past entries list with expand/collapse and delete
 - **Receivables** — Track credit invoice balances per customer; see who paid and who didn't; add payments (cash/cheque/card/other) with auto balance update
@@ -29,7 +34,7 @@ A modern admin dashboard for managing products, customers, orders, invoices, pur
 - **html2pdf.js** (PDF export)
 
 ## Setup
-
+  and remove the time in delivary part
 1. Install dependencies
 
 ```bash
@@ -57,7 +62,7 @@ npm run dev
 | `customers` | Customer list with name, address, phone |
 | `employees` | Staff with name, address, phones, email, role, is_rep |
 | `vendors` | Vendor list with name, address, phone |
-| `orders` | Sales order header with customer_id, rep_id, total, status |
+| `orders` | Sales order header with customer_id, rep_id, total, status (pending/confirmed/invoiced/converted/cancelled/delivered), delivered_at |
 | `order_items` | Order line items with product_id, quantity, price, total |
 | `invoices` | Invoice header with customer_id, rep_id, total_amount, payment_type |
 | `invoice_items` | Invoice line items with product_id, quantity, price, total |
@@ -68,6 +73,10 @@ npm run dev
 | `journal_entries` | Journal entry header with date and description |
 | `journal_entry_lines` | Entry lines with journal_id, debit, credit, description, status |
 | `invoice_payments` | Payments received against credit invoices with amount, paid_at, method, reference, note |
+| `returns` | Return note header with customer_id, rep_id, total, status |
+| `return_items` | Return line items with product_id, quantity, price, total |
+| `banks` | Bank accounts with name, account number, balance |
+| `commissions` | Commission records linked to reps and invoices |
 
 ## User Personalization
 

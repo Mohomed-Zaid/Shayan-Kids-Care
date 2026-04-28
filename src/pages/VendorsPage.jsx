@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Plus, Pencil, Trash2, X, Users, AlertTriangle, Search, CheckCircle, Ban } from 'lucide-react'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 
 function VendorForm({ initialValue, onCancel, onSave }) {
   const [code, setCode] = useState(initialValue?.code ?? '')
@@ -183,6 +184,7 @@ export default function VendorsPage() {
       return
     }
     toast.success('Vendor deleted')
+    logAction({ action: 'delete_vendor', targetType: 'vendor', targetId: row.id, targetLabel: row.name })
     await load()
   }
 

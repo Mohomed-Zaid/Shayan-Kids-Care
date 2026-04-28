@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 import { Eye, Trash2, FileText, Search, Plus, RotateCcw } from 'lucide-react'
 
 export default function ReturnsPage() {
@@ -77,7 +78,7 @@ export default function ReturnsPage() {
       return
     }
     toast.success('Return deleted')
-    await load()
+    logAction({ action: 'delete_return', targetType: 'return', targetId: row.id })
   }
 
   return (

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import html2pdf from 'html2pdf.js'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 import { ArrowLeft, Printer, Download, Trash2, Pencil } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 
@@ -87,7 +88,7 @@ export default function InvoiceViewPage() {
       return
     }
     toast.success('Invoice deleted')
-    navigate('/orders', { replace: true })
+    logAction({ action: 'delete_invoice', targetType: 'invoice', targetId: id })
   }
 
   const downloadPdf = async () => {
@@ -100,6 +101,26 @@ export default function InvoiceViewPage() {
     document.body.appendChild(wrapper)
 
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+    // Force white background + black text AFTER it's in the DOM (so computed styles are correct)
+    cloned.style.backgroundColor = '#ffffff'
+    cloned.style.color = '#000000'
+    cloned.querySelectorAll('*').forEach((el) => {
+      const cs = window.getComputedStyle(el)
+      const bg = cs.backgroundColor
+      const isTransparentBg = bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent'
+      const isWhiteBg = bg === 'rgb(255, 255, 255)'
+
+      if (!isTransparentBg && !isWhiteBg) {
+        el.style.backgroundColor = '#ffffff'
+      }
+
+      const shouldForceBlack = (isTransparentBg || isWhiteBg || el.style.backgroundColor === '#ffffff')
+      const isWhiteText = cs.color === 'rgb(255, 255, 255)' || cs.color === 'rgba(255, 255, 255, 1)'
+      if (shouldForceBlack && !isWhiteText) {
+        el.style.color = '#000000'
+      }
+    })
 
     const opt = {
       margin: 0,

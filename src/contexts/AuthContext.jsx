@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { logAction } from '../lib/auditLog'
 
 const AuthContext = createContext(null)
 
@@ -21,6 +22,11 @@ export function AuthProvider({ children }) {
     })
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      if (_event === 'SIGNED_IN' && newSession) {
+        logAction({ action: 'login' })
+      } else if (_event === 'SIGNED_OUT') {
+        logAction({ action: 'logout' })
+      }
       setSession(newSession)
       setInitializing(false)
     })

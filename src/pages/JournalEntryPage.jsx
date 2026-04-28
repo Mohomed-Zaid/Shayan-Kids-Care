@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 import { Plus, Save, Trash2, Search, ChevronDown, ChevronRight } from 'lucide-react'
 
 const fmt = (val) => `Rs. ${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
@@ -174,6 +175,7 @@ export default function JournalEntryPage() {
       if (lErr) throw lErr
 
       toast.success('Journal entry saved')
+      logAction({ action: 'create_journal_entry', targetType: 'journal_entry' })
       setLines([emptyLine(), emptyLine()])
       setSearch('')
       setDate(new Date().toISOString().slice(0, 10))
@@ -212,6 +214,7 @@ export default function JournalEntryPage() {
     const { error: err } = await supabase.from('journal_entries').delete().eq('id', entryId)
     if (err) { toast.error(err.message); return }
     toast.success('Journal entry deleted')
+    logAction({ action: 'delete_journal_entry', targetType: 'journal_entry', targetId: entryId })
     setPastEntries((prev) => prev.filter((e) => e.id !== entryId))
     if (expandedEntry === entryId) { setExpandedEntry(null); setEntryLines([]) }
   }

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 import { Plus, Trash2, ArrowLeft, AlertTriangle, X } from 'lucide-react'
 
 function emptyLine() {
@@ -158,6 +159,7 @@ export default function OrderCreatePage() {
       if (itemsErr) throw itemsErr
 
       toast.success('Order created successfully')
+      logAction({ action: 'create_order', targetType: 'order', targetId: order.id, targetLabel: `ORD-${String(order.order_number ?? '').padStart(4, '0')}` })
       navigate(`/orders/${order.id}`, { replace: true })
     } catch (e) {
       console.error(e)

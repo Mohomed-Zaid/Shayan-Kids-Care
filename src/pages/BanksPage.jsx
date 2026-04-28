@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 import { Plus, Pencil, Trash2, X, Search, Building2 } from 'lucide-react'
 
 const BRANCH_OPTIONS = [
@@ -127,6 +128,7 @@ export default function BanksPage() {
     }
 
     toast.success(editing ? 'Bank updated' : 'Bank added')
+    logAction({ action: editing ? 'edit_bank' : 'create_bank', targetType: 'bank', targetId: editing?.id, targetLabel: values.name })
     setFormOpen(false)
     setSaving(false)
     await load()
@@ -140,6 +142,7 @@ export default function BanksPage() {
       return
     }
     toast.success('Bank deleted')
+    logAction({ action: 'delete_bank', targetType: 'bank', targetId: row.id, targetLabel: row.name })
     await load()
   }
 

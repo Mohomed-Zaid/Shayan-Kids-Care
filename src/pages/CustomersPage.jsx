@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Plus, Pencil, Trash2, X, Users, AlertTriangle } from 'lucide-react'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 
 function CustomerForm({ initialValue, onCancel, onSave }) {
   const [name, setName] = useState(initialValue?.name ?? '')
@@ -158,6 +159,7 @@ export default function CustomersPage() {
       return
     }
     toast.success('Customer deleted')
+    logAction({ action: 'delete_customer', targetType: 'customer', targetId: row.id, targetLabel: row.name })
     await load()
   }
 
@@ -168,6 +170,7 @@ export default function CustomersPage() {
         .update({ name: values.name, address: values.address, phone: values.phone, phone2: values.phone2 })
         .eq('id', editing.id)
       if (err) throw err
+      logAction({ action: 'edit_customer', targetType: 'customer', targetId: editing.id, targetLabel: values.name })
     } else {
       // Get next customer number
       const { data: lastCust } = await supabase
@@ -182,6 +185,7 @@ export default function CustomersPage() {
         .from('customers')
         .insert({ name: values.name, address: values.address, phone: values.phone, phone2: values.phone2, customer_number: nextNum })
       if (err) throw err
+      logAction({ action: 'create_customer', targetType: 'customer', targetLabel: values.name })
     }
 
     setFormOpen(false)

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 import { Search, Eye, FileText, Filter, Plus } from 'lucide-react'
 
 const fmt = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
@@ -338,7 +339,7 @@ export default function ReceivablesPage() {
       }
     }
     toast.success('Payment saved')
-    setPayOpen(false)
+    logAction({ action: 'save_payment', targetType: 'payment' })
     setPaySaving(false)
     await load()
   }

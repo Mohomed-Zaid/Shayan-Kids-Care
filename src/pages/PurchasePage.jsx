@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 import { Plus, Search, Trash2, Save, AlertTriangle } from 'lucide-react'
 
 const fmt = (val) => `Rs. ${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
@@ -179,6 +180,7 @@ export default function PurchasePage() {
       }
 
       toast.success('Purchase saved')
+      logAction({ action: 'create_purchase', targetType: 'purchase', targetId: purchase?.id, targetLabel: `PUR-${purchase?.id ?? ''}` })
       setVendorId('')
       setRefNo('')
       setType('purchase')

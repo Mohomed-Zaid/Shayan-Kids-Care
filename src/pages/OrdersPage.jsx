@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 import { Plus, Eye, ShoppingCart, CheckCircle, XCircle, ArrowRightLeft, Trash2, FileText, Filter, Pencil, Search, ArrowUpDown, Truck } from 'lucide-react'
 
 const statusConfig = {
@@ -75,6 +76,7 @@ export default function OrdersPage() {
     const { error } = await supabase.from('orders').update({ status: 'confirmed' }).eq('id', order.id)
     if (error) { toast.error(error.message); return }
     toast.success('Order confirmed')
+    logAction({ action: 'confirm_order', targetType: 'order', targetId: order.id, targetLabel: `ORD-${String(order.order_number ?? '').padStart(4, '0')}` })
     await load()
   }
 
@@ -83,6 +85,7 @@ export default function OrdersPage() {
     const { error } = await supabase.from('orders').update({ status: 'cancelled' }).eq('id', order.id)
     if (error) { toast.error(error.message); return }
     toast.success('Order cancelled')
+    logAction({ action: 'cancel_order', targetType: 'order', targetId: order.id, targetLabel: `ORD-${String(order.order_number ?? '').padStart(4, '0')}` })
     await load()
   }
 
@@ -92,6 +95,7 @@ export default function OrdersPage() {
     const { error: err } = await supabase.from('orders').delete().eq('id', order.id)
     if (err) { toast.error(err.message); return }
     toast.success('Order deleted')
+    logAction({ action: 'delete_order', targetType: 'order', targetId: order.id, targetLabel: `ORD-${String(order.order_number ?? '').padStart(4, '0')}` })
     await load()
   }
 
@@ -101,6 +105,7 @@ export default function OrdersPage() {
     const { error } = await supabase.from('orders').update({ status: 'delivered', delivered_at: now }).eq('id', order.id)
     if (error) { toast.error(error.message); return }
     toast.success('Order marked as delivered')
+    logAction({ action: 'deliver_order', targetType: 'order', targetId: order.id, targetLabel: `ORD-${String(order.order_number ?? '').padStart(4, '0')}` })
     await load()
   }
 
@@ -181,6 +186,7 @@ export default function OrdersPage() {
     if (updErr) { toast.error(updErr.message); return }
 
     toast.success('Order invoiced successfully')
+    logAction({ action: 'invoice_order', targetType: 'order', targetId: order.id, targetLabel: `ORD-${String(order.order_number ?? '').padStart(4, '0')}`, details: `Invoice INV-${String(invoice.id ?? '').padStart(4, '0')}` })
     await load()
   }
 
@@ -192,6 +198,7 @@ export default function OrdersPage() {
     const { error: err } = await supabase.from('invoices').delete().eq('id', inv.id)
     if (err) { toast.error(err.message); return }
     toast.success('Invoice deleted')
+    logAction({ action: 'delete_invoice', targetType: 'invoice', targetId: inv.id, targetLabel: `INV-${String(inv.id ?? '').padStart(4, '0')}` })
     await load()
   }
 
@@ -407,7 +414,7 @@ export default function OrdersPage() {
                       </td>
                       <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{new Date(o.created_at).toLocaleDateString()}</td>
                       {activeTab === 'delivered' && (
-                        <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{o.delivered_at ? new Date(o.delivered_at).toLocaleDateString() + ' ' + new Date(o.delivered_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}</td>
+                        <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{o.delivered_at ? new Date(o.delivered_at).toLocaleDateString() : '-'}</td>
                       )}
                       {(activeTab === 'invoiced' || activeTab === 'all') && (
                         <td className="px-5 py-3.5">

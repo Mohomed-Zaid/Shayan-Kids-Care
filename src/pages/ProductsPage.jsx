@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Plus, Pencil, Trash2, X, Package, AlertTriangle, Search, ArrowUpDown, Filter, Printer } from 'lucide-react'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 
 function ProductForm({ initialValue, onCancel, onSave }) {
   const [name, setName] = useState(initialValue?.name ?? '')
@@ -240,6 +241,7 @@ export default function ProductsPage() {
       return
     }
     toast.success('Product deleted')
+    logAction({ action: 'delete_product', targetType: 'product', targetId: row.id, targetLabel: row.name })
     await load()
   }
 
@@ -250,11 +252,15 @@ export default function ProductsPage() {
         .update({ name: values.name, code: values.code, price: values.price, stock: values.stock, category: values.category, status: values.status })
         .eq('id', editing.id)
       if (err) throw err
+      logAction({ action: 'edit_product', targetType: 'product', targetId: editing.id, targetLabel: values.name })
     } else {
-      const { error: err } = await supabase
+      const { error: err, data } = await supabase
         .from('products')
         .insert({ name: values.name, code: values.code, price: values.price, stock: values.stock, category: values.category, status: values.status })
+        .select('id')
+        .single()
       if (err) throw err
+      logAction({ action: 'create_product', targetType: 'product', targetId: data?.id, targetLabel: values.name })
     }
 
     setFormOpen(false)

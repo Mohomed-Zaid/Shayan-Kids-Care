@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import html2pdf from 'html2pdf.js'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 import { ArrowLeft, CheckCircle, XCircle, ArrowRightLeft, ShoppingCart, Printer, Download, Trash2, FileText, Pencil } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 
@@ -82,7 +83,7 @@ export default function OrderViewPage() {
     const { error } = await supabase.from('orders').update({ status: 'confirmed' }).eq('id', id)
     if (error) { toast.error(error.message); return }
     toast.success('Order confirmed')
-    setOrder({ ...order, status: 'confirmed' })
+    logAction({ action: 'confirm_order', targetType: 'order', targetId: id })
   }
 
   const onCancel = async () => {
@@ -90,6 +91,7 @@ export default function OrderViewPage() {
     const { error } = await supabase.from('orders').update({ status: 'cancelled' }).eq('id', id)
     if (error) { toast.error(error.message); return }
     toast.success('Order cancelled')
+    logAction({ action: 'cancel_order', targetType: 'order', targetId: id })
     setOrder({ ...order, status: 'cancelled' })
   }
 
@@ -99,6 +101,7 @@ export default function OrderViewPage() {
     const { error: err } = await supabase.from('orders').delete().eq('id', id)
     if (err) { toast.error(err.message); return }
     toast.success('Order deleted')
+    logAction({ action: 'delete_order', targetType: 'order', targetId: id })
     navigate('/orders', { replace: true })
   }
 
@@ -172,6 +175,7 @@ export default function OrderViewPage() {
       if (updErr) { toast.error(updErr.message); setConverting(false); return }
 
       toast.success('Order invoiced successfully')
+      logAction({ action: 'invoice_order', targetType: 'order', targetId: id, details: `Invoice INV-${String(invoice.id ?? '').padStart(4, '0')}` })
       setOrder({ ...order, status: 'invoiced', invoice_id: invoice.id })
     } catch (e) {
       toast.error(e?.message ?? 'Conversion failed')
@@ -190,6 +194,26 @@ export default function OrderViewPage() {
     document.body.appendChild(wrapper)
 
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+    // Force white background + black text AFTER it's in the DOM (so computed styles are correct)
+    cloned.style.backgroundColor = '#ffffff'
+    cloned.style.color = '#000000'
+    cloned.querySelectorAll('*').forEach((el) => {
+      const cs = window.getComputedStyle(el)
+      const bg = cs.backgroundColor
+      const isTransparentBg = bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent'
+      const isWhiteBg = bg === 'rgb(255, 255, 255)'
+
+      if (!isTransparentBg && !isWhiteBg) {
+        el.style.backgroundColor = '#ffffff'
+      }
+
+      const shouldForceBlack = (isTransparentBg || isWhiteBg || el.style.backgroundColor === '#ffffff')
+      const isWhiteText = cs.color === 'rgb(255, 255, 255)' || cs.color === 'rgba(255, 255, 255, 1)'
+      if (shouldForceBlack && !isWhiteText) {
+        el.style.color = '#000000'
+      }
+    })
 
     const opt = {
       margin: 0,

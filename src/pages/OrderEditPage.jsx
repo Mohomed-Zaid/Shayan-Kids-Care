@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { logAction } from '../lib/auditLog'
 import { Plus, Trash2, ArrowLeft, AlertTriangle, X } from 'lucide-react'
 
 function emptyLine() {
@@ -177,6 +178,7 @@ export default function OrderEditPage() {
       if (itemsErr) throw itemsErr
 
       toast.success('Order updated successfully')
+      logAction({ action: 'edit_order', targetType: 'order', targetId: id, targetLabel: `ORD-${id}` })
       navigate(`/orders/${id}`, { replace: true })
     } catch (e) {
       console.error(e)
