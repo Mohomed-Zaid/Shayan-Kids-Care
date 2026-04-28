@@ -7,8 +7,8 @@ import { Package, Users, FileText, DollarSign, Plus, Eye, TrendingUp, ArrowUpRig
 const statConfig = [
   { key: 'todaySales', label: 'Today Sales', icon: DollarSign, gradient: 'from-amber-500 to-orange-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-amber-100', isCurrency: true },
   { key: 'totalSales', label: 'Total Sales', icon: TrendingUp, gradient: 'from-rose-500 to-pink-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-rose-100', isCurrency: true },
-  { key: 'todayPurchases', label: 'Today Purchases', icon: ShoppingCart, gradient: 'from-indigo-500 to-indigo-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-indigo-100', isCurrency: true },
-  { key: 'totalPurchases', label: 'Total Purchases', icon: Wallet, gradient: 'from-teal-500 to-cyan-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-teal-100', isCurrency: true },
+  { key: 'todayPayments', label: 'Today Payments', icon: ShoppingCart, gradient: 'from-indigo-500 to-indigo-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-indigo-100', isCurrency: true },
+  { key: 'totalPayments', label: 'Total Payments', icon: Wallet, gradient: 'from-teal-500 to-cyan-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-teal-100', isCurrency: true },
   { key: 'products', label: 'Products', icon: Package, gradient: 'from-blue-500 to-blue-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-blue-100' },
   { key: 'customers', label: 'Customers', icon: Users, gradient: 'from-emerald-500 to-emerald-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-emerald-100' },
 ]
@@ -48,17 +48,16 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({
     products: 0,
     customers: 0,
-    vendors: 0,
     todaySales: 0,
-    todayPurchases: 0,
+    todayPayments: 0,
     totalSales: 0,
-    totalPurchases: 0,
-    journals: 0,
-    journalEntries: 0,
+    totalPayments: 0,
   })
   const [recentInvoices, setRecentInvoices] = useState([])
-  const [recentPurchases, setRecentPurchases] = useState([])
+  const [recentPayments, setRecentPayments] = useState([])
   const [loading, setLoading] = useState(true)
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailPayment, setDetailPayment] = useState(null)
 
   useEffect(() => {
     let mounted = true
@@ -71,57 +70,51 @@ export default function DashboardPage() {
       const todayEnd = new Date()
       todayEnd.setHours(23, 59, 59, 999)
 
-      const [productsRes, customersRes, vendorsRes, todaySalesRes, todayPurchasesRes, totalSalesRes, totalPurchasesRes, journalsRes, journalEntriesRes, recentInvRes, recentPurRes] = await Promise.all([
+      const [productsRes, customersRes, todaySalesRes, todayPaymentsRes, totalSalesRes, totalPaymentsRes, recentInvRes, recentPayRes] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }),
         supabase.from('customers').select('id', { count: 'exact', head: true }),
-        supabase.from('vendors').select('id', { count: 'exact', head: true }),
         supabase
           .from('invoices')
           .select('total_amount, created_at')
           .gte('created_at', todayStart.toISOString())
           .lte('created_at', todayEnd.toISOString()),
         supabase
-          .from('purchases')
-          .select('total_amount, created_at')
-          .gte('created_at', todayStart.toISOString())
-          .lte('created_at', todayEnd.toISOString()),
+          .from('invoice_payments')
+          .select('amount, paid_at')
+          .gte('paid_at', todayStart.toISOString())
+          .lte('paid_at', todayEnd.toISOString()),
         supabase.from('invoices').select('total_amount'),
-        supabase.from('purchases').select('total_amount'),
-        supabase.from('journals').select('id', { count: 'exact', head: true }),
-        supabase.from('journal_entries').select('id', { count: 'exact', head: true }),
+        supabase.from('invoice_payments').select('amount'),
         supabase
           .from('invoices')
           .select('id, invoice_number, total_amount, created_at, customers(name)')
           .order('created_at', { ascending: false })
           .limit(10),
         supabase
-          .from('purchases')
-          .select('id, total_amount, created_at, vendors(name)')
-          .order('created_at', { ascending: false })
+          .from('invoice_payments')
+          .select('id, invoice_id, amount, paid_at, method, bank_name, reference, note, created_at, invoices(invoice_number, customer_id, customers(name))')
+          .order('paid_at', { ascending: false })
           .limit(10),
       ])
 
       if (!mounted) return
 
       const todaySales = (todaySalesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
-      const todayPurchases = (todayPurchasesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
+      const todayPayments = (todayPaymentsRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
       const totalSales = (totalSalesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
-      const totalPurchases = (totalPurchasesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
+      const totalPayments = (totalPaymentsRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
 
       setStats({
         products: productsRes.count ?? 0,
         customers: customersRes.count ?? 0,
-        vendors: vendorsRes.count ?? 0,
         todaySales,
-        todayPurchases,
+        todayPayments,
         totalSales,
-        totalPurchases,
-        journals: journalsRes.count ?? 0,
-        journalEntries: journalEntriesRes.count ?? 0,
+        totalPayments,
       })
 
       setRecentInvoices(recentInvRes.data ?? [])
-      setRecentPurchases(recentPurRes.data ?? [])
+      setRecentPayments(recentPayRes.data ?? [])
       setLoading(false)
     }
 
@@ -245,15 +238,15 @@ export default function DashboardPage() {
           </table>
         </div>
 
-        {/* Recent Purchases */}
+        {/* Customer Payments */}
         <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">
           <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-emerald-900/40">
             <div>
-              <div className="text-base font-bold text-slate-900 dark:text-emerald-50">Recent Purchases</div>
-              <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">Last 10 purchases</div>
+              <div className="text-base font-bold text-slate-900 dark:text-emerald-50">Customer Payments</div>
+              <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">Last 10 payments received</div>
             </div>
             <Link
-              to="/inventory/purchases"
+              to="/finance/receivables"
               className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors dark:text-emerald-100/75 dark:hover:text-emerald-50"
             >
               View All
@@ -264,27 +257,44 @@ export default function DashboardPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 dark:bg-emerald-950/35 dark:border-emerald-900/40">
-                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Vendor</th>
-                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Total</th>
-                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Created</th>
+                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Customer</th>
+                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Amount</th>
+                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Method</th>
+                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Date</th>
+                <th className="px-5 py-3"></th>
               </tr>
             </thead>
             <tbody>
-              {recentPurchases.length === 0 ? (
+              {recentPayments.length === 0 ? (
                 <tr>
-                  <td className="px-5 py-12 text-slate-400 dark:text-emerald-100/60 text-center" colSpan={3}>
+                  <td className="px-5 py-12 text-slate-400 dark:text-emerald-100/60 text-center" colSpan={5}>
                     <div className="flex flex-col items-center gap-2">
-                      <ShoppingCart size={32} className="text-slate-300 dark:text-emerald-200/30" />
-                      <span>No purchases yet.</span>
+                      <Wallet size={32} className="text-slate-300 dark:text-emerald-200/30" />
+                      <span>No payments yet.</span>
                     </div>
                   </td>
                 </tr>
               ) : (
-                recentPurchases.map((p) => (
-                  <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors dark:border-emerald-900/30 dark:hover:bg-emerald-500/5">
-                    <td className="px-5 py-3.5 font-medium text-slate-900 dark:text-emerald-50">{p.vendors?.name ?? '-'}</td>
-                    <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-emerald-50">Rs. {Number(p.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                    <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{new Date(p.created_at).toLocaleString()}</td>
+                recentPayments.map((p) => (
+                  <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors cursor-pointer dark:border-emerald-900/30 dark:hover:bg-emerald-500/5" onClick={() => { setDetailPayment(p); setDetailOpen(true) }}>
+                    <td className="px-5 py-3.5">
+                      <div className="font-medium text-slate-900 dark:text-emerald-50">{p.invoices?.customers?.name ?? '-'}</div>
+                      <div className="text-xs text-slate-400 dark:text-emerald-100/50">INV-{String(p.invoices?.invoice_number ?? '').padStart(4, '0')}</div>
+                    </td>
+                    <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-emerald-50">Rs. {Number(p.amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td className="px-5 py-3.5">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 dark:bg-emerald-500/15 dark:text-emerald-100">{(p.method ?? 'other').toUpperCase()}</span>
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{new Date(p.paid_at ?? p.created_at).toLocaleDateString()}</td>
+                    <td className="px-5 py-3.5 text-right">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setDetailPayment(p); setDetailOpen(true) }}
+                        className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-emerald-100/75 hover:text-slate-900 dark:hover:text-emerald-50 font-medium transition-colors"
+                      >
+                        <Eye size={14} />
+                        View
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -292,6 +302,67 @@ export default function DashboardPage() {
           </table>
         </div>
       </div>
+
+      {/* Payment Detail Modal */}
+      {detailOpen && detailPayment ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40" onClick={() => setDetailOpen(false)}>
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+              <div className="font-bold text-slate-900 dark:text-white">Payment Details</div>
+              <button
+                onClick={() => setDetailOpen(false)}
+                className="text-sm font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="flex justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Customer</span>
+                <span className="text-sm font-medium text-slate-900 dark:text-white">{detailPayment.invoices?.customers?.name ?? '-'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Invoice</span>
+                <span className="text-sm font-medium text-slate-900 dark:text-white">INV-{String(detailPayment.invoices?.invoice_number ?? '').padStart(4, '0')}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Amount</span>
+                <span className="text-sm font-bold text-slate-900 dark:text-white">Rs. {Number(detailPayment.amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Method</span>
+                <span className="text-sm font-medium text-slate-900 dark:text-white">{(detailPayment.method ?? 'other').toUpperCase()}</span>
+              </div>
+              {detailPayment.bank_name ? (
+                <div className="flex justify-between">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Bank</span>
+                  <span className="text-sm font-medium text-slate-900 dark:text-white">{detailPayment.bank_name}</span>
+                </div>
+              ) : null}
+              {detailPayment.reference ? (
+                <div className="flex justify-between">
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Reference</span>
+                  <span className="text-sm font-medium text-slate-900 dark:text-white">{detailPayment.reference}</span>
+                </div>
+              ) : null}
+              <div className="flex justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Paid At</span>
+                <span className="text-sm font-medium text-slate-900 dark:text-white">{new Date(detailPayment.paid_at ?? detailPayment.created_at).toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Recorded At</span>
+                <span className="text-sm font-medium text-slate-900 dark:text-white">{new Date(detailPayment.created_at).toLocaleString()}</span>
+              </div>
+              {detailPayment.note ? (
+                <div>
+                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Note</span>
+                  <div className="mt-1 text-sm text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2">{detailPayment.note}</div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

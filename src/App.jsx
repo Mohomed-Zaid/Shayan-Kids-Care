@@ -27,6 +27,9 @@ import JournalEntryPage from './pages/JournalEntryPage'
 import ReceivablesPage from './pages/ReceivablesPage'
 import ReceivableCustomerPage from './pages/ReceivableCustomerPage'
 import BanksPage from './pages/BanksPage'
+import ReturnsPage from './pages/ReturnsPage'
+import ReturnCreatePage from './pages/ReturnCreatePage'
+import ReturnViewPage from './pages/ReturnViewPage'
 
 export default function App() {
   return (
@@ -59,6 +62,9 @@ export default function App() {
             <Route path="/finance/receivables" element={<ReceivablesPage />} />
             <Route path="/finance/receivables/:customerId" element={<ReceivableCustomerPage />} />
             <Route path="/finance/banks" element={<BanksPage />} />
+            <Route path="/returns" element={<ReturnsPage />} />
+            <Route path="/returns/new" element={<ReturnCreatePage />} />
+            <Route path="/returns/:id" element={<ReturnViewPage />} />
           </Route>
         </Route>
 

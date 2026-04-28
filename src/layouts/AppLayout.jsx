@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2 } from 'lucide-react'
+import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -50,6 +50,7 @@ const navItems = [
     ],
   },
   { to: '/orders', label: 'Orders & Invoices', icon: ShoppingCart },
+  { to: '/returns', label: 'Returns', icon: RotateCcw },
   { to: '/commission', label: 'Commission', icon: Calculator },
 ]
 
@@ -70,6 +71,10 @@ function usePageTitle() {
     if (path.startsWith('/finance/receivables')) return 'Receivables'
     if (path.startsWith('/finance')) return 'Finance'
     if (path.startsWith('/reps')) return 'Employees'
+    if (path === '/returns/new') return 'New Return'
+    if (path.startsWith('/returns/') && path.endsWith('/edit')) return 'Edit Return'
+    if (path.startsWith('/returns/')) return 'Return Note'
+    if (path.startsWith('/returns')) return 'Returns'
     if (path.startsWith('/commission')) return 'Commission'
     if (path.startsWith('/inventory/purchases/') && path.endsWith('/edit')) return 'Edit Purchase'
     if (path.startsWith('/inventory/purchases/')) return 'Purchase Details'
@@ -98,7 +103,7 @@ export default function AppLayout() {
   const isOwner = user?.email === 'shayankidscare@gmail.com'
   const { theme, toggleTheme } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [openGroups, setOpenGroups] = useState({ originate: true, inventory: true, finance: true })
+  const [openGroups, setOpenGroups] = useState({})
 
   const onLogout = async () => {
     await signOut()
