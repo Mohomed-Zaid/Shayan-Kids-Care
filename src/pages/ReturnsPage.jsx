@@ -14,7 +14,7 @@ export default function ReturnsPage() {
     setLoading(true)
     const { data, error: err } = await supabase
       .from('returns')
-      .select('id, return_number, total_amount, reason, created_at, customers(name, phone), invoices(id, invoice_number), return_items(quantity, products(name, code))')
+      .select('id, return_number, total_amount, reason, created_at, customers(name, phone), return_items(quantity, products(name, code))')
       .order('created_at', { ascending: false })
 
     if (err) {
@@ -107,7 +107,6 @@ export default function ReturnsPage() {
             <tr>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Return #</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Customer</th>
-              <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Invoice</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Products</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Total</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Reason</th>
@@ -118,7 +117,7 @@ export default function ReturnsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-5 py-8">
+                <td colSpan={7} className="px-5 py-8">
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-900"></div>
                   </div>
@@ -126,7 +125,7 @@ export default function ReturnsPage() {
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-5 py-10 text-slate-400 dark:text-emerald-100/60 text-center">
+                <td colSpan={7} className="px-5 py-10 text-slate-400 dark:text-emerald-100/60 text-center">
                   <RotateCcw size={24} className="mx-auto mb-2 opacity-40 dark:text-emerald-200/30" />
                   No returns yet.
                 </td>
@@ -138,13 +137,6 @@ export default function ReturnsPage() {
                     <span className="font-semibold text-slate-900 dark:text-emerald-50">RET-{String(r.return_number ?? '').padStart(4, '0')}</span>
                   </td>
                   <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-100/70">{r.customers?.name ?? '-'}</td>
-                  <td className="px-5 py-3.5">
-                    {r.invoices ? (
-                      <Link to={`/invoices/${r.invoices.id}`} className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline">INV-{String(r.invoices.invoice_number ?? '').padStart(4, '0')}</Link>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
-                  </td>
                   <td className="px-5 py-3.5">
                     <div className="text-slate-700 dark:text-emerald-100/80 space-y-0.5">
                       {(r.return_items ?? []).map((i, idx) => (

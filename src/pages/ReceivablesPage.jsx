@@ -16,6 +16,7 @@ export default function ReceivablesPage() {
 
   const [invoices, setInvoices] = useState([])
   const [payments, setPayments] = useState([])
+  const [returns, setReturns] = useState([])
   const [banks, setBanks] = useState([])
 
   const [payOpen, setPayOpen] = useState(false)
@@ -44,7 +45,7 @@ export default function ReceivablesPage() {
     setLoading(true)
     setError(null)
 
-    const [invRes, payRes, bankRes] = await Promise.all([
+    const [invRes, payRes, retRes, bankRes] = await Promise.all([
       supabase
         .from('invoices')
         .select('id, invoice_number, customer_id, total_amount, created_at, payment_type, customers(name, phone)')
@@ -54,6 +55,10 @@ export default function ReceivablesPage() {
         .from('invoice_payments')
         .select('id, invoice_id, amount, paid_at, method')
         .order('paid_at', { ascending: false }),
+      supabase
+        .from('returns')
+        .select('id, customer_id, total_amount')
+        .order('created_at', { ascending: false }),
       supabase.from('banks').select('id, code, name, branch').order('code'),
     ])
 
@@ -69,6 +74,12 @@ export default function ReceivablesPage() {
       setPayments([])
     } else {
       setPayments(payRes.data ?? [])
+    }
+
+    if (retRes.error) {
+      setReturns([])
+    } else {
+      setReturns(retRes.data ?? [])
     }
 
     if (bankRes.error) {
@@ -98,6 +109,17 @@ export default function ReceivablesPage() {
     return map
   }, [payments])
 
+  const returnsByCustomer = useMemo(() => {
+    const map = new Map()
+    for (const r of returns) {
+      const cid = r.customer_id
+      if (!cid) continue
+      const prev = map.get(cid) ?? 0
+      map.set(cid, prev + Number(r.total_amount ?? 0))
+    }
+    return map
+  }, [returns])
+
   const customersRows = useMemo(() => {
     const byCustomer = new Map()
 
@@ -107,9 +129,10 @@ export default function ReceivablesPage() {
 
       const paid = paymentSumByInvoice.get(inv.id) ?? 0
       const total = Number(inv.total_amount ?? 0)
-      const balance = total - paid
+      const retAmount = returnsByCustomer.get(cid) ?? 0
+      const balance = total - paid - retAmount
 
-      const payStatus = paid === 0 ? 'unpaid' : balance > 0 ? 'partial' : 'paid'
+      const payStatus = paid === 0 && retAmount === 0 ? 'unpaid' : balance > 0 ? 'partial' : 'paid'
       const daysOutstanding = Math.floor((Date.now() - new Date(inv.created_at).getTime()) / 86400000)
       const agingBucket = daysOutstanding <= 30 ? '0-30' : daysOutstanding <= 60 ? '31-60' : '60+'
 
@@ -120,6 +143,7 @@ export default function ReceivablesPage() {
           name: inv.customers?.name ?? '-',
           phone: inv.customers?.phone ?? '',
           invoiced: total,
+          returned: retAmount,
           paid,
           balance,
           invoicesCount: 1,
@@ -129,8 +153,9 @@ export default function ReceivablesPage() {
         })
       } else {
         existing.invoiced += total
+        existing.returned = retAmount
         existing.paid += paid
-        existing.balance += balance
+        existing.balance = existing.invoiced - existing.paid - existing.returned
         existing.invoicesCount += 1
         // roll up: if any invoice is unpaid/partial, customer is worst status
         if (payStatus === 'unpaid') existing.status = 'unpaid'
@@ -161,13 +186,14 @@ export default function ReceivablesPage() {
 
     rows.sort((a, b) => (b.balance ?? 0) - (a.balance ?? 0))
     return rows
-  }, [invoices, paymentSumByInvoice, search, statusFilter])
+  }, [invoices, paymentSumByInvoice, returnsByCustomer, search, statusFilter])
 
   const totals = useMemo(() => {
     const invoiced = customersRows.reduce((s, r) => s + Number(r.invoiced ?? 0), 0)
+    const returned = customersRows.reduce((s, r) => s + Number(r.returned ?? 0), 0)
     const paid = customersRows.reduce((s, r) => s + Number(r.paid ?? 0), 0)
     const balance = customersRows.reduce((s, r) => s + Number(r.balance ?? 0), 0)
-    return { invoiced, paid, balance }
+    return { invoiced, returned, paid, balance }
   }, [customersRows])
 
   const referencePlaceholder = useMemo(() => {
@@ -322,7 +348,7 @@ export default function ReceivablesPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="text-sm text-slate-500 dark:text-slate-400">Invoice receivables by customer.</div>
-          <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">Outstanding = total invoices (credit & cash) − payments received.</div>
+          <div className="mt-1 text-xs text-slate-400 dark:text-slate-500">Outstanding = Invoiced − Returns − Payments received.</div>
         </div>
         <div className="text-right">
           <div className="text-xs text-slate-500 dark:text-slate-400">Total Outstanding</div>
@@ -369,6 +395,7 @@ export default function ReceivablesPage() {
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Customer</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Invoices</th>
               <th className="text-right font-medium px-5 py-3 text-xs uppercase tracking-wide">Invoiced</th>
+              <th className="text-right font-medium px-5 py-3 text-xs uppercase tracking-wide">Returns</th>
               <th className="text-right font-medium px-5 py-3 text-xs uppercase tracking-wide">Paid</th>
               <th className="text-right font-medium px-5 py-3 text-xs uppercase tracking-wide">Balance</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Status</th>
@@ -379,7 +406,7 @@ export default function ReceivablesPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="px-5 py-8">
+                <td colSpan={9} className="px-5 py-8">
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-900"></div>
                   </div>
@@ -387,11 +414,11 @@ export default function ReceivablesPage() {
               </tr>
             ) : error ? (
               <tr>
-                <td colSpan={8} className="px-5 py-4 text-red-600 text-center">{error}</td>
+                <td colSpan={9} className="px-5 py-4 text-red-600 text-center">{error}</td>
               </tr>
             ) : customersRows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-5 py-10 text-slate-400 dark:text-emerald-100/60 text-center">
+                <td colSpan={9} className="px-5 py-10 text-slate-400 dark:text-emerald-100/60 text-center">
                   <FileText size={24} className="mx-auto mb-2 opacity-40 dark:text-emerald-200/30" />
                   No receivables found.
                 </td>
@@ -405,6 +432,7 @@ export default function ReceivablesPage() {
                   </td>
                   <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-100/70">{r.invoicesCount}</td>
                   <td className="px-5 py-3.5 text-right font-medium text-slate-900 dark:text-emerald-50">{fmt(r.invoiced)}</td>
+                  <td className={`px-5 py-3.5 text-right font-medium ${r.returned > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-emerald-100/40'}`}>{r.returned > 0 ? `−${fmt(r.returned)}` : '—'}</td>
                   <td className="px-5 py-3.5 text-right font-medium text-slate-900 dark:text-emerald-50">{fmt(r.paid)}</td>
                   <td className={`px-5 py-3.5 text-right font-extrabold ${r.balance < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-emerald-50'}`}>{fmt(r.balance)}</td>
                   <td className="px-5 py-3.5">

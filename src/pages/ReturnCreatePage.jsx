@@ -16,10 +16,8 @@ export default function ReturnCreatePage() {
 
   const [customers, setCustomers] = useState([])
   const [products, setProducts] = useState([])
-  const [invoices, setInvoices] = useState([])
 
   const [customerId, setCustomerId] = useState('')
-  const [invoiceId, setInvoiceId] = useState('')
   const [vatEnabled, setVatEnabled] = useState(false)
   const [reason, setReason] = useState('')
   const [lines, setLines] = useState([emptyLine()])
@@ -93,44 +91,6 @@ export default function ReturnCreatePage() {
     updateLine(idx, { product_id, price: p ? Number(p.price ?? 0) : 0 })
   }
 
-  // Load invoices when customer changes
-  useEffect(() => {
-    if (!customerId) {
-      setInvoices([])
-      setInvoiceId('')
-      return
-    }
-    let mounted = true
-    supabase
-      .from('invoices')
-      .select('id, invoice_number, total_amount, created_at, invoice_items(id, product_id, quantity, price, total, products(name, code))')
-      .eq('customer_id', customerId)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        if (mounted) setInvoices(data ?? [])
-      })
-    return () => { mounted = false }
-  }, [customerId])
-
-  // Auto-populate lines when invoice is selected
-  const onSelectInvoice = (invId) => {
-    setInvoiceId(invId)
-    if (!invId) {
-      setLines([emptyLine()])
-      return
-    }
-    const inv = invoices.find((i) => i.id === invId)
-    if (inv && inv.invoice_items && inv.invoice_items.length > 0) {
-      setLines(inv.invoice_items.map((it) => ({
-        product_id: it.product_id ?? '',
-        quantity: it.quantity ?? 1,
-        price: it.price ?? 0,
-      })))
-    } else {
-      setLines([emptyLine()])
-    }
-  }
-
   const addLine = () => setLines((prev) => [...prev, emptyLine()])
 
   const removeLine = (idx) => {
@@ -155,6 +115,11 @@ export default function ReturnCreatePage() {
       return
     }
 
+    if (!reason.trim()) {
+      setError('Reason is required for returns')
+      return
+    }
+
     if (cleanedLines.length === 0) {
       setError('Add at least one product line')
       return
@@ -166,11 +131,10 @@ export default function ReturnCreatePage() {
         .from('returns')
         .insert({
           customer_id: customerId,
-          invoice_id: invoiceId || null,
           total_amount: totalWithVat,
           vat_rate: vatEnabled ? VAT_RATE : 0,
           vat_amount: vatAmount,
-          reason: reason.trim() || null,
+          reason: reason.trim(),
         })
         .select('id, return_number')
         .single()
@@ -223,7 +187,7 @@ export default function ReturnCreatePage() {
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Customer</label>
             <select
               value={customerId}
-              onChange={(e) => { setCustomerId(e.target.value); setInvoiceId('') }}
+              onChange={(e) => { setCustomerId(e.target.value) }}
               className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
             >
               <option value="">Select customer...</option>
@@ -234,29 +198,13 @@ export default function ReturnCreatePage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Invoice</label>
-            <select
-              value={invoiceId}
-              onChange={(e) => onSelectInvoice(e.target.value)}
-              disabled={!customerId}
-              className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow disabled:opacity-50"
-            >
-              <option value="">Select invoice (optional)...</option>
-              {invoices.map((inv) => (
-                <option key={inv.id} value={inv.id}>
-                  INV-{String(inv.invoice_number ?? '').padStart(4, '0')} — Rs. {Number(inv.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} — {new Date(inv.created_at).toLocaleDateString()}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Reason</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Reason <span className="text-red-500">*</span></label>
             <input
               type="text"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="e.g. Defective product, Wrong item..."
+              required
               className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
             />
           </div>

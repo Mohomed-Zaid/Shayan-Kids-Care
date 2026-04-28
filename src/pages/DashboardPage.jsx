@@ -70,7 +70,7 @@ export default function DashboardPage() {
       const todayEnd = new Date()
       todayEnd.setHours(23, 59, 59, 999)
 
-      const [productsRes, customersRes, todaySalesRes, todayPaymentsRes, totalSalesRes, totalPaymentsRes, recentInvRes, recentPayRes] = await Promise.all([
+      const [productsRes, customersRes, todaySalesRes, todayPaymentsRes, totalSalesRes, totalPaymentsRes, recentInvRes, allPayRes, recentPayRes] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }),
         supabase.from('customers').select('id', { count: 'exact', head: true }),
         supabase
@@ -89,7 +89,10 @@ export default function DashboardPage() {
           .from('invoices')
           .select('id, invoice_number, total_amount, created_at, customers(name)')
           .order('created_at', { ascending: false })
-          .limit(10),
+          .limit(30),
+        supabase
+          .from('invoice_payments')
+          .select('invoice_id, amount'),
         supabase
           .from('invoice_payments')
           .select('id, invoice_id, amount, paid_at, method, bank_name, reference, note, created_at, invoices(invoice_number, customer_id, customers(name))')
@@ -113,7 +116,19 @@ export default function DashboardPage() {
         totalPayments,
       })
 
-      setRecentInvoices(recentInvRes.data ?? [])
+      // Filter out fully paid invoices from recent list
+      const allPayments = allPayRes.data ?? []
+      const paidByInvoice = new Map()
+      for (const p of allPayments) {
+        const prev = paidByInvoice.get(p.invoice_id) ?? 0
+        paidByInvoice.set(p.invoice_id, prev + Number(p.amount ?? 0))
+      }
+      const unpaidInvoices = (recentInvRes.data ?? []).filter((inv) => {
+        const paid = paidByInvoice.get(inv.id) ?? 0
+        return Number(inv.total_amount ?? 0) - paid > 0.01
+      }).slice(0, 10)
+
+      setRecentInvoices(unpaidInvoices)
       setRecentPayments(recentPayRes.data ?? [])
       setLoading(false)
     }
@@ -183,7 +198,7 @@ export default function DashboardPage() {
           <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-emerald-900/40">
             <div>
               <div className="text-base font-bold text-slate-900 dark:text-emerald-50">Recent Invoices</div>
-              <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">Last 10 invoices</div>
+              <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">Unpaid invoices</div>
             </div>
             <Link
               to="/orders"

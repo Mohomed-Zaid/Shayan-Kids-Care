@@ -26,7 +26,7 @@ export default function ReturnViewPage() {
 
       const retRes = await supabase
         .from('returns')
-        .select('id, return_number, total_amount, vat_rate, vat_amount, reason, created_at, invoice_id, customers(name, address, phone), invoices(id, invoice_number)')
+        .select('id, return_number, total_amount, vat_rate, vat_amount, reason, created_at, customers(name, address, phone)')
         .eq('id', id)
         .single()
 
@@ -64,7 +64,6 @@ export default function ReturnViewPage() {
   }, [id])
 
   const customer = ret?.customers
-  const linkedInvoice = ret?.invoices
 
   const subtotal = useMemo(() => {
     return items.reduce((s, it) => s + Number(it.total ?? 0), 0)
@@ -227,13 +226,8 @@ export default function ReturnViewPage() {
                 <div>{customer?.phone ?? '-'}</div>
               </div>
               {ret.reason ? (
-                <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
-                  {linkedInvoice ? (
-                    <div><span className="font-medium text-slate-600 dark:text-slate-300">Original Invoice:</span> <span className="text-slate-900 dark:text-white font-semibold">INV-{String(linkedInvoice.invoice_number ?? '').padStart(4, '0')}</span></div>
-                  ) : null}
-                  {ret.reason ? (
-                    <div><span className="font-medium text-slate-600 dark:text-slate-300">Reason:</span> <span className="text-slate-900 dark:text-white font-semibold">{ret.reason}</span></div>
-                  ) : null}
+                <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
+                  <span className="font-medium text-slate-600 dark:text-slate-300">Reason:</span> <span className="text-slate-900 dark:text-white font-semibold">{ret.reason}</span>
                 </div>
               ) : null}
             </div>
