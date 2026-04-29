@@ -291,7 +291,23 @@ export default function ReturnViewPage() {
 
           {/* Totals + Signature + Footer */}
           <div className="mt-auto">
-            <div className="px-8 pb-2 flex justify-end">
+            <div className="px-8 pb-2 flex justify-between items-start">
+              {/* Bank Details */}
+              <div className="text-xs text-slate-600 dark:text-slate-300">
+                <div className="font-semibold text-slate-700 dark:text-slate-200">Bank Details</div>
+                <div className="mt-1 space-y-2">
+                  <div>
+                    <div className="font-semibold">ANM NIFLAN</div>
+                    <div>010-0272070-001</div>
+                    <div>Amana Bank Gampola</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold">ANM NIFLAN</div>
+                    <div>223020144356</div>
+                    <div>HNB Bank</div>
+                  </div>
+                </div>
+              </div>
               <div className="w-full max-w-xs border border-slate-200 dark:border-slate-700 rounded">
                 <div className="px-4 py-1.5 flex justify-between text-sm">
                   <span className="text-slate-500 dark:text-slate-400">Subtotal</span>

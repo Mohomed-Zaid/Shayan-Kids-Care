@@ -17,8 +17,11 @@ export default function ReturnCreatePage() {
 
   const [customers, setCustomers] = useState([])
   const [products, setProducts] = useState([])
+  const [invoices, setInvoices] = useState([])
+  const [invoiceItems, setInvoiceItems] = useState([])
 
   const [customerId, setCustomerId] = useState('')
+  const [invoiceId, setInvoiceId] = useState('')
   const [vatEnabled, setVatEnabled] = useState(false)
   const [reason, setReason] = useState('')
   const [lines, setLines] = useState([emptyLine()])
@@ -32,19 +35,21 @@ export default function ReturnCreatePage() {
 
     const load = async () => {
       setLoading(true)
-      const [custRes, prodRes] = await Promise.all([
+      const [custRes, prodRes, invRes] = await Promise.all([
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
         supabase.from('products').select('*').order('created_at', { ascending: false }),
+        supabase.from('invoices').select('id, invoice_number, customer_id, created_at').order('created_at', { ascending: false }),
       ])
 
       if (!mounted) return
 
       setCustomers(custRes.data ?? [])
       setProducts(prodRes.data ?? [])
+      setInvoices(invRes.data ?? [])
       setLoading(false)
 
-      if (custRes.error || prodRes.error) {
-        setError(custRes.error?.message || prodRes.error?.message || 'Failed to load')
+      if (custRes.error || prodRes.error || invRes.error) {
+        setError(custRes.error?.message || prodRes.error?.message || invRes.error?.message || 'Failed to load')
       }
     }
 
@@ -90,6 +95,36 @@ export default function ReturnCreatePage() {
   const onSelectProduct = (idx, product_id) => {
     const p = productById.get(product_id)
     updateLine(idx, { product_id, price: p ? Number(p.price ?? 0) : 0 })
+  }
+
+  const onSelectInvoice = async (invId) => {
+    setInvoiceId(invId)
+    if (!invId) {
+      setInvoiceItems([])
+      return
+    }
+
+    const { data: items } = await supabase
+      .from('invoice_items')
+      .select('product_id, quantity, price, total')
+      .eq('invoice_id', invId)
+
+    setInvoiceItems(items ?? [])
+
+    if (items?.length > 0) {
+      const newLines = items.map((it) => ({
+        product_id: it.product_id,
+        quantity: it.quantity,
+        price: Number(it.price ?? 0),
+      }))
+      setLines(newLines)
+    }
+
+    // Auto-set customer from invoice
+    const inv = invoices.find((i) => String(i.id) === String(invId))
+    if (inv?.customer_id) {
+      setCustomerId(inv.customer_id)
+    }
   }
 
   const addLine = () => setLines((prev) => [...prev, emptyLine()])
@@ -184,18 +219,39 @@ export default function ReturnCreatePage() {
   return (
     <div className="space-y-6">
       <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700 rounded-xl p-5 space-y-4 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Customer</label>
             <select
               value={customerId}
-              onChange={(e) => { setCustomerId(e.target.value) }}
+              onChange={(e) => { setCustomerId(e.target.value); setInvoiceId('') }}
               className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
             >
               <option value="">Select customer...</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Invoice (optional)</label>
+            <select
+              value={invoiceId}
+              onChange={(e) => onSelectInvoice(e.target.value)}
+              className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+            >
+              <option value="">Select invoice (optional)...</option>
+              {invoices
+                .filter((inv) => !customerId || String(inv.customer_id) === String(customerId))
+                .map((inv) => {
+                  const cust = customers.find((c) => c.id === inv.customer_id)
+                  return (
+                    <option key={inv.id} value={inv.id}>
+                      INV-{String(inv.invoice_number ?? inv.id).padStart(4, '0')}{cust ? ` — ${cust.name}` : ''}
+                    </option>
+                  )
+                })}
             </select>
           </div>
 

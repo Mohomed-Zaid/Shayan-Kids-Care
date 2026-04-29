@@ -4,8 +4,8 @@ import { Plus, Pencil, Trash2, X, Users, AlertTriangle, Search, CheckCircle, Ban
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 
-function VendorForm({ initialValue, onCancel, onSave }) {
-  const [code, setCode] = useState(initialValue?.code ?? '')
+function VendorForm({ initialValue, defaultCode, onCancel, onSave }) {
+  const [code, setCode] = useState(initialValue?.code ?? defaultCode ?? '')
   const [name, setName] = useState(initialValue?.name ?? '')
   const [phone, setPhone] = useState(initialValue?.phone ?? '')
   const [address, setAddress] = useState(initialValue?.address ?? '')
@@ -121,6 +121,7 @@ export default function VendorsPage() {
 
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [nextCode, setNextCode] = useState('')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
 
@@ -163,6 +164,12 @@ export default function VendorsPage() {
   }, [])
 
   const onAdd = () => {
+    // Auto-generate next vendor code
+    const maxNum = rows.reduce((max, r) => {
+      const m = String(r.code ?? '').match(/V-(\d+)/i)
+      return m ? Math.max(max, Number(m[1])) : max
+    }, 0)
+    setNextCode(`V-${String(maxNum + 1).padStart(3, '0')}`)
     setEditing(null)
     setFormOpen(true)
   }
@@ -323,6 +330,7 @@ export default function VendorsPage() {
       {formOpen ? (
         <VendorForm
           initialValue={editing}
+          defaultCode={editing ? undefined : nextCode}
           onCancel={() => {
             setFormOpen(false)
             setEditing(null)

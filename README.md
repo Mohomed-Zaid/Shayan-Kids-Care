@@ -6,12 +6,12 @@ A modern admin dashboard for managing products, customers, orders, invoices, pur
 
 - **Dashboard** — Personalized welcome, key stats (Today/Total Sales & Purchases, Products, Customers), recent invoices & purchases, date/time display
 - **Orders & Invoices** — Create orders, confirm, convert to invoice with stock validation & auto stock deduction; professional print/PDF layout with totals, signatures, and footer
-- **Delivery Tracking** — Mark invoiced orders as delivered with one click; delivery date/time recorded automatically; delivered orders separated into their own tab with "Delivered On" column
+- **Delivery Tracking** — Mark invoiced orders as delivered with one click; delivery date recorded automatically; delivered orders separated into their own tab with "Delivered On" column
 - **Backup & Safety** — Full JSON backup export of all tables; restore from backup file with double confirmation; per-table CSV export; database overview with record counts and row preview; activity log showing recent orders, invoices, purchases, payments, returns & journal entries
 - **Products** — Add/edit/delete products with stock tracking, low-stock badges, and comma-formatted prices
 - **Customers** — Full CRUD with foreign-key protection on delete
-- **Vendors** — Manage vendor list for purchases
-- **Purchases** — Create purchases with vendor selection, multiple items, comma-formatted Qty/Cost/MRP; purchase history with inline editing and detail view
+- **Vendors** — Manage vendor list with auto-generated codes (V-001, V-002…) for purchases
+- **Purchases** — Create purchases with vendor selection, payment type (cash/credit/bank), multiple items, comma-formatted Qty/Cost/MRP; purchase history with inline editing and detail view; auto stock update on existing products
 - **Employees / Reps** — Manage staff with role field and "Is Rep" toggle for invoice assignment; commission tracking
 - **Commission** — Calculate and view rep commissions based on invoiced sales
 - **Returns** — Create return notes, view return details, track returned items
@@ -19,7 +19,9 @@ A modern admin dashboard for managing products, customers, orders, invoices, pur
 - **Journals** — Chart of accounts with code, name, type, category, and budget
 - **Journal Entries** — Double-entry bookkeeping with multi-line debit/credit entries, balance validation, past entries list with expand/collapse and delete
 - **Receivables** — Track credit invoice balances per customer; see who paid and who didn't; add payments (cash/cheque/card/other) with auto balance update
-- **Invoice/Order Print** — Professional A4 layout with logo, from/bill-to, items table, subtotal/discount/total, signature section, and PDF download
+- **Payables** — Track purchase balances owed to vendors; view outstanding per vendor with aging (0-30/31-60/60+ days); make payments (cash/bank/other) with auto balance update; edit/delete vendor payments
+- **Invoice/Order/Return Print** — Professional A4 layout with logo, from/bill-to, items table, bank details (left-aligned above totals), subtotal/discount/total, signature section, and PDF download
+- **Audit Log** — Date-grouped timeline view with category badges (Order, Invoice, Purchase, Payment, etc.); search & filter by action, user; auto-cleanup of logs older than 90 days
 - **Auth** — Email/password login via Supabase with personalized display name & role (configurable user map)
 - **Themes** — Light (blue/teal glass) and dark (emerald) themes with toggle; invoice always prints high-contrast
 - **UI/UX** — Lucide icons, toast notifications, responsive sidebar with mobile hamburger, gradient stat cards, modern tables, modal forms with backdrop blur
@@ -34,7 +36,7 @@ A modern admin dashboard for managing products, customers, orders, invoices, pur
 - **html2pdf.js** (PDF export)
 
 ## Setup
-  and remove the time in delivary part
+
 1. Install dependencies
 
 ```bash
@@ -61,13 +63,14 @@ npm run dev
 | `products` | Product catalog with name, code, price, stock |
 | `customers` | Customer list with name, address, phone |
 | `employees` | Staff with name, address, phones, email, role, is_rep |
-| `vendors` | Vendor list with name, address, phone |
+| `vendors` | Vendor list with code, name, address, phone, status |
 | `orders` | Sales order header with customer_id, rep_id, total, status (pending/confirmed/invoiced/converted/cancelled/delivered), delivered_at |
 | `order_items` | Order line items with product_id, quantity, price, total |
 | `invoices` | Invoice header with customer_id, rep_id, total_amount, payment_type |
 | `invoice_items` | Invoice line items with product_id, quantity, price, total |
-| `purchases` | Purchase header with vendor_id, date, ref_no, total |
+| `purchases` | Purchase header with vendor_id, date, ref_no, payment_type, total |
 | `purchase_items` | Purchase line items with product_id, quantity, cost, mrp, total |
+| `purchase_payments` | Payments made to vendors against purchases with amount, paid_at, method, bank_name, reference, note |
 | `journals` | Chart of accounts with code, name, type, category, budget |
 | `journal_categories` | Categories for journal classification |
 | `journal_entries` | Journal entry header with date and description |
@@ -77,6 +80,7 @@ npm run dev
 | `return_items` | Return line items with product_id, quantity, price, total |
 | `banks` | Bank accounts with name, account number, balance |
 | `commissions` | Commission records linked to reps and invoices |
+| `audit_logs` | Audit trail with action, user_name, target_type, target_id, target_label, details; auto-cleaned after 90 days |
 
 ## User Personalization
 

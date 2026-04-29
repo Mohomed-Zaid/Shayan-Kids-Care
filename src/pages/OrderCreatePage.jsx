@@ -6,7 +6,7 @@ import { logAction } from '../lib/auditLog'
 import { Plus, Trash2, ArrowLeft, AlertTriangle, X } from 'lucide-react'
 
 function emptyLine() {
-  return { product_id: '', quantity: 1, price: 0 }
+  return { product_id: '', quantity: 1, price: 0, discount: 0 }
 }
 
 export default function OrderCreatePage() {
@@ -62,7 +62,9 @@ export default function OrderCreatePage() {
     return lines.map((l) => {
       const qty = Number(l.quantity || 0)
       const price = Number(l.price || 0)
-      return { ...l, total: qty * price }
+      const discPct = Number(l.discount || 0)
+      const discAmt = qty * price * (discPct / 100)
+      return { ...l, total: qty * price - discAmt }
     })
   }, [lines])
 
@@ -109,6 +111,7 @@ export default function OrderCreatePage() {
         product_id: l.product_id,
         quantity: Number(l.quantity || 0),
         price: Number(l.price || 0),
+        discount: Number(l.discount || 0),
         total: Number(l.total || 0),
       }))
       .filter((l) => l.quantity > 0)
@@ -152,6 +155,7 @@ export default function OrderCreatePage() {
         product_id: l.product_id,
         quantity: l.quantity,
         price: l.price,
+        discount: l.discount,
         total: l.total,
       }))
 
@@ -250,6 +254,7 @@ export default function OrderCreatePage() {
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Product</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Qty</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Price</th>
+              <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Disc %</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Total</th>
               <th className="px-5 py-3"></th>
             </tr>
@@ -289,6 +294,18 @@ export default function OrderCreatePage() {
                     onChange={(e) => updateLine(idx, { price: e.target.value })}
                     className="w-32 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
                   />
+                </td>
+                <td className="px-5 py-3">
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={l.discount}
+                    onChange={(e) => updateLine(idx, { discount: e.target.value })}
+                    className="w-20 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+                    min={0}
+                    max={100}
+                  />
+                  <span className="text-xs text-slate-400 ml-1">%</span>
                 </td>
                 <td className="px-5 py-3 font-medium text-slate-900 dark:text-white">Rs. {Number(l.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                 <td className="px-5 py-3 text-right">

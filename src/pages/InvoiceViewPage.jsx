@@ -34,7 +34,7 @@ export default function InvoiceViewPage() {
 
       const itemsRes = await supabase
         .from('invoice_items')
-        .select('id, product_id, quantity, price, total, products(name, code)')
+        .select('id, product_id, quantity, price, discount, total, products(name, code)')
         .eq('invoice_id', id)
         .order('id', { ascending: true })
 
@@ -72,6 +72,13 @@ export default function InvoiceViewPage() {
 
   const subtotal = useMemo(() => {
     return items.reduce((s, it) => s + Number(it.total ?? 0), 0)
+  }, [items])
+
+  const totalDiscount = useMemo(() => {
+    return items.reduce((s, it) => {
+      const discAmt = Number(it.quantity ?? 0) * Number(it.price ?? 0) * (Number(it.discount ?? 0) / 100)
+      return s + discAmt
+    }, 0)
   }, [items])
 
   const vatRate = Number(invoice?.vat_rate ?? 0.18)
@@ -258,6 +265,8 @@ export default function InvoiceViewPage() {
                   <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Description</th>
                   <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Qty</th>
                   <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Unit Price</th>
+                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Disc %</th>
+                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Disc. Amount</th>
                   <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Amount</th>
                 </tr>
               </thead>
@@ -268,12 +277,16 @@ export default function InvoiceViewPage() {
                     <td className="px-3 py-1.5 text-slate-900 dark:text-white font-medium">{it.products?.name ?? '-'}</td>
                     <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{it.quantity}</td>
                     <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">Rs. {Number(it.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                    <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{Number(it.discount ?? 0) > 0 ? `${Number(it.discount).toLocaleString(undefined, { minimumFractionDigits: 2 })}%` : '-'}</td>
+                    <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{Number(it.discount ?? 0) > 0 ? `Rs. ${(Number(it.quantity ?? 0) * Number(it.price ?? 0) * Number(it.discount ?? 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}</td>
                     <td className="px-3 py-1.5 text-right text-slate-900 dark:text-white font-semibold">Rs. {Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                   </tr>
                 ))}
                 {Array.from({ length: Math.max(0, 14 - items.length) }).map((_, i) => (
                   <tr key={`empty-${i}`} className="border-b border-slate-100 dark:border-slate-700">
                     <td className="px-3 py-1">&nbsp;</td>
+                    <td className="px-3 py-1"></td>
+                    <td className="px-3 py-1"></td>
                     <td className="px-3 py-1"></td>
                     <td className="px-3 py-1"></td>
                     <td className="px-3 py-1"></td>
@@ -286,7 +299,23 @@ export default function InvoiceViewPage() {
 
           {/* Totals + Signature + Footer pushed to bottom */}
           <div className="mt-auto">
-            <div className="px-8 pb-2 flex justify-end">
+            <div className="px-8 pb-2 flex justify-between items-start">
+              {/* Bank Details */}
+              <div className="text-xs text-slate-600 dark:text-slate-300">
+                <div className="font-semibold text-slate-700 dark:text-slate-200">Bank Details</div>
+                <div className="mt-1 space-y-2">
+                  <div>
+                    <div className="font-semibold">ANM NIFLAN</div>
+                    <div>010-0272070-001</div>
+                    <div>Amana Bank Gampola</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold">ANM NIFLAN</div>
+                    <div>223020144356</div>
+                    <div>HNB Bank</div>
+                  </div>
+                </div>
+              </div>
               <div className="w-full max-w-xs border border-slate-200 dark:border-slate-700 rounded">
                 <div className="px-4 py-1.5 flex justify-between text-sm">
                   <span className="text-slate-500 dark:text-slate-400">Subtotal</span>
@@ -298,11 +327,7 @@ export default function InvoiceViewPage() {
                 </div>
                 <div className="px-4 py-2 flex justify-between text-sm border-t border-slate-100 dark:border-slate-700">
                   <span className="text-slate-500 dark:text-slate-400">Discount</span>
-                  <span className="text-slate-800 dark:text-slate-200">0.00%</span>
-                </div>
-                <div className="px-4 py-2 flex justify-between text-sm border-t border-slate-100 dark:border-slate-700">
-                  <span className="text-slate-500 dark:text-slate-400">Disc. Amount</span>
-                  <span className="text-slate-800 dark:text-slate-200">Rs. 0.00</span>
+                  <span className="text-slate-800 dark:text-slate-200">Rs. {Number(totalDiscount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="px-4 py-2 bg-slate-800 flex justify-between items-center border-t-2 border-slate-800">
                   <span className="text-white font-bold text-sm uppercase tracking-wider">Total</span>

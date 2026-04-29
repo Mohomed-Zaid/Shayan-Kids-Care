@@ -30,6 +30,7 @@ export default function PurchasePage() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [refNo, setRefNo] = useState('')
   const [type, setType] = useState('purchase')
+  const [paymentType, setPaymentType] = useState('cash')
 
   const [productSearch, setProductSearch] = useState('')
   const [selectedProductId, setSelectedProductId] = useState('')
@@ -149,7 +150,7 @@ export default function PurchasePage() {
     try {
       const { data: purchase, error: pErr } = await supabase
         .from('purchases')
-        .insert({ vendor_id: vendorId, date, ref_no: refNo.trim() || null, type, total_amount: totals.totalAmount })
+        .insert({ vendor_id: vendorId, date, ref_no: refNo.trim() || null, type, payment_type: paymentType, total_amount: totals.totalAmount })
         .select('*')
         .single()
 
@@ -184,6 +185,7 @@ export default function PurchasePage() {
       setVendorId('')
       setRefNo('')
       setType('purchase')
+      setPaymentType('cash')
       setItems([])
       await load()
     } catch (e) {
@@ -251,6 +253,19 @@ export default function PurchasePage() {
                 className="mt-1 w-full rounded-lg border border-slate-300 dark:border-emerald-900/60 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-emerald-50"
               >
                 <option value="purchase" className="text-slate-900">Purchase</option>
+              </select>
+            </div>
+
+            <div className="md:col-span-3">
+              <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-emerald-100/70">Payment Type</div>
+              <select
+                value={paymentType}
+                onChange={(e) => setPaymentType(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 dark:border-emerald-900/60 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-emerald-50"
+              >
+                <option value="cash" className="text-slate-900">Cash</option>
+                <option value="credit" className="text-slate-900">Credit</option>
+                <option value="bank" className="text-slate-900">Bank</option>
               </select>
             </div>
           </div>

@@ -26,6 +26,8 @@ import JournalsPage from './pages/JournalsPage'
 import JournalEntryPage from './pages/JournalEntryPage'
 import ReceivablesPage from './pages/ReceivablesPage'
 import ReceivableCustomerPage from './pages/ReceivableCustomerPage'
+import PayablesPage from './pages/PayablesPage'
+import PayableVendorPage from './pages/PayableVendorPage'
 import BanksPage from './pages/BanksPage'
 import ReturnsPage from './pages/ReturnsPage'
 import ReturnCreatePage from './pages/ReturnCreatePage'
@@ -63,6 +65,8 @@ export default function App() {
             <Route path="/finance/journal-entry" element={<JournalEntryPage />} />
             <Route path="/finance/receivables" element={<ReceivablesPage />} />
             <Route path="/finance/receivables/:customerId" element={<ReceivableCustomerPage />} />
+            <Route path="/finance/payables" element={<PayablesPage />} />
+            <Route path="/finance/payables/:vendorId" element={<PayableVendorPage />} />
             <Route path="/finance/banks" element={<BanksPage />} />
             <Route path="/returns" element={<ReturnsPage />} />
             <Route path="/returns/new" element={<ReturnCreatePage />} />
