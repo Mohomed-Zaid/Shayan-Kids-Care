@@ -44,7 +44,8 @@ function VendorForm({ initialValue, defaultCode, onCancel, onSave }) {
             <input
               value={code}
               onChange={(e) => setCode(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+              readOnly={!!initialValue}
+              className={`mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 px-3 py-2.5 text-sm focus:outline-none transition-shadow ${initialValue ? 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-not-allowed' : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900'}`}
               placeholder="e.g. 046"
             />
           </div>

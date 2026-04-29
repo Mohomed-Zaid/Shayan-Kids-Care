@@ -136,12 +136,12 @@ export default function PurchaseListPage() {
                 <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wide">Ref No</th>
                 <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wide">Vendor</th>
                 <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wide">Product</th>
+                <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wide">Description</th>
                 <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wide">Qty</th>
                 <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wide">Cost</th>
                 <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wide">MRP</th>
                 <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wide">Profit %</th>
                 <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wide">Total</th>
-                <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wide">Description</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
@@ -179,6 +179,13 @@ export default function PurchaseListPage() {
                       <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{purchase.ref_no || '-'}</td>
                       <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{vendor.name ?? '-'}</td>
                       <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{row.products?.code ? `${row.products.code} - ` : ''}{row.products?.name ?? '-'}</td>
+                      <td className="px-4 py-3">
+                        {isEditing ? (
+                          <input value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white" />
+                        ) : (
+                          <span className="text-slate-500 dark:text-slate-400">{row.description ?? '-'}</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3 text-right">
                         {isEditing ? (
                           <input type="text" inputMode="numeric" value={editForm.quantity} onChange={(e) => setEditForm((f) => ({ ...f, quantity: e.target.value.replace(/[^0-9]/g, '') }))} className="w-16 text-right rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white" />
@@ -202,13 +209,6 @@ export default function PurchaseListPage() {
                       </td>
                       <td className="px-4 py-3 text-right font-semibold text-emerald-600 dark:text-emerald-300">{profitPct ? `${profitPct}%` : '-'}</td>
                       <td className="px-4 py-3 text-right font-semibold text-slate-900 dark:text-white">{isEditing ? fmt(editTotal) : fmt(row.total)}</td>
-                      <td className="px-4 py-3">
-                        {isEditing ? (
-                          <input value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} className="w-full rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-2 py-1 text-sm text-slate-900 dark:text-white" />
-                        ) : (
-                          <span className="text-slate-500 dark:text-slate-400">{row.description ?? '-'}</span>
-                        )}
-                      </td>
                       <td className="px-4 py-3 text-right flex items-center justify-end gap-1">
                         {isEditing ? (
                           <>

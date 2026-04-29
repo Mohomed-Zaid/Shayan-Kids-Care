@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
-import { Plus, Search, Trash2, Save, AlertTriangle } from 'lucide-react'
+import { Plus, Search, Trash2, Save, AlertTriangle, X } from 'lucide-react'
 
 const fmt = (val) => `Rs. ${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
@@ -19,6 +19,7 @@ const stripCommas = (val) => String(val).replace(/,/g, '')
 
 export default function PurchasePage() {
   const toast = useToast()
+  const productSearchRef = React.useRef(null)
 
   const [vendors, setVendors] = useState([])
   const [products, setProducts] = useState([])
@@ -44,6 +45,15 @@ export default function PurchasePage() {
 
   const [items, setItems] = useState([])
 
+  const [newProdOpen, setNewProdOpen] = useState(false)
+  const [prodDropdownOpen, setProdDropdownOpen] = useState(false)
+  const prodDropdownRef = React.useRef(null)
+  const [newProdName, setNewProdName] = useState('')
+  const [newProdCode, setNewProdCode] = useState('')
+  const [newProdPrice, setNewProdPrice] = useState('')
+  const [newProdCategory, setNewProdCategory] = useState('General')
+  const [newProdSaving, setNewProdSaving] = useState(false)
+
   const load = async () => {
     setLoading(true)
     const [{ data: vData, error: vErr }, { data: pData, error: pErr }] = await Promise.all([
@@ -66,6 +76,44 @@ export default function PurchasePage() {
       setLoading(false)
     })
   }, [])
+
+  useEffect(() => {
+    if (!prodDropdownOpen) return
+    const handler = (e) => {
+      if (prodDropdownRef.current && !prodDropdownRef.current.contains(e.target)) {
+        setProdDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [prodDropdownOpen])
+
+  const saveNewProduct = async () => {
+    if (!newProdName.trim()) { toast.error('Product name is required'); return }
+    if (!newProdCode.trim()) { toast.error('Product code is required'); return }
+    setNewProdSaving(true)
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .insert({ name: newProdName.trim(), code: newProdCode.trim(), price: Number(newProdPrice) || 0, stock: 0, category: newProdCategory.trim() || 'General', status: 'active' })
+        .select('*')
+        .single()
+      if (error) throw error
+      toast.success('Product added')
+      logAction({ action: 'create_product', targetType: 'product', targetId: data.id, targetLabel: data.name })
+      setProducts((prev) => [...prev, data])
+      setSelectedProductId(data.id)
+      setNewProdOpen(false)
+      setNewProdName('')
+      setNewProdCode('')
+      setNewProdPrice('')
+      setNewProdCategory('General')
+    } catch (e) {
+      toast.error(e?.message ?? 'Failed to add product')
+    } finally {
+      setNewProdSaving(false)
+    }
+  }
 
   const vendor = useMemo(() => vendors.find((v) => v.id === vendorId) ?? null, [vendors, vendorId])
 
@@ -132,6 +180,7 @@ export default function PurchasePage() {
     setRemarks('')
     setExpDate('')
     setProductSearch('')
+    setTimeout(() => productSearchRef.current?.focus(), 0)
   }
 
   const removeItem = (id) => setItems((prev) => prev.filter((x) => x.id !== id))
@@ -278,22 +327,55 @@ export default function PurchasePage() {
                 <div className="relative mt-1">
                   <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
+                    ref={productSearchRef}
                     value={productSearch}
                     onChange={(e) => setProductSearch(e.target.value)}
                     placeholder="Search by code or name"
                     className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-300 dark:border-emerald-900/60 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-emerald-50"
                   />
                 </div>
-                <select
-                  value={selectedProductId}
-                  onChange={(e) => setSelectedProductId(e.target.value)}
-                  className="mt-2 w-full rounded-lg border border-slate-300 dark:border-emerald-900/60 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-emerald-50"
+                <div ref={prodDropdownRef} className="mt-2 relative">
+                  <div
+                    onClick={() => setProdDropdownOpen((v) => !v)}
+                    className="w-full rounded-lg border border-slate-300 dark:border-emerald-900/60 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-emerald-50 cursor-pointer flex items-center justify-between"
+                  >
+                    <span className={selectedProductId ? '' : 'text-slate-400'}>
+                      {selectedProductId ? (products.find((p) => p.id === selectedProductId)?.code ?? 'Select product') : 'Select product'}
+                    </span>
+                    <svg className={`w-4 h-4 text-slate-400 transition-transform ${prodDropdownOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                  </div>
+                  {prodDropdownOpen ? (
+                    <div className="absolute z-40 mt-1 w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                      {filteredProducts.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-slate-400">No products found</div>
+                      ) : (
+                        filteredProducts.map((p) => (
+                          <div
+                            key={p.id}
+                            onClick={() => {
+                              setSelectedProductId(p.id)
+                              setDescription(p.name ?? '')
+                              setProdDropdownOpen(false)
+                              setProductSearch('')
+                            }}
+                            className={`px-3 py-2 text-sm cursor-pointer hover:bg-emerald-50 dark:hover:bg-emerald-900/30 ${selectedProductId === p.id ? 'bg-emerald-50 dark:bg-emerald-900/20 font-medium' : ''}`}
+                          >
+                            <span className="text-slate-900 dark:text-emerald-50">{p.code}</span>
+                            <span className="text-slate-400 dark:text-slate-500 ml-2">- {p.name}</span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNewProdOpen(true)}
+                  className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 dark:text-emerald-300 hover:text-emerald-900 dark:hover:text-emerald-100 transition-colors"
                 >
-                  <option value="" className="text-slate-900">Select product</option>
-                  {filteredProducts.map((p) => (
-                    <option key={p.id} value={p.id} className="text-slate-900">{p.code} - {p.name}</option>
-                  ))}
-                </select>
+                  <Plus size={13} />
+                  New Product
+                </button>
               </div>
 
               <div className="md:col-span-2">
@@ -327,6 +409,7 @@ export default function PurchasePage() {
                   inputMode="decimal"
                   value={withCommas(mrp)}
                   onChange={(e) => setMrp(stripCommas(e.target.value))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addItem() } }}
                   placeholder="0"
                   className="mt-1 w-full rounded-lg border border-slate-300 dark:border-emerald-900/60 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-emerald-50"
                 />
@@ -486,6 +569,78 @@ export default function PurchasePage() {
           </div>
         </div>
       </div>
+
+      {/* New Product Modal */}
+      {newProdOpen ? (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center px-4 z-50">
+          <div className="w-full max-w-lg bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-xl">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+              <div className="text-sm font-semibold text-slate-900 dark:text-white">Add New Product</div>
+              <button onClick={() => setNewProdOpen(false)} className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Name</label>
+                <input
+                  value={newProdName}
+                  onChange={(e) => setNewProdName(e.target.value)}
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-shadow"
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Code</label>
+                  <input
+                    value={newProdCode}
+                    onChange={(e) => setNewProdCode(e.target.value)}
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-shadow"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Price</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newProdPrice}
+                    onChange={(e) => setNewProdPrice(e.target.value)}
+                    className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-shadow"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Category</label>
+                <input
+                  value={newProdCategory}
+                  onChange={(e) => setNewProdCategory(e.target.value)}
+                  className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-700 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-shadow"
+                  placeholder="e.g. Toys, Clothes, Accessories"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setNewProdOpen(false)}
+                  className="px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={saveNewProduct}
+                  disabled={newProdSaving}
+                  className="px-4 py-2.5 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm"
+                >
+                  {newProdSaving ? 'Saving...' : 'Add Product'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
