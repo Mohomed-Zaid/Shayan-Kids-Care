@@ -56,9 +56,10 @@ export default function PurchasePage() {
 
   const load = async () => {
     setLoading(true)
-    const [{ data: vData, error: vErr }, { data: pData, error: pErr }] = await Promise.all([
+    const [{ data: vData, error: vErr }, { data: pData, error: pErr }, { count, error: cErr }] = await Promise.all([
       supabase.from('vendors').select('*').eq('status', 'active').order('name', { ascending: true }),
       supabase.from('products').select('*').order('name', { ascending: true }),
+      supabase.from('purchases').select('*', { count: 'exact', head: true }),
     ])
 
     if (vErr) toast.error(vErr.message)
@@ -66,6 +67,7 @@ export default function PurchasePage() {
 
     setVendors(vData ?? [])
     setProducts(pData ?? [])
+    setRefNo(`PUR-${String((count ?? 0) + 1).padStart(4, '0')}`)
     setLoading(false)
   }
 
@@ -289,8 +291,8 @@ export default function PurchasePage() {
               <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-emerald-100/70">Ref No</div>
               <input
                 value={refNo}
-                onChange={(e) => setRefNo(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 dark:border-emerald-900/60 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-emerald-50"
+                readOnly
+                className="mt-1 w-full rounded-lg border border-slate-300 dark:border-emerald-900/60 bg-slate-100 dark:bg-slate-700 px-3 py-2.5 text-sm text-slate-500 dark:text-slate-400 cursor-not-allowed"
               />
             </div>
 
