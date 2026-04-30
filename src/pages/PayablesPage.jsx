@@ -32,6 +32,14 @@ export default function PayablesPage() {
     note: '',
   })
 
+  const [cheques, setCheques] = useState([
+    {
+      cheque_date: new Date().toISOString().slice(0, 10),
+      cheque_number: '',
+      amount: '',
+    },
+  ])
+
   const load = async () => {
     setLoading(true)
     setError(null)
@@ -172,15 +180,12 @@ export default function PayablesPage() {
   }, [purchases, paymentSumByPurchase, payForm.vendor_id])
 
   const openPay = (vendorId) => {
-    const vendorPurs = purchases.filter((pur) => pur.vendor_id === vendorId)
-    const firstPur = vendorPurs.find((pur) => {
-      const paid = paymentSumByPurchase.get(pur.id) ?? 0
-      return Number(pur.total_amount ?? 0) - paid > 0
-    })
-    const balance = firstPur ? Number(firstPur.total_amount ?? 0) - (paymentSumByPurchase.get(firstPur.id) ?? 0) : 0
+    const list = purchases.filter((x) => x.vendor_id === vendorId && (x.balance ?? 0) > 0)
+    const first = list[0]
+    const balance = first?.balance ?? 0
     setPayForm({
       vendor_id: vendorId,
-      purchase_id: firstPur?.id ?? (vendorPurs[0]?.id ?? ''),
+      purchase_id: first?.id ?? '',
       paid_at: new Date().toISOString().slice(0, 10),
       amount: balance ? balance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '',
       method: 'cash',
@@ -188,12 +193,64 @@ export default function PayablesPage() {
       reference: '',
       note: '',
     })
+    setCheques([
+      {
+        cheque_date: new Date().toISOString().slice(0, 10),
+        cheque_number: '',
+        amount: balance ? balance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '',
+      },
+    ])
     setPayOpen(true)
   }
 
   const savePayment = async () => {
     if (!payForm.purchase_id) {
       toast.error('Select a purchase')
+      return
+    }
+
+    if (payForm.method === 'cheque') {
+      const rows = cheques
+        .map((c) => ({
+          cheque_date: c.cheque_date,
+          cheque_number: String(c.cheque_number || '').trim(),
+          amount: Number(String(c.amount || '').replace(/,/g, '')),
+        }))
+        .filter((c) => c.cheque_date || c.cheque_number || c.amount)
+
+      if (rows.length === 0) {
+        toast.error('Add at least one cheque')
+        return
+      }
+      for (const c of rows) {
+        if (!c.cheque_date) { toast.error('Cheque date is required'); return }
+        if (!c.cheque_number) { toast.error('Cheque number is required'); return }
+        if (!c.amount || c.amount <= 0) { toast.error('Cheque amount must be greater than 0'); return }
+      }
+
+      setPaySaving(true)
+      const payload = rows.map((c) => ({
+        purchase_id: payForm.purchase_id,
+        amount: c.amount,
+        paid_at: c.cheque_date,
+        method: 'cheque',
+        bank_name: null,
+        reference: c.cheque_number,
+        note: payForm.note.trim() || null,
+      }))
+
+      const { error: err } = await supabase.from('purchase_payments').insert(payload)
+      if (err) {
+        toast.error(err.message)
+        setPaySaving(false)
+        return
+      }
+
+      toast.success('Payment saved')
+      logAction({ action: 'save_purchase_payment', targetType: 'purchase_payment' })
+      setPaySaving(false)
+      setPayOpen(false)
+      await load()
       return
     }
 
@@ -209,7 +266,7 @@ export default function PayablesPage() {
       amount,
       paid_at: payForm.paid_at,
       method: payForm.method,
-      bank_name: payForm.method === 'bank' ? (payForm.bank_name || null) : null,
+      bank_name: payForm.method === 'bank' ? 'Bank' : null,
       reference: payForm.reference.trim() || null,
       note: payForm.note.trim() || null,
     })
@@ -386,12 +443,18 @@ export default function PayablesPage() {
 
                 <div className="sm:col-span-2">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Method</div>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['cash', 'bank', 'other'].map((m) => (
+                  <div className="grid grid-cols-4 gap-2">
+                    {['cash', 'cheque', 'bank', 'other'].map((m) => (
                       <button
                         key={m}
                         type="button"
-                        onClick={() => setPayForm((p) => ({ ...p, method: m }))}
+                        onClick={() =>
+                          setPayForm((p) => ({
+                            ...p,
+                            method: m,
+                            bank_name: m === 'bank' ? 'Bank' : '',
+                          }))
+                        }
                         className={`px-3 py-2 rounded-md text-xs font-bold border transition-colors ${
                           payForm.method === m
                             ? 'bg-slate-900 text-white border-slate-900 dark:bg-emerald-500/15 dark:text-emerald-50 dark:border-emerald-400/20'
@@ -404,19 +467,90 @@ export default function PayablesPage() {
                   </div>
                 </div>
 
-                {payForm.method === 'bank' && (
-                  <div className="sm:col-span-2">
-                    <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Bank</div>
-                    <select
-                      value={payForm.bank_name || ''}
-                      onChange={(e) => setPayForm((p) => ({ ...p, bank_name: e.target.value }))}
-                      className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
-                    >
-                      <option value="">Select bank</option>
-                      {banks.map((b) => (
-                        <option key={b.id} value={`${b.code} - ${b.name}`}>{b.code} - {b.name}{b.branch ? ` (${b.branch})` : ''}</option>
+                {payForm.method === 'cheque' && (
+                  <div className="sm:col-span-2 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Cheques</div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setCheques((prev) => [
+                            ...prev,
+                            {
+                              cheque_date: new Date().toISOString().slice(0, 10),
+                              cheque_number: '',
+                              amount: '',
+                            },
+                          ])
+                        }
+                        className="px-3 py-2 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                      >
+                        Add Cheque
+                      </button>
+                    </div>
+
+                    <div className="space-y-2">
+                      {cheques.map((c, idx) => (
+                        <div key={idx} className="grid grid-cols-1 sm:grid-cols-7 gap-2">
+                          <div className="sm:col-span-2">
+                            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cheque Date</div>
+                            <input
+                              type="date"
+                              value={c.cheque_date}
+                              onChange={(e) =>
+                                setCheques((prev) =>
+                                  prev.map((x, i) => (i === idx ? { ...x, cheque_date: e.target.value } : x))
+                                )
+                              }
+                              className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cheque Number</div>
+                            <input
+                              value={c.cheque_number}
+                              onChange={(e) => {
+                                const digits = String(e.target.value || '').replace(/[^0-9]/g, '').slice(0, 13)
+                                let formatted = digits
+                                if (digits.length > 10) formatted = digits.slice(0, 6) + '-' + digits.slice(6, 10) + '-' + digits.slice(10)
+                                else if (digits.length > 6) formatted = digits.slice(0, 6) + '-' + digits.slice(6)
+                                setCheques((prev) => prev.map((x, i) => (i === idx ? { ...x, cheque_number: formatted } : x)))
+                              }}
+
+                              className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Amount</div>
+                            <input
+                              value={c.amount}
+                              onChange={(e) => {
+                                const raw = e.target.value.replace(/[^0-9.]/g, '')
+                                const parts = raw.split('.')
+                                const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+                                const formatted = parts.length > 1 ? intPart + '.' + parts[1].slice(0, 2) : intPart
+                                setCheques((prev) =>
+                                  prev.map((x, i) => (i === idx ? { ...x, amount: formatted } : x))
+                                )
+                              }}
+                              placeholder="0.00"
+                              className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                            />
+                          </div>
+                          <div className="flex items-end">
+                            {cheques.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => setCheques((prev) => prev.filter((_, i) => i !== idx))}
+                                className="px-3 py-2.5 rounded-lg text-xs font-bold border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       ))}
-                    </select>
+                    </div>
                   </div>
                 )}
 

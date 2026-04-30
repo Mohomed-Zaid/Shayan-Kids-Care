@@ -36,7 +36,6 @@ const navItems = [
     icon: Boxes,
     children: [
       { to: '/inventory/purchase', label: 'New Purchase', icon: ShoppingCart },
-      { to: '/inventory/purchases', label: 'Purchase History', icon: FileText },
     ],
   },
   {
@@ -90,9 +89,6 @@ function usePageTitle() {
     if (path.startsWith('/backup')) return 'Backup & Safety'
     if (path.startsWith('/audit-log')) return 'Audit Log'
     if (path.startsWith('/admin')) return 'Admin'
-    if (path.startsWith('/inventory/purchases/') && path.endsWith('/edit')) return 'Edit Purchase'
-    if (path.startsWith('/inventory/purchases/')) return 'Purchase Details'
-    if (path.startsWith('/inventory/purchases')) return 'Purchase History'
     if (path.startsWith('/inventory/purchase')) return 'New Purchase'
     if (path.startsWith('/inventory')) return 'Inventory'
     if (path === '/orders/new') return 'Create Order'

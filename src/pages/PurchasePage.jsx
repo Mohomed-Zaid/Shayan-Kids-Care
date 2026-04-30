@@ -23,6 +23,7 @@ export default function PurchasePage() {
 
   const [vendors, setVendors] = useState([])
   const [products, setProducts] = useState([])
+  const [prevCosts, setPrevCosts] = useState([])
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -56,10 +57,14 @@ export default function PurchasePage() {
 
   const load = async () => {
     setLoading(true)
-    const [{ data: vData, error: vErr }, { data: pData, error: pErr }, { count, error: cErr }] = await Promise.all([
+    const [{ data: vData, error: vErr }, { data: pData, error: pErr }, { count, error: cErr }, { data: piData, error: piErr }] = await Promise.all([
       supabase.from('vendors').select('*').eq('status', 'active').order('name', { ascending: true }),
       supabase.from('products').select('*').order('name', { ascending: true }),
       supabase.from('purchases').select('*', { count: 'exact', head: true }),
+      supabase
+        .from('purchase_items')
+        .select('id, product_id, cost, mrp, quantity, purchases(id, date, vendor_id, vendors(name))')
+        .order('id', { ascending: false }),
     ])
 
     if (vErr) toast.error(vErr.message)
@@ -67,6 +72,7 @@ export default function PurchasePage() {
 
     setVendors(vData ?? [])
     setProducts(pData ?? [])
+    setPrevCosts(piData ?? [])
     setRefNo(`PUR-${String((count ?? 0) + 1).padStart(4, '0')}`)
     setLoading(false)
   }
@@ -128,6 +134,27 @@ export default function PurchasePage() {
   }, [products, productSearch])
 
   const selectedProduct = useMemo(() => products.find((p) => p.id === selectedProductId) ?? null, [products, selectedProductId])
+
+  const prevCostForProduct = useMemo(() => {
+    if (!selectedProductId) return []
+    const seen = new Set()
+    const results = []
+    for (const pi of prevCosts) {
+      if (pi.product_id !== selectedProductId) continue
+      const key = `${pi.cost}-${pi.purchases?.vendor_id ?? ''}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      results.push({
+        cost: pi.cost,
+        mrp: pi.mrp,
+        qty: pi.quantity,
+        date: pi.purchases?.date ?? null,
+        vendor: pi.purchases?.vendors?.name ?? 'Unknown',
+      })
+      if (results.length >= 3) break
+    }
+    return results
+  }, [prevCosts, selectedProductId])
 
   const totals = useMemo(() => {
     const totalAmount = items.reduce((sum, it) => sum + Number(it.total || 0), 0)
@@ -461,6 +488,20 @@ export default function PurchasePage() {
                   </span>
                 ) : null}
               </div>
+              {prevCostForProduct.length > 0 && (
+                <div className="mt-2 rounded-lg border border-blue-200 dark:border-blue-800/40 bg-blue-50 dark:bg-blue-500/10 p-2.5 text-xs text-blue-700 dark:text-blue-200 space-y-1">
+                  <div className="font-bold text-blue-800 dark:text-blue-100 mb-1">Previous Purchase Cost</div>
+                  {prevCostForProduct.map((h, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="font-semibold">{fmt(h.cost)}</span>
+                      {h.mrp ? <span className="text-blue-500 dark:text-blue-300">MRP: {fmt(h.mrp)}</span> : null}
+                      <span className="text-blue-400 dark:text-blue-300">•</span>
+                      <span>{h.vendor}</span>
+                      {h.date ? <span className="text-blue-400 dark:text-blue-300">• {new Date(h.date).toLocaleDateString()}</span> : null}
+                    </div>
+                  ))}
+                </div>
+              )}
               <button
                 type="button"
                 onClick={addItem}
