@@ -134,13 +134,22 @@
  }
 
  .pdf-export-wrapper .print-area * {
-   color: inherit !important;
+   color: #000000 !important;
    border-color: #e2e8f0 !important;
+ }
+
+ .pdf-export-wrapper .print-area [class*="dark:bg-"] {
+   background-color: transparent !important;
  }
 
  .pdf-export-wrapper .print-area .bg-slate-800,
  .pdf-export-wrapper .print-area .bg-slate-900 {
    background-color: #1e293b !important;
+   color: white !important;
+ }
+
+ .pdf-export-wrapper .print-area .bg-slate-800 *,
+ .pdf-export-wrapper .print-area .bg-slate-900 * {
    color: white !important;
  }
 
@@ -187,13 +196,22 @@
   }
 
   .print-area * {
-    color: inherit !important;
+    color: #000000 !important;
     border-color: #e2e8f0 !important;
+  }
+
+  .print-area [class*="dark:bg-"] {
+    background-color: transparent !important;
   }
 
   .print-area .bg-slate-800,
   .print-area .bg-slate-900 {
     background-color: #1e293b !important;
+    color: white !important;
+  }
+
+  .print-area .bg-slate-800 *,
+  .print-area .bg-slate-900 * {
     color: white !important;
   }
 

@@ -215,15 +215,18 @@ export default function OrderViewPage() {
       const bg = cs.backgroundColor
       const isTransparentBg = bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent'
       const isWhiteBg = bg === 'rgb(255, 255, 255)'
+      const isDarkHeader = el.classList.contains('bg-slate-800') || el.classList.contains('bg-slate-900') || el.closest('.bg-slate-800') || el.closest('.bg-slate-900')
 
-      if (!isTransparentBg && !isWhiteBg) {
+      // Skip dark header rows — keep them dark
+      if (!isDarkHeader && !isTransparentBg && !isWhiteBg) {
         el.style.backgroundColor = '#ffffff'
       }
 
-      const shouldForceBlack = (isTransparentBg || isWhiteBg || el.style.backgroundColor === '#ffffff')
-      const isWhiteText = cs.color === 'rgb(255, 255, 255)' || cs.color === 'rgba(255, 255, 255, 1)'
-      if (shouldForceBlack && !isWhiteText) {
+      // Force black text everywhere except inside dark headers
+      if (!isDarkHeader) {
         el.style.color = '#000000'
+      } else {
+        el.style.color = '#ffffff'
       }
     })
 
