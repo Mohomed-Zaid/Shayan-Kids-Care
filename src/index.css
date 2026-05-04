@@ -144,13 +144,13 @@
 
  .pdf-export-wrapper .print-area .bg-slate-800,
  .pdf-export-wrapper .print-area .bg-slate-900 {
-   background-color: #1e293b !important;
-   color: white !important;
+   background-color: #ffffff !important;
+   color: #000000 !important;
  }
 
  .pdf-export-wrapper .print-area .bg-slate-800 *,
  .pdf-export-wrapper .print-area .bg-slate-900 * {
-   color: white !important;
+   color: #000000 !important;
  }
 
  .pdf-export-wrapper .print-area .bg-slate-50,
@@ -159,7 +159,7 @@
  }
 
  .pdf-export-wrapper .print-area .text-white {
-   color: white !important;
+   color: #000000 !important;
  }
 
 @keyframes slide-in {

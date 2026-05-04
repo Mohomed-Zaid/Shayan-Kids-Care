@@ -117,19 +117,11 @@ export default function InvoiceViewPage() {
       const bg = cs.backgroundColor
       const isTransparentBg = bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent'
       const isWhiteBg = bg === 'rgb(255, 255, 255)'
-      const isDarkHeader = el.classList.contains('bg-slate-800') || el.classList.contains('bg-slate-900') || el.closest('.bg-slate-800') || el.closest('.bg-slate-900')
 
-      // Skip dark header rows — keep them dark
-      if (!isDarkHeader && !isTransparentBg && !isWhiteBg) {
+      if (!isTransparentBg && !isWhiteBg) {
         el.style.backgroundColor = '#ffffff'
       }
-
-      // Force black text everywhere except inside dark headers
-      if (!isDarkHeader) {
-        el.style.color = '#000000'
-      } else {
-        el.style.color = '#ffffff'
-      }
+      el.style.color = '#000000'
     })
 
     const opt = {
@@ -263,7 +255,7 @@ export default function InvoiceViewPage() {
           <div className="px-8 py-2 flex-1 flex flex-col">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-slate-800 text-white">
+                <tr className="bg-white text-black border-b-2 border-black">
                   <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Item #</th>
                   <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Description</th>
                   <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Qty</th>
@@ -332,9 +324,9 @@ export default function InvoiceViewPage() {
                   <span className="text-slate-500 dark:text-slate-400">Discount</span>
                   <span className="text-slate-800 dark:text-slate-200">Rs. {Number(totalDiscount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
-                <div className="px-4 py-2 bg-slate-800 flex justify-between items-center border-t-2 border-slate-800">
-                  <span className="text-white font-bold text-sm uppercase tracking-wider">Total</span>
-                  <span className="text-white font-extrabold text-lg">Rs. {Number(totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                <div className="px-4 py-2 bg-white flex justify-between items-center border-t-2 border-black">
+                  <span className="text-black font-bold text-sm uppercase tracking-wider">Total</span>
+                  <span className="text-black font-extrabold text-lg">Rs. {Number(totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>

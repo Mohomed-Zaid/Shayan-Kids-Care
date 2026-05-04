@@ -333,12 +333,11 @@ export default function PayableVendorPage() {
       const bg = cs.backgroundColor
       const isTransparentBg = bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent'
       const isWhiteBg = bg === 'rgb(255, 255, 255)'
-      const isDark = el.classList.contains('bg-slate-800') || el.classList.contains('bg-slate-900') || el.closest('.bg-slate-800') || el.closest('.bg-slate-900')
 
-      if (!isDark && !isTransparentBg && !isWhiteBg) {
+      if (!isTransparentBg && !isWhiteBg) {
         el.style.backgroundColor = '#ffffff'
       }
-      el.style.color = isDark ? '#ffffff' : '#000000'
+      el.style.color = '#000000'
     })
 
     const opt = {
@@ -511,7 +510,7 @@ export default function PayableVendorPage() {
 
               {receiptData.method === 'cheque' ? (
                 <div className="mt-2 border border-black">
-                  <div className="bg-slate-800 text-white px-2 py-1 text-center font-bold">Cheque Details</div>
+                  <div className="bg-black text-white px-2 py-1 text-center font-bold">Cheque Details</div>
                   <table className="w-full text-[10px]">
                     <thead>
                       <tr className="border-b border-black">

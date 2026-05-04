@@ -20,6 +20,136 @@ const waitFor = async (predicate, { timeoutMs = 2000, intervalMs = 50 } = {}) =>
   }
 }
 
+const buildGrnHtml = ({ purchase, vendor, items, totals, createdAt }) => {
+  const v = vendor ?? {}
+  const p = purchase ?? {}
+  const dateStr = new Date(p.date || p.created_at || createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
+  const refLabel = p.ref_no || `P-${p.id ?? ''}`
+  const payLabel = p.payment_type === 'cash' ? 'Cash' : 'Credit'
+  const totalAmt = fmt(totals?.totalAmount ?? 0)
+
+  const itemRows = (items ?? []).map((it, idx) => `
+    <tr style="background:${idx % 2 !== 0 ? '#f8fafc' : '#ffffff'}">
+      <td style="border:1px solid #000;padding:6px 12px;color:#475569">${it.code ?? '-'}</td>
+      <td style="border:1px solid #000;padding:6px 12px;color:#0f172a;font-weight:500">${it.name ?? '-'}</td>
+      <td style="border:1px solid #000;padding:6px 12px;text-align:right;color:#334155">${it.quantity}</td>
+      <td style="border:1px solid #000;padding:6px 12px;text-align:right;color:#334155">Rs. ${Number(it.cost ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+      <td style="border:1px solid #000;padding:6px 12px;text-align:right;color:#334155">${it.mrp ? 'Rs. ' + Number(it.mrp).toLocaleString(undefined, { minimumFractionDigits: 2 }) : '-'}</td>
+      <td style="border:1px solid #000;padding:6px 12px;text-align:right;color:#0f172a;font-weight:600">Rs. ${Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+    </tr>`).join('')
+
+  const emptyRows = Array.from({ length: Math.max(0, 14 - (items ?? []).length) }).map(() => `
+    <tr>
+      <td style="border:1px solid #000;padding:6px 12px">&nbsp;</td>
+      <td style="border:1px solid #000;padding:6px 12px"></td>
+      <td style="border:1px solid #000;padding:6px 12px"></td>
+      <td style="border:1px solid #000;padding:6px 12px"></td>
+      <td style="border:1px solid #000;padding:6px 12px"></td>
+      <td style="border:1px solid #000;padding:6px 12px"></td>
+    </tr>`).join('')
+
+  return `<div style="background:#fff;color:#000;font-family:Helvetica,Arial,sans-serif;width:210mm;min-height:297mm;display:flex;flex-direction:column">
+  <div style="padding:12px 32px 8px;display:flex;justify-content:space-between;border-bottom:3px solid #1e293b">
+    <div style="display:flex;align-items:center;gap:16px">
+      <div>
+        <div style="font-size:24px;font-weight:700;line-height:1.2">Shayan Kids Care</div>
+        <div style="font-size:16px;font-weight:600;color:#475569">&amp; Toys Store</div>
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:28px;font-weight:700;letter-spacing:2px">GOODS RECEIVED NOTE</div>
+      <div style="font-size:14px;color:#475569;margin-top:4px;font-weight:500">${refLabel}</div>
+      <div style="font-size:12px;color:#64748b;margin-top:2px">${dateStr}</div>
+    </div>
+  </div>
+
+  <div style="padding:8px 32px;display:flex;justify-content:space-between;border-bottom:1px solid #e2e8f0">
+    <div>
+      <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">From</div>
+      <div style="font-size:14px;color:#334155;line-height:1.6">
+        <div style="font-weight:700;color:#0f172a">Shayan Kids Care</div>
+        <div>10/3 B, Attidiya Road</div>
+        <div>Kawdana, Dehiwala</div>
+        <div>+94 75 384 1599</div>
+        <div style="color:#64748b">shayankidscare@gmail.com</div>
+      </div>
+    </div>
+    <div style="text-align:left">
+      <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Vendor</div>
+      <div style="font-size:14px;color:#334155;line-height:1.6">
+        <div style="font-weight:700;color:#0f172a">${v.name ?? '-'}</div>
+        <div>${v.address ?? '-'}</div>
+        <div>${v.phone ?? '-'}</div>
+        <div><span style="font-weight:500;color:#475569">Payment:</span> <span style="font-weight:600;color:#0f172a">${payLabel}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding:4px 32px;flex:1;display:flex;flex-direction:column">
+    <table style="width:100%;font-size:14px;border-collapse:collapse;border:1px solid #000">
+      <thead>
+        <tr style="background:#ffffff;color:#000000">
+          <th style="border:1px solid #000;text-align:left;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Item #</th>
+          <th style="border:1px solid #000;text-align:left;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Description</th>
+          <th style="border:1px solid #000;text-align:right;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Qty</th>
+          <th style="border:1px solid #000;text-align:right;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Unit Cost</th>
+          <th style="border:1px solid #000;text-align:right;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">MRP</th>
+          <th style="border:1px solid #000;text-align:right;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Amount</th>
+        </tr>
+      </thead>
+      <tbody>${itemRows}${emptyRows}</tbody>
+    </table>
+  </div>
+
+  <div style="margin-top:auto">
+    <div style="padding:0 32px 8px;display:flex;justify-content:flex-end">
+      <div style="width:100%;max-width:320px;border:1px solid #e2e8f0;border-radius:4px">
+        <div style="padding:6px 16px;display:flex;justify-content:space-between;font-size:14px">
+          <span style="color:#64748b">Amount</span>
+          <span style="color:#1e293b">${totalAmt}</span>
+        </div>
+        <div style="padding:8px 16px;background:#ffffff;display:flex;justify-content:space-between;align-items:center;border-top:3px solid #000">
+          <span style="color:#000;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:1px">Total</span>
+          <span style="color:#000;font-weight:800;font-size:18px">${totalAmt}</span>
+        </div>
+      </div>
+    </div>
+    <div style="padding:8px 32px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px;border-top:1px solid #e2e8f0">
+      <div style="border-bottom:1px solid #cbd5e1;padding-bottom:8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:500">Purchased by</div>
+      <div style="border-bottom:1px solid #cbd5e1;padding-bottom:8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:500">Checked By</div>
+      <div style="border-bottom:1px solid #cbd5e1;padding-bottom:8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:500">Authorized by</div>
+    </div>
+    <div style="padding:4px 32px;border-top:3px solid #1e293b;text-align:center;font-size:12px;color:#64748b">
+      <div style="font-weight:600;color:#334155">Shayan Kids Care &amp; Toys Store</div>
+      <div>shayankidscare@gmail.com</div>
+    </div>
+  </div>
+</div>`
+}
+
+const exportGrnPdf = async (html, filename) => {
+  const wrapper = document.createElement('div')
+  wrapper.className = 'pdf-export-wrapper'
+  wrapper.innerHTML = html
+  document.body.appendChild(wrapper)
+
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+  const opt = {
+    margin: 0,
+    filename,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+  }
+
+  try {
+    await html2pdf().set(opt).from(wrapper.firstElementChild).save()
+  } finally {
+    wrapper.remove()
+  }
+}
+
 const withCommas = (val) => {
   if (val === '' || val === undefined || val === null) return ''
   const str = String(val).replace(/,/g, '')
@@ -249,17 +379,11 @@ export default function PurchasePage() {
       const bg = cs.backgroundColor
       const isTransparentBg = bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent'
       const isWhiteBg = bg === 'rgb(255, 255, 255)'
-      const isDarkHeader = el.classList.contains('bg-slate-800') || el.classList.contains('bg-slate-900') || el.closest('.bg-slate-800') || el.closest('.bg-slate-900')
 
-      if (!isDarkHeader && !isTransparentBg && !isWhiteBg) {
+      if (!isTransparentBg && !isWhiteBg) {
         el.style.backgroundColor = '#ffffff'
       }
-
-      if (!isDarkHeader) {
-        el.style.color = '#000000'
-      } else {
-        el.style.color = '#ffffff'
-      }
+      el.style.color = '#000000'
     })
 
     const opt = {
@@ -325,6 +449,10 @@ export default function PurchasePage() {
       logAction({ action: 'create_purchase', targetType: 'purchase', targetId: purchase?.id, targetLabel: `PUR-${purchase?.id ?? ''}` })
 
       const vendorName = vendor?.name ?? ''
+      const grnHtml = buildGrnHtml({ purchase, vendor, items, totals, createdAt: new Date().toISOString() })
+      const base = `GRN-${purchase?.ref_no || purchase?.id || 'purchase'}-${vendorName || 'Vendor'}`
+      await exportGrnPdf(grnHtml, `${safeFilename(base)}.pdf`)
+
       setGrnData({
         purchase,
         vendor,
@@ -332,13 +460,6 @@ export default function PurchasePage() {
         totals,
         createdAt: new Date().toISOString(),
       })
-
-      const ready = await waitFor(() => !!grnRef.current)
-      if (!ready) {
-        throw new Error('GRN preview not ready')
-      }
-      const base = `GRN-${purchase?.ref_no || purchase?.id || 'purchase'}-${vendorName || 'Vendor'}`
-      await downloadGrnPdf(`${safeFilename(base)}.pdf`)
 
       setVendorId('')
       setRefNo('')
@@ -366,7 +487,7 @@ export default function PurchasePage() {
     <div className="space-y-4">
       <div className="fixed left-[-99999px] top-0">
         {grnData ? (
-          <div ref={grnRef} className="bg-white text-black">
+          <div ref={grnRef} className="bg-white text-black print-area">
             <div className="min-h-[297mm] flex flex-col" style={{ width: '210mm' }}>
               {/* Header — same as invoice */}
               <div className="px-8 pt-3 pb-2 flex items-start justify-between border-b-2 border-slate-800">
@@ -412,7 +533,7 @@ export default function PurchasePage() {
               <div className="px-8 py-1 flex-1 flex flex-col">
                 <table className="w-full text-sm border border-black">
                   <thead>
-                    <tr className="bg-slate-800 text-white">
+                    <tr className="bg-white text-black">
                       <th className="border border-black text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Item #</th>
                       <th className="border border-black text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Description</th>
                       <th className="border border-black text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Qty</th>
@@ -454,9 +575,9 @@ export default function PurchasePage() {
                       <span className="text-slate-500">Amount</span>
                       <span className="text-slate-800">Rs. {Number(grnData.totals?.totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     </div>
-                    <div className="px-4 py-2 bg-slate-800 flex justify-between items-center border-t-2 border-slate-800">
-                      <span className="text-white font-bold text-sm uppercase tracking-wider">Total</span>
-                      <span className="text-white font-extrabold text-lg">Rs. {Number(grnData.totals?.totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                    <div className="px-4 py-2 bg-white flex justify-between items-center border-t-2 border-black">
+                      <span className="text-black font-bold text-sm uppercase tracking-wider">Total</span>
+                      <span className="text-black font-extrabold text-lg">Rs. {Number(grnData.totals?.totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>
                 </div>
