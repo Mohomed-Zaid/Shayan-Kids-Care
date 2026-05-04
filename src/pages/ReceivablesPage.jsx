@@ -24,7 +24,6 @@ export default function ReceivablesPage() {
   const [paySaving, setPaySaving] = useState(false)
   const [payForm, setPayForm] = useState({
     customer_id: '',
-    invoice_id: '',
     paid_at: new Date().toISOString().slice(0, 10),
     amount: '',
     method: 'cash',
@@ -181,7 +180,9 @@ export default function ReceivablesPage() {
       )
     }
 
-    rows = rows.filter((r) => r.balance !== 0)
+    if (statusFilter !== 'paid') {
+      rows = rows.filter((r) => r.balance !== 0)
+    }
 
     if (statusFilter !== 'all') {
       rows = rows.filter((r) => r.status === statusFilter)
@@ -212,36 +213,34 @@ export default function ReceivablesPage() {
       .filter((inv) => inv.customer_id === payForm.customer_id)
       .map((inv) => {
         const paid = paymentSumByInvoice.get(inv.id) ?? 0
+        const retAmount = returnsByCustomer.get(inv.customer_id) ?? 0
         const total = Number(inv.total_amount ?? 0)
         const balance = total - paid
         return { ...inv, paid, balance }
       })
-  }, [invoices, paymentSumByInvoice, payForm.customer_id])
+      .filter((inv) => inv.balance > 0)
+  }, [invoices, paymentSumByInvoice, returnsByCustomer, payForm.customer_id])
 
-  const selectedInvoiceForPay = useMemo(() => {
-    if (!payForm.invoice_id) return null
-    return invoicesForPayCustomer.find((i) => i.id === payForm.invoice_id) ?? null
-  }, [invoicesForPayCustomer, payForm.invoice_id])
+  const totalOutstanding = useMemo(() => {
+    return invoicesForPayCustomer.reduce((s, inv) => s + inv.balance, 0)
+  }, [invoicesForPayCustomer])
 
   const chequeTotals = useMemo(() => {
     const total = cheques.reduce((s, c) => s + Number(String(c.amount || '').replace(/,/g, '') || 0), 0)
-    const balance = Number(selectedInvoiceForPay?.balance ?? 0)
-    const remaining = balance - total
+    const remaining = totalOutstanding - total
     return { total, remaining }
-  }, [cheques, selectedInvoiceForPay])
+  }, [cheques, totalOutstanding])
 
   const openPay = (customerId) => {
     const custInvs = invoices.filter((inv) => inv.customer_id === customerId)
-    const firstInv = custInvs.find((inv) => {
+    const outstanding = custInvs.reduce((s, inv) => {
       const paid = paymentSumByInvoice.get(inv.id) ?? 0
-      return Number(inv.total_amount ?? 0) - paid > 0
-    })
-    const balance = firstInv ? Number(firstInv.total_amount ?? 0) - (paymentSumByInvoice.get(firstInv.id) ?? 0) : 0
+      return s + Math.max(0, Number(inv.total_amount ?? 0) - paid)
+    }, 0)
     setPayForm({
       customer_id: customerId,
-      invoice_id: firstInv?.id ?? (custInvs[0]?.id ?? ''),
       paid_at: new Date().toISOString().slice(0, 10),
-      amount: balance ? balance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '',
+      amount: outstanding > 0 ? outstanding.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '',
       method: 'cash',
       bank_name: '',
       sub_method: 'other',
@@ -252,22 +251,25 @@ export default function ReceivablesPage() {
       {
         cheque_date: new Date().toISOString().slice(0, 10),
         cheque_number: '',
-        amount: balance ? balance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '',
+        amount: outstanding > 0 ? outstanding.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '',
       },
     ])
     setPayOpen(true)
   }
 
   const savePayment = async () => {
-    if (!payForm.invoice_id) {
-      toast.error('Select an invoice')
+    if (invoicesForPayCustomer.length === 0) {
+      toast.error('No outstanding invoices')
       return
     }
 
     const resolvedMethod = payForm.method === 'other' ? (payForm.sub_method || 'other') : payForm.method
 
+    let totalAmount = 0
+    let chequeRows = []
+
     if (resolvedMethod === 'cheque') {
-      const rows = cheques
+      chequeRows = cheques
         .map((c) => {
           const amount = Number(String(c.amount || '').replace(/,/g, ''))
           return {
@@ -278,12 +280,12 @@ export default function ReceivablesPage() {
         })
         .filter((c) => c.cheque_date || c.cheque_number || c.amount)
 
-      if (rows.length === 0) {
+      if (chequeRows.length === 0) {
         toast.error('Add at least one cheque')
         return
       }
 
-      for (const c of rows) {
+      for (const c of chequeRows) {
         if (!c.cheque_date) {
           toast.error('Cheque date is required')
           return
@@ -298,50 +300,82 @@ export default function ReceivablesPage() {
         }
       }
 
-      setPaySaving(true)
-
-      const payload = rows.map((c) => ({
-        invoice_id: payForm.invoice_id,
-        amount: c.amount,
-        paid_at: c.cheque_date,
-        method: 'cheque',
-        bank_name: null,
-        reference: c.cheque_number,
-        note: payForm.note.trim() || null,
-      }))
-
-      const { error: err } = await supabase.from('invoice_payments').insert(payload)
-
-      if (err) {
-        toast.error(err.message)
-        setPaySaving(false)
-        return
-      }
+      totalAmount = chequeRows.reduce((s, c) => s + c.amount, 0)
     } else {
-      const amount = Number(String(payForm.amount || '').replace(/,/g, ''))
-      if (!amount || amount <= 0) {
+      totalAmount = Number(String(payForm.amount || '').replace(/,/g, ''))
+      if (!totalAmount || totalAmount <= 0) {
         toast.error('Enter a valid amount')
         return
       }
-
-      setPaySaving(true)
-      const { error: err } = await supabase.from('invoice_payments').insert({
-        invoice_id: payForm.invoice_id,
-        amount,
-        paid_at: payForm.paid_at,
-        method: resolvedMethod,
-        bank_name: resolvedMethod === 'bank' ? (payForm.bank_name || null) : null,
-        reference: payForm.reference.trim() || null,
-        note: payForm.note.trim() || null,
-      })
-      if (err) {
-        toast.error(err.message)
-        setPaySaving(false)
-        return
-      }
     }
-    toast.success('Payment saved')
-    logAction({ action: 'save_payment', targetType: 'payment' })
+
+    setPaySaving(true)
+
+    // Distribute payment across outstanding invoices (oldest first)
+    const sorted = [...invoicesForPayCustomer].sort(
+      (a, b) => new Date(a.created_at) - new Date(b.created_at)
+    )
+    let remaining = totalAmount
+    const payments = []
+
+    for (const inv of sorted) {
+      if (remaining <= 0) break
+      const alloc = Math.min(remaining, inv.balance)
+      payments.push({ invoice_id: inv.id, amount: Math.round(alloc * 100) / 100 })
+      remaining -= alloc
+    }
+
+    if (payments.length === 0) {
+      toast.error('No invoices to allocate payment to')
+      setPaySaving(false)
+      return
+    }
+
+    try {
+      if (resolvedMethod === 'cheque') {
+        // Each cheque becomes a separate payment, distributed across invoices
+        const payload = []
+        let chequeRemaining = totalAmount
+        for (const c of chequeRows) {
+          let chequeAlloc = c.amount
+          for (const p of payments) {
+            if (chequeAlloc <= 0) break
+            const alloc = Math.min(chequeAlloc, p.amount)
+            payload.push({
+              invoice_id: p.invoice_id,
+              amount: Math.round(alloc * 100) / 100,
+              paid_at: c.cheque_date,
+              method: 'cheque',
+              bank_name: null,
+              reference: c.cheque_number,
+              note: payForm.note.trim() || null,
+            })
+            p.amount -= alloc
+            chequeAlloc -= alloc
+          }
+        }
+        const { error: err } = await supabase.from('invoice_payments').insert(payload)
+        if (err) throw err
+      } else {
+        const payload = payments.map((p) => ({
+          invoice_id: p.invoice_id,
+          amount: p.amount,
+          paid_at: payForm.paid_at,
+          method: resolvedMethod,
+          bank_name: resolvedMethod === 'bank' ? (payForm.bank_name || null) : null,
+          reference: payForm.reference.trim() || null,
+          note: payForm.note.trim() || null,
+        }))
+        const { error: err } = await supabase.from('invoice_payments').insert(payload)
+        if (err) throw err
+      }
+
+      toast.success('Payment saved')
+      logAction({ action: 'save_payment', targetType: 'payment' })
+    } catch (e) {
+      toast.error(e?.message ?? 'Failed to save payment')
+    }
+
     setPaySaving(false)
     await load()
   }
@@ -652,34 +686,39 @@ export default function ReceivablesPage() {
                 )}
 
                 <div className="sm:col-span-2">
-                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Invoice</div>
-                  <select
-                    value={payForm.invoice_id}
-                    onChange={(e) => {
-                      const invId = e.target.value
-                      const inv = invoicesForPayCustomer.find((i) => i.id === invId)
-                      const bal = inv ? inv.balance : 0
-                      setPayForm((p) => ({
-                        ...p,
-                        invoice_id: invId,
-                        amount: bal > 0 ? bal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '',
-                      }))
-                      setCheques([
-                        {
-                          cheque_date: new Date().toISOString().slice(0, 10),
-                          cheque_number: '',
-                          amount: bal > 0 ? bal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '',
-                        },
-                      ])
-                    }}
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
-                  >
-                    {invoicesForPayCustomer.map((inv) => (
-                      <option key={inv.id} value={inv.id}>
-                        INV-{String(inv.invoice_number ?? '').padStart(4, '0')} — Balance {fmt(inv.balance)}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Outstanding Invoices</div>
+                  {invoicesForPayCustomer.length === 0 ? (
+                    <div className="text-xs text-slate-400 py-2">No outstanding invoices</div>
+                  ) : (
+                    <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead className="bg-slate-50 dark:bg-slate-800">
+                          <tr>
+                            <th className="text-left px-3 py-1.5 font-semibold text-slate-500 dark:text-slate-400">Invoice</th>
+                            <th className="text-right px-3 py-1.5 font-semibold text-slate-500 dark:text-slate-400">Total</th>
+                            <th className="text-right px-3 py-1.5 font-semibold text-slate-500 dark:text-slate-400">Paid</th>
+                            <th className="text-right px-3 py-1.5 font-semibold text-slate-500 dark:text-slate-400">Balance</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {invoicesForPayCustomer.map((inv) => (
+                            <tr key={inv.id} className="border-t border-slate-100 dark:border-slate-700/50">
+                              <td className="px-3 py-1.5 text-slate-900 dark:text-white font-medium">INV-{String(inv.invoice_number ?? '').padStart(4, '0')}</td>
+                              <td className="px-3 py-1.5 text-right text-slate-600 dark:text-slate-300">{fmt(inv.total_amount)}</td>
+                              <td className="px-3 py-1.5 text-right text-slate-600 dark:text-slate-300">{fmt(inv.paid)}</td>
+                              <td className="px-3 py-1.5 text-right font-bold text-slate-900 dark:text-white">{fmt(inv.balance)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+                          <tr>
+                            <td colSpan={3} className="px-3 py-1.5 font-bold text-slate-700 dark:text-slate-200 text-right">Total Outstanding</td>
+                            <td className="px-3 py-1.5 text-right font-extrabold text-slate-900 dark:text-white">{fmt(totalOutstanding)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
                 {payForm.method !== 'cheque' ? (
