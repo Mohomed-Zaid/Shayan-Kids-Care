@@ -93,11 +93,17 @@ export default function DashboardPage() {
         supabase
           .from('invoice_payments')
           .select('invoice_id, amount'),
-        supabase
-          .from('invoice_payments')
-          .select('id, invoice_id, amount, paid_at, method, bank_name, reference, note, created_at, invoices(invoice_number, customer_id, customers(name))')
-          .order('paid_at', { ascending: false })
-          .limit(10),
+        (() => {
+          const tenDaysAgo = new Date()
+          tenDaysAgo.setDate(tenDaysAgo.getDate() - 10)
+          tenDaysAgo.setHours(0, 0, 0, 0)
+          return supabase
+            .from('invoice_payments')
+            .select('id, invoice_id, amount, paid_at, method, bank_name, reference, note, created_at, invoices(invoice_number, customer_id, customers(name))')
+            .gte('paid_at', tenDaysAgo.toISOString())
+            .order('paid_at', { ascending: false })
+            .limit(10)
+        })(),
       ])
 
       if (!mounted) return
@@ -258,7 +264,7 @@ export default function DashboardPage() {
           <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-emerald-900/40">
             <div>
               <div className="text-base font-bold text-slate-900 dark:text-emerald-50">Customer Payments</div>
-              <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">Last 10 payments received</div>
+              <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">Payments from the last 10 days</div>
             </div>
             <Link
               to="/finance/receivables"

@@ -1,14 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import { Search, Eye, FileText, Plus } from 'lucide-react'
+import html2pdf from 'html2pdf.js'
 
 const fmt = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
 export default function PayablesPage() {
   const toast = useToast()
+
+  const receiptRef = useRef(null)
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -39,6 +42,8 @@ export default function PayablesPage() {
       amount: '',
     },
   ])
+
+  const [receiptData, setReceiptData] = useState(null)
 
   const load = async () => {
     setLoading(true)
@@ -180,8 +185,16 @@ export default function PayablesPage() {
   }, [purchases, paymentSumByPurchase, payForm.vendor_id])
 
   const openPay = (vendorId) => {
-    const list = purchases.filter((x) => x.vendor_id === vendorId && (x.balance ?? 0) > 0)
-    const first = list[0]
+    const vendorPurchases = purchases
+      .filter((x) => x.vendor_id === vendorId)
+      .map((pur) => {
+        const paid = paymentSumByPurchase.get(pur.id) ?? 0
+        const total = Number(pur.total_amount ?? 0)
+        const balance = total - paid
+        return { ...pur, paid, balance }
+      })
+    const list = vendorPurchases.filter((x) => (x.balance ?? 0) > 0)
+    const first = list[0] ?? vendorPurchases[0]
     const balance = first?.balance ?? 0
     setPayForm({
       vendor_id: vendorId,
@@ -203,11 +216,56 @@ export default function PayablesPage() {
     setPayOpen(true)
   }
 
+  const downloadReceiptPdf = async (filename) => {
+    if (!receiptRef.current) return
+
+    const wrapper = document.createElement('div')
+    wrapper.className = 'pdf-export-wrapper'
+    const cloned = receiptRef.current.cloneNode(true)
+    wrapper.appendChild(cloned)
+    document.body.appendChild(wrapper)
+
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+    cloned.style.backgroundColor = '#ffffff'
+    cloned.style.color = '#000000'
+    cloned.querySelectorAll('*').forEach((el) => {
+      const cs = window.getComputedStyle(el)
+      const bg = cs.backgroundColor
+      const isTransparentBg = bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent'
+      const isWhiteBg = bg === 'rgb(255, 255, 255)'
+      const isDark = el.classList.contains('bg-slate-800') || el.classList.contains('bg-slate-900') || el.closest('.bg-slate-800') || el.closest('.bg-slate-900')
+
+      if (!isDark && !isTransparentBg && !isWhiteBg) {
+        el.style.backgroundColor = '#ffffff'
+      }
+      el.style.color = isDark ? '#ffffff' : '#000000'
+    })
+
+    const opt = {
+      margin: 0,
+      filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm', format: [80, 297], orientation: 'portrait' },
+    }
+
+    try {
+      await html2pdf().set(opt).from(cloned).save()
+    } finally {
+      wrapper.remove()
+    }
+  }
+
   const savePayment = async () => {
     if (!payForm.purchase_id) {
       toast.error('Select a purchase')
       return
     }
+
+    const selectedPurchase = purchasesForPayVendor.find((p) => p.id === payForm.purchase_id) ?? null
+    const vendorName = purchases.find((p) => p.vendor_id === payForm.vendor_id)?.vendors?.name ?? ''
+    const purchaseLabel = selectedPurchase?.ref_no || (selectedPurchase ? `PUR-${String(selectedPurchase.id).slice(0, 8)}` : '')
 
     if (payForm.method === 'cheque') {
       const rows = cheques
@@ -239,7 +297,7 @@ export default function PayablesPage() {
         note: payForm.note.trim() || null,
       }))
 
-      const { error: err } = await supabase.from('purchase_payments').insert(payload)
+      const { data: inserted, error: err } = await supabase.from('purchase_payments').insert(payload).select('id, amount, paid_at, method, reference, created_at')
       if (err) {
         toast.error(err.message)
         setPaySaving(false)
@@ -248,6 +306,24 @@ export default function PayablesPage() {
 
       toast.success('Payment saved')
       logAction({ action: 'save_purchase_payment', targetType: 'purchase_payment' })
+
+      const totalPaid = (inserted ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0)
+      const balanceAfter = selectedPurchase ? Number(selectedPurchase.balance ?? 0) - totalPaid : 0
+      const firstId = (inserted ?? [])[0]?.id
+      setReceiptData({
+        vendorName,
+        purchaseLabel,
+        purchaseId: payForm.purchase_id,
+        paidAt: rows[0]?.cheque_date || payForm.paid_at,
+        method: 'cheque',
+        paymentNo: firstId ? `PAY-${String(firstId).slice(0, 8)}` : 'PAY',
+        amount: totalPaid,
+        balanceAfter,
+        cheques: rows,
+      })
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+      await downloadReceiptPdf(`Payment-Receipt-${purchaseLabel || 'Purchase'}.pdf`)
+
       setPaySaving(false)
       setPayOpen(false)
       await load()
@@ -261,7 +337,7 @@ export default function PayablesPage() {
     }
 
     setPaySaving(true)
-    const { error: err } = await supabase.from('purchase_payments').insert({
+    const { data: inserted, error: err } = await supabase.from('purchase_payments').insert({
       purchase_id: payForm.purchase_id,
       amount,
       paid_at: payForm.paid_at,
@@ -269,7 +345,7 @@ export default function PayablesPage() {
       bank_name: payForm.method === 'bank' ? 'Bank' : null,
       reference: payForm.reference.trim() || null,
       note: payForm.note.trim() || null,
-    })
+    }).select('id, amount, paid_at, method, bank_name, reference, created_at')
 
     if (err) {
       toast.error(err.message)
@@ -279,6 +355,24 @@ export default function PayablesPage() {
 
     toast.success('Payment saved')
     logAction({ action: 'save_purchase_payment', targetType: 'purchase_payment' })
+
+    const paymentRow = Array.isArray(inserted) ? inserted[0] : null
+    const balanceAfter = selectedPurchase ? Number(selectedPurchase.balance ?? 0) - amount : 0
+    setReceiptData({
+      vendorName,
+      purchaseLabel,
+      purchaseId: payForm.purchase_id,
+      paidAt: payForm.paid_at,
+      method: payForm.method,
+      paymentNo: paymentRow?.id ? `PAY-${String(paymentRow.id).slice(0, 8)}` : 'PAY',
+      amount,
+      balanceAfter,
+      bankName: payForm.method === 'bank' ? 'Bank' : null,
+      reference: payForm.reference.trim() || null,
+    })
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+    await downloadReceiptPdf(`Payment-Receipt-${purchaseLabel || 'Purchase'}.pdf`)
+
     setPaySaving(false)
     setPayOpen(false)
     await load()
@@ -286,6 +380,71 @@ export default function PayablesPage() {
 
   return (
     <div className="space-y-4">
+      <div className="fixed left-[-99999px] top-0">
+        {receiptData ? (
+          <div ref={receiptRef} className="bg-white text-black" style={{ width: '80mm' }}>
+            <div className="p-3 text-[11px] leading-tight">
+              <div className="text-center">
+                <div className="text-[16px] font-extrabold">SHAYAN KIDS CARE</div>
+                <div className="text-[10px] font-semibold">10/3 B, Attidiya Road, Kawdana, Dehiwala</div>
+                <div className="text-[10px] font-semibold">+94 75 384 1599</div>
+                <div className="mt-2 text-[12px] font-extrabold tracking-wide">PAYMENT RECEIPT</div>
+              </div>
+
+              <div className="mt-2 border-t border-b border-black py-2 space-y-1">
+                <div className="flex justify-between"><span className="font-bold">Payment No</span><span>{receiptData.paymentNo}</span></div>
+                <div className="flex justify-between"><span className="font-bold">Date/Time</span><span>{new Date(receiptData.paidAt || Date.now()).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span className="font-bold">Paid For</span><span className="text-right max-w-[45mm]">{receiptData.vendorName || '-'}</span></div>
+                <div className="flex justify-between"><span className="font-bold">Settlement</span><span className="text-right max-w-[45mm]">{receiptData.purchaseLabel || '-'}</span></div>
+              </div>
+
+              <div className="mt-2 space-y-1">
+                <div className="flex justify-between"><span className="font-bold">Paid By</span><span>{String(receiptData.method || '').toUpperCase()}</span></div>
+                <div className="flex justify-between"><span className="font-bold">Amount</span><span>{fmt(receiptData.amount)}</span></div>
+                <div className="flex justify-between"><span className="font-bold">Balance</span><span>{fmt(receiptData.balanceAfter)}</span></div>
+              </div>
+
+              {receiptData.method === 'cheque' ? (
+                <div className="mt-2 border border-black">
+                  <div className="bg-slate-800 text-white px-2 py-1 text-center font-bold">Cheque Details</div>
+                  <table className="w-full text-[10px]">
+                    <thead>
+                      <tr className="border-b border-black">
+                        <th className="text-left px-2 py-1">Date</th>
+                        <th className="text-left px-2 py-1">No</th>
+                        <th className="text-right px-2 py-1">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(receiptData.cheques ?? []).map((c, idx) => (
+                        <tr key={idx} className="border-b border-black/20">
+                          <td className="px-2 py-1">{c.cheque_date}</td>
+                          <td className="px-2 py-1">{c.cheque_number}</td>
+                          <td className="px-2 py-1 text-right">{fmt(c.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+
+              {(receiptData.reference || receiptData.bankName) ? (
+                <div className="mt-2 border-t border-black pt-2 text-[10px]">
+                  {receiptData.bankName ? <div><span className="font-bold">Bank</span>: {receiptData.bankName}</div> : null}
+                  {receiptData.reference ? <div><span className="font-bold">Reference</span>: {receiptData.reference}</div> : null}
+                </div>
+              ) : null}
+
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px]">
+                <div className="border-t border-black pt-6">Prepared</div>
+                <div className="border-t border-black pt-6">Approved</div>
+                <div className="border-t border-black pt-6">Received</div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="text-sm text-slate-500 dark:text-slate-400">Purchase payables by vendor.</div>

@@ -181,6 +181,8 @@ export default function ReceivablesPage() {
       )
     }
 
+    rows = rows.filter((r) => r.balance !== 0)
+
     if (statusFilter !== 'all') {
       rows = rows.filter((r) => r.status === statusFilter)
     }

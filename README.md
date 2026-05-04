@@ -26,7 +26,7 @@ A modern admin dashboard for managing products, customers, orders, invoices, pur
 - **Themes** — Light (blue/teal glass) and dark (emerald) themes with toggle; invoice always prints high-contrast
 - **UI/UX** — Lucide icons, toast notifications, responsive sidebar with mobile hamburger, gradient stat cards, modern tables, modal forms with backdrop blur
 
-## Tech Stack
+## Tech Stack 
 
 - **React** + **Vite**
 - **Tailwind CSS** (dark mode + custom light glass theme)

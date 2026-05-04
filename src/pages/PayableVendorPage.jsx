@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
-import { ArrowLeft, Plus, FileText } from 'lucide-react'
+import { ArrowLeft, Plus, FileText, Trash2, Eye } from 'lucide-react'
+import html2pdf from 'html2pdf.js'
 
 const fmt = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
@@ -11,8 +12,11 @@ export default function PayableVendorPage() {
   const { vendorId } = useParams()
   const toast = useToast()
 
+  const receiptRef = useRef(null)
+
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [purchaseDeletingId, setPurchaseDeletingId] = useState('')
   const [error, setError] = useState(null)
 
   const [vendor, setVendor] = useState(null)
@@ -43,6 +47,26 @@ export default function PayableVendorPage() {
   const [payHistPurchaseId, setPayHistPurchaseId] = useState('')
   const [editingPaymentId, setEditingPaymentId] = useState('')
   const [editPayForm, setEditPayForm] = useState({ paid_at: '', amount: '' })
+
+  const [viewOpen, setViewOpen] = useState(false)
+  const [viewPurchase, setViewPurchase] = useState(null)
+  const [viewItems, setViewItems] = useState([])
+  const [viewLoading, setViewLoading] = useState(false)
+
+  const [receiptData, setReceiptData] = useState(null)
+
+  const openViewPurchase = async (pur) => {
+    setViewOpen(true)
+    setViewLoading(true)
+    setViewPurchase(pur)
+    setViewItems([])
+    const { data, error } = await supabase
+      .from('purchase_items')
+      .select('id, product_id, quantity, cost, mrp, description, total, exp_date, remarks, products(name, code)')
+      .eq('purchase_id', pur.id)
+    if (!error) setViewItems(data ?? [])
+    setViewLoading(false)
+  }
 
   const load = async () => {
     setLoading(true)
@@ -173,6 +197,55 @@ export default function PayableVendorPage() {
     await load()
   }
 
+  const deletePurchase = async (purchaseId) => {
+    if (!confirm('Delete this purchase and all its items/payments?')) return
+    setPurchaseDeletingId(purchaseId)
+
+    try {
+      const { data: items, error: itemsErr } = await supabase
+        .from('purchase_items')
+        .select('id, product_id, quantity')
+        .eq('purchase_id', purchaseId)
+
+      if (itemsErr) throw itemsErr
+
+      const ids = Array.from(new Set((items ?? []).map((x) => x.product_id).filter(Boolean)))
+      if (ids.length > 0) {
+        const { data: prods, error: prodErr } = await supabase.from('products').select('id, stock').in('id', ids)
+        if (prodErr) throw prodErr
+
+        const stockById = new Map((prods ?? []).map((p) => [p.id, Number(p.stock ?? 0)]))
+        for (const it of items ?? []) {
+          const current = stockById.get(it.product_id) ?? 0
+          const next = Math.max(0, current - Number(it.quantity ?? 0))
+          stockById.set(it.product_id, next)
+        }
+
+        for (const [pid, next] of stockById.entries()) {
+          const { error: updErr } = await supabase.from('products').update({ stock: next }).eq('id', pid)
+          if (updErr) throw updErr
+        }
+      }
+
+      const { error: payErr } = await supabase.from('purchase_payments').delete().eq('purchase_id', purchaseId)
+      if (payErr) throw payErr
+
+      const { error: delItemsErr } = await supabase.from('purchase_items').delete().eq('purchase_id', purchaseId)
+      if (delItemsErr) throw delItemsErr
+
+      const { error: purErr } = await supabase.from('purchases').delete().eq('id', purchaseId)
+      if (purErr) throw purErr
+
+      toast.success('Purchase deleted')
+      logAction({ action: 'delete_purchase', targetType: 'purchase', targetId: purchaseId })
+      await load()
+    } catch (e) {
+      toast.error(e?.message ?? 'Failed to delete purchase')
+    } finally {
+      setPurchaseDeletingId('')
+    }
+  }
+
   const startEditPayment = (p) => {
     setEditingPaymentId(p.id)
     setEditPayForm({
@@ -221,7 +294,7 @@ export default function PayableVendorPage() {
   }, [purRows])
 
   const openPay = () => {
-    const firstPur = purRows.find((x) => (x.balance ?? 0) > 0)
+    const firstPur = purRows.find((x) => (x.balance ?? 0) > 0) ?? purRows[0]
     const balance = firstPur?.balance ?? 0
     setPayForm((p) => ({
       ...p,
@@ -242,11 +315,56 @@ export default function PayableVendorPage() {
     setPayOpen(true)
   }
 
+  const downloadReceiptPdf = async (filename) => {
+    if (!receiptRef.current) return
+
+    const wrapper = document.createElement('div')
+    wrapper.className = 'pdf-export-wrapper'
+    const cloned = receiptRef.current.cloneNode(true)
+    wrapper.appendChild(cloned)
+    document.body.appendChild(wrapper)
+
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+    cloned.style.backgroundColor = '#ffffff'
+    cloned.style.color = '#000000'
+    cloned.querySelectorAll('*').forEach((el) => {
+      const cs = window.getComputedStyle(el)
+      const bg = cs.backgroundColor
+      const isTransparentBg = bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent'
+      const isWhiteBg = bg === 'rgb(255, 255, 255)'
+      const isDark = el.classList.contains('bg-slate-800') || el.classList.contains('bg-slate-900') || el.closest('.bg-slate-800') || el.closest('.bg-slate-900')
+
+      if (!isDark && !isTransparentBg && !isWhiteBg) {
+        el.style.backgroundColor = '#ffffff'
+      }
+      el.style.color = isDark ? '#ffffff' : '#000000'
+    })
+
+    const opt = {
+      margin: 0,
+      filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm', format: [80, 297], orientation: 'portrait' },
+    }
+
+    try {
+      await html2pdf().set(opt).from(cloned).save()
+    } finally {
+      wrapper.remove()
+    }
+  }
+
   const savePayment = async () => {
     if (!payForm.purchase_id) {
       toast.error('Select a purchase')
       return
     }
+
+    const selectedPurchase = purRows.find((p) => p.id === payForm.purchase_id) ?? null
+    const purchaseLabel = selectedPurchase?.ref_no || (selectedPurchase ? `PUR-${String(selectedPurchase.id).slice(0, 8)}` : '')
+    const vendorName = vendor?.name ?? ''
 
     if (payForm.method === 'cheque') {
       const rows = cheques
@@ -278,7 +396,7 @@ export default function PayableVendorPage() {
         note: payForm.note.trim() || null,
       }))
 
-      const { error: err } = await supabase.from('purchase_payments').insert(payload)
+      const { data: inserted, error: err } = await supabase.from('purchase_payments').insert(payload).select('id, amount, paid_at, method, reference, created_at')
       if (err) {
         toast.error(err.message)
         setSaving(false)
@@ -287,6 +405,23 @@ export default function PayableVendorPage() {
 
       toast.success('Payment saved')
       logAction({ action: 'save_purchase_payment', targetType: 'purchase_payment' })
+
+      const totalPaid = (inserted ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0)
+      const balanceAfter = selectedPurchase ? Number(selectedPurchase.balance ?? 0) - totalPaid : 0
+      const firstId = (inserted ?? [])[0]?.id
+      setReceiptData({
+        vendorName,
+        purchaseLabel,
+        paidAt: rows[0]?.cheque_date || payForm.paid_at,
+        method: 'cheque',
+        paymentNo: firstId ? `PAY-${String(firstId).slice(0, 8)}` : 'PAY',
+        amount: totalPaid,
+        balanceAfter,
+        cheques: rows,
+      })
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+      await downloadReceiptPdf(`Payment-Receipt-${purchaseLabel || 'Purchase'}.pdf`)
+
       setSaving(false)
       setPayOpen(false)
       await load()
@@ -300,7 +435,7 @@ export default function PayableVendorPage() {
     }
 
     setSaving(true)
-    const { error: err } = await supabase.from('purchase_payments').insert({
+    const { data: inserted, error: err } = await supabase.from('purchase_payments').insert({
       purchase_id: payForm.purchase_id,
       amount,
       paid_at: payForm.paid_at,
@@ -308,7 +443,7 @@ export default function PayableVendorPage() {
       bank_name: payForm.method === 'bank' ? 'Bank' : null,
       reference: payForm.reference.trim() || null,
       note: payForm.note.trim() || null,
-    })
+    }).select('id, amount, paid_at, method, bank_name, reference, created_at')
 
     if (err) {
       toast.error(err.message)
@@ -318,6 +453,23 @@ export default function PayableVendorPage() {
 
     toast.success('Payment saved')
     logAction({ action: 'save_purchase_payment', targetType: 'purchase_payment' })
+
+    const paymentRow = Array.isArray(inserted) ? inserted[0] : null
+    const balanceAfter = selectedPurchase ? Number(selectedPurchase.balance ?? 0) - amount : 0
+    setReceiptData({
+      vendorName,
+      purchaseLabel,
+      paidAt: payForm.paid_at,
+      method: payForm.method,
+      paymentNo: paymentRow?.id ? `PAY-${String(paymentRow.id).slice(0, 8)}` : 'PAY',
+      amount,
+      balanceAfter,
+      bankName: payForm.method === 'bank' ? 'Bank' : null,
+      reference: payForm.reference.trim() || null,
+    })
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+    await downloadReceiptPdf(`Payment-Receipt-${purchaseLabel || 'Purchase'}.pdf`)
+
     setSaving(false)
     setPayOpen(false)
     await load()
@@ -333,6 +485,71 @@ export default function PayableVendorPage() {
 
   return (
     <div className="space-y-4">
+      <div className="fixed left-[-99999px] top-0">
+        {receiptData ? (
+          <div ref={receiptRef} className="bg-white text-black" style={{ width: '80mm' }}>
+            <div className="p-3 text-[11px] leading-tight">
+              <div className="text-center">
+                <div className="text-[16px] font-extrabold">SHAYAN KIDS CARE</div>
+                <div className="text-[10px] font-semibold">10/3 B, Attidiya Road, Kawdana, Dehiwala</div>
+                <div className="text-[10px] font-semibold">+94 75 384 1599</div>
+                <div className="mt-2 text-[12px] font-extrabold tracking-wide">PAYMENT RECEIPT</div>
+              </div>
+
+              <div className="mt-2 border-t border-b border-black py-2 space-y-1">
+                <div className="flex justify-between"><span className="font-bold">Payment No</span><span>{receiptData.paymentNo}</span></div>
+                <div className="flex justify-between"><span className="font-bold">Date/Time</span><span>{new Date(receiptData.paidAt || Date.now()).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span className="font-bold">Paid For</span><span className="text-right max-w-[45mm]">{receiptData.vendorName || '-'}</span></div>
+                <div className="flex justify-between"><span className="font-bold">Settlement</span><span className="text-right max-w-[45mm]">{receiptData.purchaseLabel || '-'}</span></div>
+              </div>
+
+              <div className="mt-2 space-y-1">
+                <div className="flex justify-between"><span className="font-bold">Paid By</span><span>{String(receiptData.method || '').toUpperCase()}</span></div>
+                <div className="flex justify-between"><span className="font-bold">Amount</span><span>{fmt(receiptData.amount)}</span></div>
+                <div className="flex justify-between"><span className="font-bold">Balance</span><span>{fmt(receiptData.balanceAfter)}</span></div>
+              </div>
+
+              {receiptData.method === 'cheque' ? (
+                <div className="mt-2 border border-black">
+                  <div className="bg-slate-800 text-white px-2 py-1 text-center font-bold">Cheque Details</div>
+                  <table className="w-full text-[10px]">
+                    <thead>
+                      <tr className="border-b border-black">
+                        <th className="text-left px-2 py-1">Date</th>
+                        <th className="text-left px-2 py-1">No</th>
+                        <th className="text-right px-2 py-1">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(receiptData.cheques ?? []).map((c, idx) => (
+                        <tr key={idx} className="border-b border-black/20">
+                          <td className="px-2 py-1">{c.cheque_date}</td>
+                          <td className="px-2 py-1">{c.cheque_number}</td>
+                          <td className="px-2 py-1 text-right">{fmt(c.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+
+              {(receiptData.reference || receiptData.bankName) ? (
+                <div className="mt-2 border-t border-black pt-2 text-[10px]">
+                  {receiptData.bankName ? <div><span className="font-bold">Bank</span>: {receiptData.bankName}</div> : null}
+                  {receiptData.reference ? <div><span className="font-bold">Reference</span>: {receiptData.reference}</div> : null}
+                </div>
+              ) : null}
+
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px]">
+                <div className="border-t border-black pt-6">Prepared</div>
+                <div className="border-t border-black pt-6">Approved</div>
+                <div className="border-t border-black pt-6">Received</div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
       <div className="flex items-center justify-between">
         <Link to="/finance/payables" className="inline-flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium transition-colors">
           <ArrowLeft size={16} />
@@ -469,13 +686,23 @@ export default function PayableVendorPage() {
                     })()}
                   </td>
                   <td className="px-5 py-3.5 text-right">
-                    <Link
-                      to={`/inventory/purchases/${pur.id}`}
-                      state={{ from: `/finance/payables/${vendorId}` }}
+                    <button
+                      type="button"
+                      onClick={() => openViewPurchase(pur)}
                       className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                     >
+                      <Eye size={14} />
                       View Purchase
-                    </Link>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deletePurchase(pur.id)}
+                      disabled={purchaseDeletingId === pur.id}
+                      className="ml-2 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                      {purchaseDeletingId === pur.id ? 'Deleting...' : 'Delete'}
+                    </button>
                   </td>
                 </tr>
               ))
@@ -813,6 +1040,105 @@ export default function PayableVendorPage() {
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {viewOpen && viewPurchase ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="w-full max-w-3xl max-h-[90vh] bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden flex flex-col">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+              <div>
+                <div className="font-bold text-slate-900 dark:text-white">Purchase Details</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {viewPurchase.ref_no ? `Ref: ${viewPurchase.ref_no}` : `ID: ${viewPurchase.id}`} &middot; {new Date(viewPurchase.date ?? viewPurchase.created_at).toLocaleDateString()}
+                </div>
+              </div>
+              <button
+                onClick={() => setViewOpen(false)}
+                className="text-sm font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4">
+              {/* Purchase Info */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Vendor</div>
+                  <div className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5">{vendor?.name ?? '-'}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Payment Type</div>
+                  <div className="text-sm font-semibold text-slate-900 dark:text-white mt-0.5">{viewPurchase.payment_type === 'cash' ? 'Cash' : 'Credit'}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Total Amount</div>
+                  <div className="text-sm font-extrabold text-slate-900 dark:text-white mt-0.5">{fmt(viewPurchase.total_amount)}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-wider font-bold text-slate-500 dark:text-slate-400">Balance</div>
+                  <div className="text-sm font-extrabold text-slate-900 dark:text-white mt-0.5">{fmt(viewPurchase.balance ?? viewPurchase.total_amount - (viewPurchase.paid ?? 0))}</div>
+                </div>
+              </div>
+
+              {/* Items Table */}
+              {viewLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-900"></div>
+                </div>
+              ) : (
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400">
+                      <tr>
+                        <th className="text-left font-medium px-4 py-2.5 text-xs uppercase tracking-wide">#</th>
+                        <th className="text-left font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Product</th>
+                        <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Qty</th>
+                        <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Cost</th>
+                        <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">MRP</th>
+                        <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Profit %</th>
+                        <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Total</th>
+                        <th className="text-left font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Exp Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {viewItems.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="px-4 py-6 text-center text-slate-400 dark:text-slate-500">No items</td>
+                        </tr>
+                      ) : (
+                        viewItems.map((it, idx) => (
+                          <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800">
+                            <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{idx + 1}</td>
+                            <td className="px-4 py-2.5 font-medium text-slate-900 dark:text-white">
+                              {it.products?.code ? `${it.products.code} - ` : ''}{it.products?.name ?? '-'}
+                            </td>
+                            <td className="px-4 py-2.5 text-right text-slate-700 dark:text-slate-300">{it.quantity}</td>
+                            <td className="px-4 py-2.5 text-right text-slate-700 dark:text-slate-300">{fmt(it.cost)}</td>
+                            <td className="px-4 py-2.5 text-right text-slate-700 dark:text-slate-300">{it.mrp ? fmt(it.mrp) : '-'}</td>
+                            <td className="px-4 py-2.5 text-right font-semibold text-emerald-600 dark:text-emerald-300">{it.mrp && it.cost && Number(it.cost) > 0 ? `${((Number(it.mrp) - Number(it.cost)) / Number(it.cost) * 100).toFixed(1)}%` : '-'}</td>
+                            <td className="px-4 py-2.5 text-right font-semibold text-slate-900 dark:text-white">{fmt(it.total)}</td>
+                            <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{it.exp_date ?? '-'}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Total */}
+              <div className="flex items-center justify-end">
+                <div className="bg-slate-50 dark:bg-slate-800 rounded-lg px-6 py-4 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center justify-between gap-8">
+                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Amount</span>
+                    <span className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(viewPurchase.total_amount)}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
