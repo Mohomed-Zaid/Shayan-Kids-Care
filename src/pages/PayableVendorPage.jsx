@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
-import { ArrowLeft, Plus, FileText, Trash2, Eye } from 'lucide-react'
+import { ArrowLeft, Plus, FileText, Trash2, Eye, Pencil, Save, X } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 
 const fmt = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
@@ -52,12 +52,16 @@ export default function PayableVendorPage() {
   const [viewPurchase, setViewPurchase] = useState(null)
   const [viewItems, setViewItems] = useState([])
   const [viewLoading, setViewLoading] = useState(false)
+  const [viewEditing, setViewEditing] = useState(false)
+  const [viewSaving, setViewSaving] = useState(false)
+  const [editItems, setEditItems] = useState([])
 
   const [receiptData, setReceiptData] = useState(null)
 
   const openViewPurchase = async (pur) => {
     setViewOpen(true)
     setViewLoading(true)
+    setViewEditing(false)
     setViewPurchase(pur)
     setViewItems([])
     const { data, error } = await supabase
@@ -66,6 +70,88 @@ export default function PayableVendorPage() {
       .eq('purchase_id', pur.id)
     if (!error) setViewItems(data ?? [])
     setViewLoading(false)
+  }
+
+  const startViewEdit = () => {
+    setEditItems(viewItems.map((it) => ({ ...it })))
+    setViewEditing(true)
+  }
+
+  const cancelViewEdit = () => {
+    setViewEditing(false)
+    setEditItems([])
+  }
+
+  const updateEditItem = (idx, field, value) => {
+    setEditItems((prev) => {
+      const next = [...prev]
+      next[idx] = { ...next[idx], [field]: value }
+      const qty = Number(field === 'quantity' ? value : next[idx].quantity || 0)
+      const c = Number(field === 'cost' ? value : next[idx].cost || 0)
+      next[idx].total = qty * c
+      return next
+    })
+  }
+
+  const saveViewEdit = async () => {
+    if (editItems.length === 0) return
+    setViewSaving(true)
+    try {
+      const updates = []
+      for (const editIt of editItems) {
+        const origIt = viewItems.find((v) => v.id === editIt.id)
+        const qtyDiff = Number(editIt.quantity || 0) - Number(origIt?.quantity || 0)
+
+        updates.push(
+          supabase
+            .from('purchase_items')
+            .update({
+              quantity: Number(editIt.quantity || 0),
+              cost: Number(editIt.cost || 0),
+              mrp: editIt.mrp ? Number(editIt.mrp) : null,
+              description: editIt.description?.trim() || null,
+              exp_date: editIt.exp_date || null,
+              remarks: editIt.remarks?.trim() || null,
+              total: Number(editIt.total || 0),
+            })
+            .eq('id', editIt.id)
+        )
+
+        if (qtyDiff !== 0 && editIt.product_id) {
+          const { data: prod } = await supabase
+            .from('products')
+            .select('stock')
+            .eq('id', editIt.product_id)
+            .single()
+          if (prod) {
+            const newStock = Math.max(0, Number(prod.stock ?? 0) + qtyDiff)
+            await supabase.from('products').update({ stock: newStock }).eq('id', editIt.product_id)
+          }
+        }
+      }
+
+      await Promise.all(updates)
+
+      const newTotal = editItems.reduce((s, it) => s + Number(it.total || 0), 0)
+      await supabase.from('purchases').update({ total_amount: newTotal }).eq('id', viewPurchase.id)
+
+      toast.success('Purchase updated')
+      logAction({ action: 'edit_purchase', targetType: 'purchase', targetId: viewPurchase.id })
+
+      const { data } = await supabase
+        .from('purchase_items')
+        .select('id, product_id, quantity, cost, mrp, description, total, exp_date, remarks, products(name, code)')
+        .eq('purchase_id', viewPurchase.id)
+      setViewItems(data ?? [])
+      setViewPurchase((prev) => (prev ? { ...prev, total_amount: newTotal } : prev))
+      setViewEditing(false)
+      setEditItems([])
+      await load()
+    } catch (e) {
+      toast.error(e?.message ?? 'Failed to update purchase')
+    } finally {
+      setViewSaving(false)
+    }
   }
 
   const load = async () => {
@@ -1054,12 +1140,42 @@ export default function PayableVendorPage() {
                   {viewPurchase.ref_no ? `Ref: ${viewPurchase.ref_no}` : `ID: ${viewPurchase.id}`} &middot; {new Date(viewPurchase.date ?? viewPurchase.created_at).toLocaleDateString()}
                 </div>
               </div>
-              <button
-                onClick={() => setViewOpen(false)}
-                className="text-sm font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                {!viewEditing ? (
+                  <button
+                    onClick={startViewEdit}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-colors"
+                  >
+                    <Pencil size={14} />
+                    Edit
+                  </button>
+                ) : (
+                  <>
+                    <button
+                      onClick={saveViewEdit}
+                      disabled={viewSaving}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                    >
+                      <Save size={14} />
+                      {viewSaving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={cancelViewEdit}
+                      disabled={viewSaving}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                    >
+                      <X size={14} />
+                      Cancel
+                    </button>
+                  </>
+                )}
+                <button
+                  onClick={() => { setViewOpen(false); setViewEditing(false); setEditItems([]) }}
+                  className="text-sm font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="p-5 overflow-y-auto space-y-4">
@@ -1087,6 +1203,71 @@ export default function PayableVendorPage() {
               {viewLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-900"></div>
+                </div>
+              ) : viewEditing ? (
+                <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400">
+                      <tr>
+                        <th className="text-left font-medium px-4 py-2.5 text-xs uppercase tracking-wide">#</th>
+                        <th className="text-left font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Product</th>
+                        <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Qty</th>
+                        <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Cost</th>
+                        <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">MRP</th>
+                        <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Total</th>
+                        <th className="text-left font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Exp Date</th>
+                        <th className="text-left font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Remarks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {editItems.length === 0 ? (
+                        <tr>
+                          <td colSpan={8} className="px-4 py-6 text-center text-slate-400 dark:text-slate-500">No items</td>
+                        </tr>
+                      ) : (
+                        editItems.map((it, idx) => (
+                          <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800">
+                            <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{idx + 1}</td>
+                            <td className="px-4 py-2.5 font-medium text-slate-900 dark:text-white">
+                              {it.products?.code ? `${it.products.code} - ` : ''}{it.products?.name ?? '-'}
+                            </td>
+                            <td className="px-4 py-2">
+                              <input type="number" min="1" value={it.quantity ?? ''}
+                                onChange={(e) => updateEditItem(idx, 'quantity', e.target.value)}
+                                className="w-16 px-2 py-1 text-right rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <input type="number" min="0" step="0.01" value={it.cost ?? ''}
+                                onChange={(e) => updateEditItem(idx, 'cost', e.target.value)}
+                                className="w-24 px-2 py-1 text-right rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <input type="number" min="0" step="0.01" value={it.mrp ?? ''}
+                                onChange={(e) => updateEditItem(idx, 'mrp', e.target.value)}
+                                className="w-24 px-2 py-1 text-right rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                              />
+                            </td>
+                            <td className="px-4 py-2.5 text-right font-semibold text-slate-900 dark:text-white">{fmt(it.total)}</td>
+                            <td className="px-4 py-2">
+                              <input type="date" value={it.exp_date ?? ''}
+                                onChange={(e) => updateEditItem(idx, 'exp_date', e.target.value)}
+                                className="w-32 px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <input type="text" value={it.remarks ?? ''}
+                                onChange={(e) => updateEditItem(idx, 'remarks', e.target.value)}
+                                className="w-28 px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                                placeholder="-"
+                              />
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               ) : (
                 <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
@@ -1134,7 +1315,7 @@ export default function PayableVendorPage() {
                 <div className="bg-slate-50 dark:bg-slate-800 rounded-lg px-6 py-4 border border-slate-200 dark:border-slate-700">
                   <div className="flex items-center justify-between gap-8">
                     <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Total Amount</span>
-                    <span className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(viewPurchase.total_amount)}</span>
+                    <span className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(viewEditing ? editItems.reduce((s, it) => s + Number(it.total || 0), 0) : viewPurchase.total_amount)}</span>
                   </div>
                 </div>
               </div>

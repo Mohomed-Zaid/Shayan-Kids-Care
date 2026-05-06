@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw, Shield, ScrollText, HandCoins } from 'lucide-react'
+import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw, Shield, ScrollText, HandCoins, Landmark } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -47,6 +47,8 @@ const navItems = [
       { to: '/finance/receivables', label: 'Receivables', icon: FileText },
       { to: '/finance/payables', label: 'Payables', icon: HandCoins },
       { to: '/finance/banks', label: 'Banks', icon: Building2 },
+      { to: '/finance/cheques', label: 'Cheque Administration', icon: Landmark },
+      { to: '/finance/bank-reconciliation', label: 'Bank Reconciliation', icon: Landmark },
     ],
   },
   { to: '/orders', label: 'Orders & Invoices', icon: ShoppingCart },
@@ -79,6 +81,8 @@ function usePageTitle() {
     if (path.startsWith('/finance/journal-entry')) return 'Journal Entry'
     if (path.startsWith('/finance/receivables')) return 'Receivables'
     if (path.startsWith('/finance/payables')) return 'Payables'
+    if (path.startsWith('/finance/cheques')) return 'Cheque Administration'
+    if (path.startsWith('/finance/bank-reconciliation')) return 'Bank Reconciliation'
     if (path.startsWith('/finance')) return 'Finance'
     if (path.startsWith('/reps')) return 'Employees'
     if (path === '/returns/new') return 'New Return'

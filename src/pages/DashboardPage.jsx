@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Package, Users, FileText, DollarSign, Plus, Eye, TrendingUp, ArrowUpRight, Truck, ShoppingCart, BookOpen, Wallet, Calendar } from 'lucide-react'
+import { Package, Users, FileText, DollarSign, Plus, Eye, TrendingUp, ArrowUpRight, Truck, ShoppingCart, BookOpen, Wallet, Calendar, Landmark } from 'lucide-react'
+import Chart from 'react-apexcharts'
 
 const statConfig = [
   { key: 'todaySales', label: 'Today Sales', icon: DollarSign, gradient: 'from-amber-500 to-orange-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-amber-100', isCurrency: true },
@@ -33,6 +34,29 @@ function StatCard({ label, value, icon: Icon, gradient, iconBg, textColor, value
   )
 }
 
+const fmtMoney = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+
+function monthKeyFromDate(d) {
+  const dt = new Date(d)
+  const y = dt.getFullYear()
+  const m = String(dt.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}`
+}
+
+function buildLast12Months() {
+  const now = new Date()
+  const months = []
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const key = monthKeyFromDate(d)
+    const label = d.toLocaleString(undefined, { month: 'short' })
+    months.push({ key, label })
+  }
+  return months
+}
+
+// (Charts are rendered with ApexCharts now)
+
 export default function DashboardPage() {
   const { user } = useAuth()
 
@@ -53,11 +77,22 @@ export default function DashboardPage() {
     totalSales: 0,
     totalPayments: 0,
   })
-  const [recentInvoices, setRecentInvoices] = useState([])
+  const [receivableCheques, setReceivableCheques] = useState([])
   const [recentPayments, setRecentPayments] = useState([])
+  const [payableCheques, setPayableCheques] = useState([])
+  const [monthSeries, setMonthSeries] = useState({ labels: [], sales: [], grossProfit: [] })
+  const [receivable, setReceivable] = useState({ due: 0, currentMonth: 0, received: 0 })
   const [loading, setLoading] = useState(true)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailPayment, setDetailPayment] = useState(null)
+
+  const receivableSegments = useMemo(() => {
+    return [
+      { label: 'Due', value: receivable.due, color: 'rgba(255,255,255,0.95)' },
+      { label: 'Current Month', value: receivable.currentMonth, color: 'rgba(148,163,184,0.65)' },
+      { label: 'Received', value: receivable.received, color: 'rgba(148,163,184,0.30)' },
+    ]
+  }, [receivable])
 
   useEffect(() => {
     let mounted = true
@@ -70,7 +105,19 @@ export default function DashboardPage() {
       const todayEnd = new Date()
       todayEnd.setHours(23, 59, 59, 999)
 
-      const [productsRes, customersRes, todaySalesRes, todayPaymentsRes, totalSalesRes, totalPaymentsRes, recentInvRes, allPayRes, recentPayRes] = await Promise.all([
+      const months = buildLast12Months()
+      const oldestMonthStart = new Date(months[0].key + '-01T00:00:00.000Z')
+      const monthStart = new Date(todayStart)
+      monthStart.setDate(1)
+
+      const payChequeRes = supabase
+        .from('purchase_payments')
+        .select('id, amount, paid_at, reference, method, created_at, purchases(vendor_id, vendors(name))')
+        .eq('method', 'cheque')
+        .order('paid_at', { ascending: false })
+        .limit(10)
+
+      const [productsRes, customersRes, todaySalesRes, todayPaymentsRes, totalSalesRes, totalPaymentsRes, recentInvRes, allPayRes, recentPayRes, invForChartsRes, payForChartsRes, invItemsForProfitRes, purchaseItemsRes] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }),
         supabase.from('customers').select('id', { count: 'exact', head: true }),
         supabase
@@ -86,10 +133,11 @@ export default function DashboardPage() {
         supabase.from('invoices').select('total_amount'),
         supabase.from('invoice_payments').select('amount'),
         supabase
-          .from('invoices')
-          .select('id, invoice_number, total_amount, created_at, customers(name)')
-          .order('created_at', { ascending: false })
-          .limit(30),
+          .from('customer_cheques')
+          .select('id, cheque_date, cheque_number, amount, bank_name, status, customers(name)')
+          .eq('status', 'in_hand')
+          .order('cheque_date', { ascending: false })
+          .limit(15),
         supabase
           .from('invoice_payments')
           .select('invoice_id, amount'),
@@ -104,9 +152,28 @@ export default function DashboardPage() {
             .order('paid_at', { ascending: false })
             .limit(10)
         })(),
+        supabase
+          .from('invoices')
+          .select('id, total_amount, created_at')
+          .gte('created_at', oldestMonthStart.toISOString()),
+        supabase
+          .from('invoice_payments')
+          .select('id, amount, paid_at')
+          .gte('paid_at', oldestMonthStart.toISOString()),
+        supabase
+          .from('invoice_items')
+          .select('product_id, quantity, price, discount, total, invoices(created_at)')
+          .gte('invoices.created_at', oldestMonthStart.toISOString()),
+        supabase
+          .from('purchase_items')
+          .select('product_id, cost')
+          .order('id', { ascending: false })
+          .limit(5000),
       ])
 
       if (!mounted) return
+
+      const payChequeData = await payChequeRes
 
       const todaySales = (todaySalesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
       const todayPayments = (todayPaymentsRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
@@ -122,20 +189,60 @@ export default function DashboardPage() {
         totalPayments,
       })
 
-      // Filter out fully paid invoices from recent list
-      const allPayments = allPayRes.data ?? []
-      const paidByInvoice = new Map()
-      for (const p of allPayments) {
-        const prev = paidByInvoice.get(p.invoice_id) ?? 0
-        paidByInvoice.set(p.invoice_id, prev + Number(p.amount ?? 0))
-      }
-      const unpaidInvoices = (recentInvRes.data ?? []).filter((inv) => {
-        const paid = paidByInvoice.get(inv.id) ?? 0
-        return Number(inv.total_amount ?? 0) - paid > 0.01
-      }).slice(0, 10)
-
-      setRecentInvoices(unpaidInvoices)
+      setReceivableCheques(recentInvRes.data ?? [])
       setRecentPayments(recentPayRes.data ?? [])
+      if (payChequeData.error) console.error('Payable cheques load error:', payChequeData.error)
+      setPayableCheques(payChequeData.data ?? [])
+
+      // Monthly series (last 12 months)
+      const latestCostByProduct = new Map()
+      for (const pi of purchaseItemsRes.data ?? []) {
+        const pid = pi.product_id
+        if (!pid) continue
+        if (latestCostByProduct.has(pid)) continue
+        latestCostByProduct.set(pid, Number(pi.cost ?? 0))
+      }
+
+      const salesByMonth = new Map(months.map((m) => [m.key, 0]))
+      for (const inv of invForChartsRes.data ?? []) {
+        const k = monthKeyFromDate(inv.created_at)
+        if (!salesByMonth.has(k)) continue
+        salesByMonth.set(k, (salesByMonth.get(k) ?? 0) + Number(inv.total_amount ?? 0))
+      }
+
+      const grossProfitByMonth = new Map(months.map((m) => [m.key, 0]))
+      for (const it of invItemsForProfitRes.data ?? []) {
+        const created = it?.invoices?.created_at
+        if (!created) continue
+        const k = monthKeyFromDate(created)
+        if (!grossProfitByMonth.has(k)) continue
+
+        const qty = Number(it.quantity ?? 0)
+        const price = Number(it.price ?? 0)
+        const discPct = Number(it.discount ?? 0)
+        const discAmt = qty * price * (discPct / 100)
+        const revenue = Number(it.total ?? (qty * price - discAmt))
+        const cost = Number(latestCostByProduct.get(it.product_id) ?? 0)
+        const gp = revenue - qty * cost
+        grossProfitByMonth.set(k, (grossProfitByMonth.get(k) ?? 0) + gp)
+      }
+
+      setMonthSeries({
+        labels: months.map((m) => m.label),
+        sales: months.map((m) => salesByMonth.get(m.key) ?? 0),
+        grossProfit: months.map((m) => grossProfitByMonth.get(m.key) ?? 0),
+      })
+
+      // Receivable summary
+      const due = Math.max(0, totalSales - totalPayments)
+      const currentMonthSales = (invForChartsRes.data ?? [])
+        .filter((inv) => new Date(inv.created_at) >= monthStart)
+        .reduce((s, inv) => s + Number(inv.total_amount ?? 0), 0)
+      setReceivable({
+        due,
+        currentMonth: currentMonthSales,
+        received: totalPayments,
+      })
       setLoading(false)
     }
 
@@ -148,6 +255,112 @@ export default function DashboardPage() {
       mounted = false
     }
   }, [])
+
+  const currentMonthIdx = useMemo(() => {
+    const nowLabel = new Date().toLocaleString(undefined, { month: 'short' })
+    return monthSeries.labels.findIndex((l) => l === nowLabel)
+  }, [monthSeries.labels])
+
+  const currentMonthSales = currentMonthIdx >= 0 ? Number(monthSeries.sales[currentMonthIdx] ?? 0) : 0
+  const currentMonthGrossProfit = currentMonthIdx >= 0 ? Number(monthSeries.grossProfit[currentMonthIdx] ?? 0) : 0
+  const profitPct = currentMonthSales > 0 ? (currentMonthGrossProfit / currentMonthSales) * 100 : 0
+
+  const areaSeries = useMemo(() => {
+    return [
+      { name: 'Sales', data: monthSeries.sales },
+      { name: 'Gross Profit', data: monthSeries.grossProfit },
+    ]
+  }, [monthSeries.sales, monthSeries.grossProfit])
+
+  const areaOptions = useMemo(() => {
+    return {
+      chart: {
+        type: 'area',
+        toolbar: { show: false },
+        background: 'transparent',
+        foreColor: 'rgba(226,232,240,0.85)',
+      },
+      stroke: { curve: 'smooth', width: 2 },
+      dataLabels: { enabled: false },
+      fill: { type: 'solid', opacity: 0.35 },
+      colors: ['#ffffff', '#94a3b8'],
+      grid: {
+        borderColor: 'rgba(148,163,184,0.16)',
+        strokeDashArray: 4,
+        xaxis: { lines: { show: true } },
+        yaxis: { lines: { show: true } },
+      },
+      xaxis: {
+        categories: monthSeries.labels,
+        labels: { style: { colors: 'rgba(148,163,184,0.85)', fontWeight: 700 } },
+        axisBorder: { show: false },
+        axisTicks: { show: false },
+      },
+      yaxis: {
+        labels: {
+          formatter: (v) => {
+            const n = Number(v || 0)
+            return n >= 1000000 ? `${(n / 1000000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(0)}k` : `${n.toFixed(0)}`
+          },
+          style: { colors: 'rgba(148,163,184,0.85)', fontWeight: 700 },
+        },
+      },
+      tooltip: {
+        theme: 'dark',
+        y: {
+          formatter: (v) => fmtMoney(v),
+        },
+      },
+      legend: {
+        show: true,
+        position: 'top',
+        horizontalAlign: 'left',
+        labels: { colors: 'rgba(226,232,240,0.9)' },
+      },
+    }
+  }, [monthSeries.labels])
+
+  const donutSeries = useMemo(() => receivableSegments.map((s) => Number(s.value ?? 0)), [receivableSegments])
+  const donutOptions = useMemo(() => {
+    return {
+      chart: { type: 'donut', background: 'transparent', foreColor: 'rgba(226,232,240,0.85)' },
+      labels: receivableSegments.map((s) => s.label),
+      colors: receivableSegments.map((s) => s.color),
+      stroke: { width: 0 },
+      dataLabels: { enabled: false },
+      legend: { show: false },
+      tooltip: {
+        theme: 'dark',
+        y: { formatter: (v) => fmtMoney(v) },
+      },
+      plotOptions: {
+        pie: {
+          donut: {
+            size: '62%',
+            labels: {
+              show: true,
+              name: { show: true, color: 'rgba(148,163,184,0.9)', fontSize: '11px', fontWeight: 800 },
+              value: {
+                show: true,
+                color: '#fff',
+                fontSize: '14px',
+                fontWeight: 900,
+                formatter: (v) => fmtMoney(v),
+              },
+              total: {
+                show: true,
+                label: 'TOTAL',
+                color: 'rgba(148,163,184,0.9)',
+                fontSize: '11px',
+                fontWeight: 900,
+                formatter: () => fmtMoney(donutSeries.reduce((s, x) => s + Number(x || 0), 0)),
+              },
+            },
+          },
+        },
+      },
+    }
+  }, [receivableSegments, donutSeries])
 
   if (loading) {
     return (
@@ -198,16 +411,80 @@ export default function DashboardPage() {
         ))}
       </div>
 
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 rounded-2xl overflow-hidden shadow-sm border border-slate-200/60 dark:border-emerald-400/15 bg-white dark:bg-emerald-950/25">
+          <div className="p-5 flex items-start justify-between border-b border-slate-100 dark:border-emerald-900/40">
+            <div>
+              <div className="text-base font-bold text-slate-900 dark:text-emerald-50">Sales & Profit</div>
+              <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">Last 12 months</div>
+            </div>
+            <div className="text-xs font-semibold text-slate-500 dark:text-emerald-100/60">Amounts are exact (hover on chart)</div>
+          </div>
+          <div className="p-4">
+            <div className="rounded-xl overflow-hidden border border-slate-200/60 dark:border-emerald-900/40 bg-slate-900/90">
+              <Chart options={areaOptions} series={areaSeries} type="area" height={260} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+              <div className="rounded-xl border border-slate-200/60 dark:border-emerald-900/40 bg-white/60 dark:bg-emerald-950/15 px-4 py-3">
+                <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-emerald-100/60">Current Month Sales</div>
+                <div className="mt-1 text-base font-extrabold text-slate-900 dark:text-white">{fmtMoney(currentMonthSales)}</div>
+              </div>
+              <div className="rounded-xl border border-slate-200/60 dark:border-emerald-900/40 bg-white/60 dark:bg-emerald-950/15 px-4 py-3">
+                <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-emerald-100/60">Current Month Gross Profit</div>
+                <div className="mt-1 text-base font-extrabold text-slate-900 dark:text-white">{fmtMoney(currentMonthGrossProfit)}</div>
+              </div>
+              <div className="rounded-xl border border-slate-200/60 dark:border-emerald-900/40 bg-white/60 dark:bg-emerald-950/15 px-4 py-3">
+                <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-emerald-100/60">Profit Percentage</div>
+                <div className="mt-1 text-base font-extrabold text-slate-900 dark:text-white">{profitPct.toFixed(2)}%</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl overflow-hidden shadow-sm border border-slate-200/60 dark:border-emerald-400/15 bg-white dark:bg-emerald-950/25">
+          <div className="p-5 border-b border-slate-100 dark:border-emerald-900/40">
+            <div className="text-base font-bold text-slate-900 dark:text-emerald-50">Customer Receivable</div>
+            <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">Due / Current Month / Received</div>
+          </div>
+          <div className="p-5 flex flex-col items-center gap-4">
+            <div className="rounded-xl overflow-hidden border border-slate-200/60 dark:border-emerald-900/40 bg-slate-900/90">
+              <Chart options={donutOptions} series={donutSeries} type="donut" width={260} />
+            </div>
+            <div className="w-full space-y-2">
+              {receivableSegments.map((s) => (
+                <div key={s.label} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: s.color }} />
+                    <span className="font-semibold text-slate-700 dark:text-slate-200">{s.label}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="font-extrabold text-slate-900 dark:text-white">{fmtMoney(s.value)}</div>
+                    <div className="text-xs font-bold text-slate-500 dark:text-slate-300 w-[64px] text-right">
+                      {(() => {
+                        const total = receivableSegments.reduce((sum, r) => sum + Math.max(0, Number(r.value ?? 0)), 0)
+                        const pct = total > 0 ? (Number(s.value ?? 0) / total) * 100 : 0
+                        return `${pct.toFixed(2)}%`
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Invoices */}
+        {/* Receivable Cheques */}
         <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">
           <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-emerald-900/40">
             <div>
-              <div className="text-base font-bold text-slate-900 dark:text-emerald-50">Recent Invoices</div>
-              <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">Unpaid invoices</div>
+              <div className="text-base font-bold text-slate-900 dark:text-emerald-50">Receivable Cheques</div>
+              <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">Cheques in hand</div>
             </div>
             <Link
-              to="/orders"
+              to="/finance/cheques"
               className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors dark:text-emerald-100/75 dark:hover:text-emerald-50"
             >
               View All
@@ -218,42 +495,55 @@ export default function DashboardPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200 dark:bg-emerald-950/35 dark:border-emerald-900/40">
-                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Invoice #</th>
+                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Cheque #</th>
                 <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Customer</th>
-                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Total</th>
+                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Due Date</th>
+                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Amount</th>
                 <th className="px-5 py-3"></th>
               </tr>
             </thead>
             <tbody>
-              {recentInvoices.length === 0 ? (
+              {receivableCheques.length === 0 ? (
                 <tr>
-                  <td className="px-5 py-12 text-slate-400 dark:text-emerald-100/60 text-center" colSpan={4}>
+                  <td className="px-5 py-12 text-slate-400 dark:text-emerald-100/60 text-center" colSpan={5}>
                     <div className="flex flex-col items-center gap-2">
-                      <FileText size={32} className="text-slate-300 dark:text-emerald-200/30" />
-                      <span>No invoices yet. Create your first invoice!</span>
+                      <Landmark size={32} className="text-slate-300 dark:text-emerald-200/30" />
+                      <span>No cheques in hand</span>
                     </div>
                   </td>
                 </tr>
               ) : (
-                recentInvoices.map((inv) => (
-                  <tr key={inv.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors dark:border-emerald-900/30 dark:hover:bg-emerald-500/5">
-                    <td className="px-5 py-3.5">
-                      <div className="font-semibold text-slate-900 dark:text-emerald-50">INV-{String(inv.invoice_number ?? '').padStart(4, '0')}</div>
-                      <div className="text-xs text-slate-400 dark:text-emerald-100/50">{new Date(inv.created_at).toLocaleString()}</div>
-                    </td>
-                    <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-100/70">{inv.customers?.name ?? '-'}</td>
-                    <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-emerald-50">Rs. {Number(inv.total_amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                    <td className="px-5 py-3.5 text-right">
-                      <Link
-                        to={`/invoices/${inv.id}`}
-                        className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-emerald-100/75 hover:text-slate-900 dark:hover:text-emerald-50 font-medium transition-colors"
-                      >
-                        <Eye size={14} />
-                        View
-                      </Link>
-                    </td>
-                  </tr>
-                ))
+                receivableCheques.map((ch) => {
+                  const dueDate = ch.cheque_date ? new Date(`${String(ch.cheque_date).slice(0, 10)}T00:00:00`) : null
+                  const today = new Date()
+                  const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+                  const diffDays = dueDate ? Math.floor((dueDate.getTime() - startToday.getTime()) / 86400000) : null
+                  const daysLabel = diffDays === null ? '-' : diffDays < 0 ? `${Math.abs(diffDays)}d passed` : diffDays === 0 ? 'Today' : `${diffDays}d left`
+                  const daysColor = diffDays === null ? 'text-slate-400' : diffDays < 0 ? 'text-rose-500' : diffDays <= 3 ? 'text-amber-500' : 'text-emerald-500'
+                  return (
+                    <tr key={ch.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors dark:border-emerald-900/30 dark:hover:bg-emerald-500/5">
+                      <td className="px-5 py-3.5">
+                        <div className="font-semibold text-slate-900 dark:text-emerald-50">{ch.cheque_number || '-'}</div>
+                        <div className="text-xs text-slate-400 dark:text-emerald-100/50">{ch.bank_name || '-'}</div>
+                      </td>
+                      <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-100/70">{ch.customers?.name ?? '-'}</td>
+                      <td className="px-5 py-3.5">
+                        <div className="text-slate-700 dark:text-emerald-50">{ch.cheque_date ? String(ch.cheque_date).slice(0, 10) : '-'}</div>
+                        <div className={`text-xs font-semibold ${daysColor}`}>{daysLabel}</div>
+                      </td>
+                      <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-emerald-50">Rs. {Number(ch.amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      <td className="px-5 py-3.5 text-right">
+                        <Link
+                          to="/finance/cheques"
+                          className="inline-flex items-center gap-1.5 text-sm text-slate-600 dark:text-emerald-100/75 hover:text-slate-900 dark:hover:text-emerald-50 font-medium transition-colors"
+                        >
+                          <Eye size={14} />
+                          View
+                        </Link>
+                      </td>
+                    </tr>
+                  )
+                })
               )}
             </tbody>
           </table>
@@ -322,6 +612,57 @@ export default function DashboardPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Payable Cheques */}
+      <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">
+        <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-emerald-900/40">
+          <div>
+            <div className="text-base font-bold text-slate-900 dark:text-emerald-50">Payable Cheques</div>
+            <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">Vendor cheques deposited</div>
+          </div>
+          <Link
+            to="/finance/cheques"
+            className="flex items-center gap-1.5 text-sm text-slate-600 hover:text-slate-900 font-medium transition-colors dark:text-emerald-100/75 dark:hover:text-emerald-50"
+          >
+            View All
+            <ArrowUpRight size={14} />
+          </Link>
+        </div>
+
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-slate-50 border-b border-slate-200 dark:bg-emerald-950/35 dark:border-emerald-900/40">
+              <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Vendor</th>
+              <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Cheque #</th>
+              <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Amount</th>
+              <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {payableCheques.length === 0 ? (
+              <tr>
+                <td className="px-5 py-12 text-slate-400 dark:text-emerald-100/60 text-center" colSpan={4}>
+                  <div className="flex flex-col items-center gap-2">
+                    <Landmark size={32} className="text-slate-300 dark:text-emerald-200/30" />
+                    <span>No payable cheques</span>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              payableCheques.map((c) => (
+                <tr key={c.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors dark:border-emerald-900/30 dark:hover:bg-emerald-500/5">
+                  <td className="px-5 py-3.5">
+                    <div className="font-medium text-slate-900 dark:text-emerald-50">{c.purchases?.vendors?.name ?? '-'}</div>
+                  </td>
+                  <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-100/70">{c.reference ?? '-'}</td>
+                  <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-emerald-50">Rs. {Number(c.amount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                  <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{new Date(c.paid_at ?? c.created_at).toLocaleDateString()}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
       {/* Payment Detail Modal */}

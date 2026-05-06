@@ -5,6 +5,47 @@ import { logAction } from '../lib/auditLog'
 const AuthContext = createContext(null)
 
 const TABS_KEY = 'skc_active_tabs'
+const PENDING_LOGOUT_KEY = 'skc_pending_logout'
+const PENDING_LOGOUT_GRACE_MS = 2000
+
+function clearSupabaseLocalStorageSession() {
+  Object.keys(localStorage).forEach((key) => {
+    if (key.startsWith('sb-') || key === TABS_KEY || key === PENDING_LOGOUT_KEY) {
+      localStorage.removeItem(key)
+    }
+  })
+}
+
+function processPendingLogoutIfNeeded() {
+  const raw = localStorage.getItem(PENDING_LOGOUT_KEY)
+  if (!raw) return
+  let pending
+  try {
+    pending = JSON.parse(raw)
+  } catch {
+    localStorage.removeItem(PENDING_LOGOUT_KEY)
+    return
+  }
+
+  const now = Date.now()
+  const ts = Number(pending?.ts || 0)
+  if (!ts) {
+    localStorage.removeItem(PENDING_LOGOUT_KEY)
+    return
+  }
+
+  const tabs = JSON.parse(localStorage.getItem(TABS_KEY) || '[]')
+  if (Array.isArray(tabs) && tabs.length > 0) {
+    // App is open again; cancel pending logout.
+    localStorage.removeItem(PENDING_LOGOUT_KEY)
+    return
+  }
+
+  // If the app was fully closed and remains closed long enough, clear auth.
+  if (now - ts >= PENDING_LOGOUT_GRACE_MS) {
+    clearSupabaseLocalStorageSession()
+  }
+}
 
 function registerTab() {
   const tabId = crypto.randomUUID()
@@ -22,12 +63,10 @@ function unregisterTab(tabId) {
   const current = JSON.parse(localStorage.getItem(TABS_KEY) || '[]')
   const remaining = current.filter((t) => t.id !== tabId)
   if (remaining.length === 0) {
-    // Last tab closing — clear auth session and tab list
-    Object.keys(localStorage).forEach((key) => {
-      if (key.startsWith('sb-') || key === TABS_KEY) {
-        localStorage.removeItem(key)
-      }
-    })
+    // Last tab unloading — mark pending logout.
+    // We do NOT clear auth here, because refresh triggers unload too.
+    localStorage.setItem(TABS_KEY, '[]')
+    localStorage.setItem(PENDING_LOGOUT_KEY, JSON.stringify({ ts: Date.now() }))
   } else {
     localStorage.setItem(TABS_KEY, JSON.stringify(remaining))
   }
@@ -39,7 +78,14 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true
+
+    // If the app was fully closed previously, enforce logout on next start.
+    processPendingLogoutIfNeeded()
+
     const tabId = registerTab()
+
+    // App is open again; cancel any pending logout.
+    localStorage.removeItem(PENDING_LOGOUT_KEY)
 
     const handleUnload = () => unregisterTab(tabId)
     window.addEventListener('beforeunload', handleUnload)
