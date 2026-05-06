@@ -356,6 +356,20 @@ export default function ReceivablesPage() {
         }
         const { error: err } = await supabase.from('invoice_payments').insert(payload)
         if (err) throw err
+
+        // Sync cheques to customer_cheques (upsert by customer_id + cheque_number)
+        for (const c of chequeRows) {
+          await supabase
+            .from('customer_cheques')
+            .upsert({
+              customer_id: payForm.customer_id,
+              cheque_date: c.cheque_date,
+              cheque_number: c.cheque_number,
+              bank_name: null,
+              amount: c.amount,
+              status: 'in_hand',
+            }, { onConflict: 'customer_id,cheque_number' })
+        }
       } else {
         const payload = payments.map((p) => ({
           invoice_id: p.invoice_id,

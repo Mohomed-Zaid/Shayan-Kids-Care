@@ -343,6 +343,20 @@ export default function ReceivableCustomerPage() {
         setSaving(false)
         return
       }
+
+      // Sync cheques to customer_cheques (upsert by customer_id + cheque_number)
+      for (const c of rows) {
+        await supabase
+          .from('customer_cheques')
+          .upsert({
+            customer_id: customerId,
+            cheque_date: c.cheque_date,
+            cheque_number: c.cheque_number,
+            bank_name: null,
+            amount: c.amount,
+            status: 'in_hand',
+          }, { onConflict: 'customer_id,cheque_number' })
+      }
     } else {
       const amount = Number(String(payForm.amount || '').replace(/,/g, ''))
       if (!amount || amount <= 0) {
