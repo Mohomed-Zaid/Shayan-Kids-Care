@@ -34,6 +34,7 @@ import BackupPage from './pages/BackupPage'
 import AuditLogPage from './pages/AuditLogPage'
 import ChequeAdministrationPage from './pages/ChequeAdministrationPage'
 import BankReconciliationPage from './pages/BankReconciliationPage'
+import DeleteReceivablePage from './pages/DeleteReceivablePage'
 
 export default function App() {
   return (
@@ -68,6 +69,7 @@ export default function App() {
             <Route path="/finance/banks" element={<BanksPage />} />
             <Route path="/finance/cheques" element={<ChequeAdministrationPage />} />
             <Route path="/finance/bank-reconciliation" element={<BankReconciliationPage />} />
+            <Route path="/finance/delete-receivable" element={<DeleteReceivablePage />} />
             <Route path="/returns" element={<ReturnsPage />} />
             <Route path="/returns/new" element={<ReturnCreatePage />} />
             <Route path="/returns/:id" element={<ReturnViewPage />} />

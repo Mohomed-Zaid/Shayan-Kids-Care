@@ -46,8 +46,9 @@ function monthKeyFromDate(d) {
 function buildLast12Months() {
   const now = new Date()
   const months = []
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+  const startYear = now.getFullYear()
+  for (let m = 0; m < 12; m++) {
+    const d = new Date(startYear, m, 1)
     const key = monthKeyFromDate(d)
     const label = d.toLocaleString(undefined, { month: 'short' })
     months.push({ key, label })

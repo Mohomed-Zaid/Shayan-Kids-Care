@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw, Shield, ScrollText, HandCoins, Landmark } from 'lucide-react'
+import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw, Shield, ScrollText, HandCoins, Landmark, Trash2 } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -49,6 +49,7 @@ const navItems = [
       { to: '/finance/banks', label: 'Banks', icon: Building2 },
       { to: '/finance/cheques', label: 'Cheque Administration', icon: Landmark },
       { to: '/finance/bank-reconciliation', label: 'Bank Reconciliation', icon: Landmark },
+      { to: '/finance/delete-receivable', label: 'Delete Receivable', icon: Trash2 },
     ],
   },
   { to: '/orders', label: 'Orders & Invoices', icon: ShoppingCart },
