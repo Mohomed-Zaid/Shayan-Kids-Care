@@ -81,7 +81,7 @@ export default function DashboardPage() {
   const [receivableCheques, setReceivableCheques] = useState([])
   const [recentPayments, setRecentPayments] = useState([])
   const [payableCheques, setPayableCheques] = useState([])
-  const [monthSeries, setMonthSeries] = useState({ labels: [], sales: [], grossProfit: [] })
+  const [monthSeries, setMonthSeries] = useState({ labels: [], sales: [], purchase: [] })
   const [receivable, setReceivable] = useState({ due: 0, currentMonth: 0, received: 0 })
   const [loading, setLoading] = useState(true)
   const [detailOpen, setDetailOpen] = useState(false)
@@ -167,7 +167,7 @@ export default function DashboardPage() {
           .gte('invoices.created_at', oldestMonthStart.toISOString()),
         supabase
           .from('purchase_items')
-          .select('product_id, cost')
+          .select('product_id, cost, purchases(created_at)')
           .order('id', { ascending: false })
           .limit(5000),
       ])
@@ -196,43 +196,61 @@ export default function DashboardPage() {
       setPayableCheques(payChequeData.data ?? [])
 
       // Monthly series (last 12 months)
-      const latestCostByProduct = new Map()
-      for (const pi of purchaseItemsRes.data ?? []) {
+      // Build cost timeline per product: [{date, cost}] sorted oldest-first
+      const costTimelineByProduct = new Map()
+      for (const pi of [...(purchaseItemsRes.data ?? [])].reverse()) {
         const pid = pi.product_id
         if (!pid) continue
-        if (latestCostByProduct.has(pid)) continue
-        latestCostByProduct.set(pid, Number(pi.cost ?? 0))
+        const date = pi.purchases?.created_at
+        if (!date) continue
+        if (!costTimelineByProduct.has(pid)) costTimelineByProduct.set(pid, [])
+        costTimelineByProduct.get(pid).push({ date: new Date(date), cost: Number(pi.cost ?? 0) })
+      }
+
+      // For a given product and sale date, find the cost that was active at that time
+      const getCostAtDate = (productId, saleDate) => {
+        const timeline = costTimelineByProduct.get(productId)
+        if (!timeline || timeline.length === 0) return 0
+        const sale = new Date(saleDate)
+        let cost = timeline[0].cost // default to earliest cost
+        for (const entry of timeline) {
+          if (entry.date <= sale) cost = entry.cost
+          else break
+        }
+        return cost
       }
 
       const salesByMonth = new Map(months.map((m) => [m.key, 0]))
       for (const inv of invForChartsRes.data ?? []) {
-        const k = monthKeyFromDate(inv.created_at)
+        const created = inv?.created_at
+        if (!created) continue
+        const k = monthKeyFromDate(created)
         if (!salesByMonth.has(k)) continue
         salesByMonth.set(k, (salesByMonth.get(k) ?? 0) + Number(inv.total_amount ?? 0))
       }
 
-      const grossProfitByMonth = new Map(months.map((m) => [m.key, 0]))
+      const purchaseByMonth = new Map(months.map((m) => [m.key, 0]))
       for (const it of invItemsForProfitRes.data ?? []) {
         const created = it?.invoices?.created_at
         if (!created) continue
         const k = monthKeyFromDate(created)
-        if (!grossProfitByMonth.has(k)) continue
+        if (!purchaseByMonth.has(k)) continue
 
         const qty = Number(it.quantity ?? 0)
         const price = Number(it.price ?? 0)
         const discPct = Number(it.discount ?? 0)
         const discAmt = qty * price * (discPct / 100)
-        const revenue = Number(it.total ?? (qty * price - discAmt))
-        const cost = Number(latestCostByProduct.get(it.product_id) ?? 0)
-        const gp = revenue - qty * cost
-        grossProfitByMonth.set(k, (grossProfitByMonth.get(k) ?? 0) + gp)
+        const cost = getCostAtDate(it.product_id, created)
+        const purchase = qty * cost
+        purchaseByMonth.set(k, (purchaseByMonth.get(k) ?? 0) + purchase)
       }
 
-      setMonthSeries({
-        labels: months.map((m) => m.label),
-        sales: months.map((m) => salesByMonth.get(m.key) ?? 0),
-        grossProfit: months.map((m) => grossProfitByMonth.get(m.key) ?? 0),
-      })
+      const labels = months.map((m) => m.label)
+      const sales = months.map((m) => salesByMonth.get(m.key) ?? 0)
+      const purchase = months.map((m) => purchaseByMonth.get(m.key) ?? 0)
+      const profit = sales.map((s, i) => Number(s ?? 0) - Number(purchase[i] ?? 0))
+
+      setMonthSeries({ labels, sales, purchase, profit })
 
       // Receivable summary
       const due = Math.max(0, totalSales - totalPayments)
@@ -263,15 +281,16 @@ export default function DashboardPage() {
   }, [monthSeries.labels])
 
   const currentMonthSales = currentMonthIdx >= 0 ? Number(monthSeries.sales[currentMonthIdx] ?? 0) : 0
-  const currentMonthGrossProfit = currentMonthIdx >= 0 ? Number(monthSeries.grossProfit[currentMonthIdx] ?? 0) : 0
-  const profitPct = currentMonthSales > 0 ? (currentMonthGrossProfit / currentMonthSales) * 100 : 0
+  const currentMonthPurchase = currentMonthIdx >= 0 ? Number(monthSeries.purchase[currentMonthIdx] ?? 0) : 0
+  const currentMonthProfit = currentMonthSales - currentMonthPurchase
+  const profitPct = currentMonthSales > 0 ? (currentMonthProfit / currentMonthSales) * 100 : 0
 
   const areaSeries = useMemo(() => {
     return [
       { name: 'Sales', data: monthSeries.sales },
-      { name: 'Gross Profit', data: monthSeries.grossProfit },
+      { name: 'Profit', data: monthSeries.profit },
     ]
-  }, [monthSeries.sales, monthSeries.grossProfit])
+  }, [monthSeries.sales, monthSeries.profit])
 
   const areaOptions = useMemo(() => {
     return {
@@ -333,6 +352,16 @@ export default function DashboardPage() {
       tooltip: {
         theme: 'dark',
         y: { formatter: (v) => fmtMoney(v) },
+        custom: ({ series, seriesIndex, w }) => {
+          const label = w?.globals?.labels?.[seriesIndex] ?? ''
+          const value = series?.[seriesIndex]
+          return `
+            <div style="background:#0b1220;color:#ffffff;padding:8px 10px;border-radius:10px;border:1px solid rgba(148,163,184,0.25);box-shadow:0 10px 25px rgba(0,0,0,0.35);">
+              <div style="font-size:11px;font-weight:800;letter-spacing:0.03em;color:rgba(226,232,240,0.9);text-transform:uppercase;">${label}</div>
+              <div style="margin-top:2px;font-size:13px;font-weight:900;color:#ffffff;">${fmtMoney(value)}</div>
+            </div>
+          `.trim()
+        },
       },
       plotOptions: {
         pie: {
@@ -432,8 +461,8 @@ export default function DashboardPage() {
                 <div className="mt-1 text-base font-extrabold text-slate-900 dark:text-white">{fmtMoney(currentMonthSales)}</div>
               </div>
               <div className="rounded-xl border border-slate-200/60 dark:border-emerald-900/40 bg-white/60 dark:bg-emerald-950/15 px-4 py-3">
-                <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-emerald-100/60">Current Month Gross Profit</div>
-                <div className="mt-1 text-base font-extrabold text-slate-900 dark:text-white">{fmtMoney(currentMonthGrossProfit)}</div>
+                <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-emerald-100/60">Current Month Purchase</div>
+                <div className="mt-1 text-base font-extrabold text-slate-900 dark:text-white">{fmtMoney(currentMonthPurchase)}</div>
               </div>
               <div className="rounded-xl border border-slate-200/60 dark:border-emerald-900/40 bg-white/60 dark:bg-emerald-950/15 px-4 py-3">
                 <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-emerald-100/60">Profit Percentage</div>

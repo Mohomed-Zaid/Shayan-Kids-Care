@@ -27,6 +27,8 @@ import ReceivableCustomerPage from './pages/ReceivableCustomerPage'
 import PayablesPage from './pages/PayablesPage'
 import PayableVendorPage from './pages/PayableVendorPage'
 import BanksPage from './pages/BanksPage'
+import DeleteReceivablePage from './pages/DeleteReceivablePage'
+import DeletePayablePage from './pages/DeletePayablePage'
 import ReturnsPage from './pages/ReturnsPage'
 import ReturnCreatePage from './pages/ReturnCreatePage'
 import ReturnViewPage from './pages/ReturnViewPage'
@@ -34,7 +36,6 @@ import BackupPage from './pages/BackupPage'
 import AuditLogPage from './pages/AuditLogPage'
 import ChequeAdministrationPage from './pages/ChequeAdministrationPage'
 import BankReconciliationPage from './pages/BankReconciliationPage'
-import DeleteReceivablePage from './pages/DeleteReceivablePage'
 
 export default function App() {
   return (
@@ -70,6 +71,7 @@ export default function App() {
             <Route path="/finance/cheques" element={<ChequeAdministrationPage />} />
             <Route path="/finance/bank-reconciliation" element={<BankReconciliationPage />} />
             <Route path="/finance/delete-receivable" element={<DeleteReceivablePage />} />
+            <Route path="/finance/delete-payable" element={<DeletePayablePage />} />
             <Route path="/returns" element={<ReturnsPage />} />
             <Route path="/returns/new" element={<ReturnCreatePage />} />
             <Route path="/returns/:id" element={<ReturnViewPage />} />

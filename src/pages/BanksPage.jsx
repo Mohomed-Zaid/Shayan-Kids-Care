@@ -15,6 +15,7 @@ const BRANCH_OPTIONS = [
 const emptyForm = () => ({
   code: '',
   name: '',
+  bank_code: '',
   branch: '',
   account_no: '',
   swift_no: '',
@@ -88,6 +89,7 @@ export default function BanksPage() {
     setForm({
       code: row.code ?? '',
       name: row.name ?? '',
+      bank_code: row.bank_code ?? '',
       branch: row.branch ?? '',
       account_no: row.account_no ?? '',
       swift_no: row.swift_no ?? '',
@@ -107,6 +109,7 @@ export default function BanksPage() {
     const payload = {
       code: form.code.trim(),
       name: form.name.trim(),
+      bank_code: form.bank_code.trim() || null,
       branch: form.branch.trim() || null,
       account_no: form.account_no.trim() || null,
       swift_no: form.swift_no.trim() || null,
@@ -128,7 +131,7 @@ export default function BanksPage() {
     }
 
     toast.success(editing ? 'Bank updated' : 'Bank added')
-    logAction({ action: editing ? 'edit_bank' : 'create_bank', targetType: 'bank', targetId: editing?.id, targetLabel: values.name })
+    logAction({ action: editing ? 'edit_bank' : 'create_bank', targetType: 'bank', targetId: editing?.id, targetLabel: form.name })
     setFormOpen(false)
     setSaving(false)
     await load()
@@ -142,7 +145,8 @@ export default function BanksPage() {
       return
     }
     toast.success('Bank deleted')
-    logAction({ action: 'delete_bank', targetType: 'bank', targetId: row.id, targetLabel: row.name })
+    const bank = rows.find((r) => r.id === id)
+    logAction({ action: 'delete_bank', targetType: 'bank', targetId: id, targetLabel: bank?.name })
     await load()
   }
 
@@ -173,6 +177,7 @@ export default function BanksPage() {
             <tr>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Code</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Bank Name</th>
+              <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Bank Code</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Branch</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Account No</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Currency</th>
@@ -182,7 +187,7 @@ export default function BanksPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-5 py-8">
+                <td colSpan={7} className="px-5 py-8">
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-900"></div>
                   </div>
@@ -190,7 +195,7 @@ export default function BanksPage() {
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-5 py-10 text-slate-400 dark:text-emerald-100/60 text-center">
+                <td colSpan={7} className="px-5 py-10 text-slate-400 dark:text-emerald-100/60 text-center">
                   <Building2 size={24} className="mx-auto mb-2 opacity-40 dark:text-emerald-200/30" />
                   No banks found.
                 </td>
@@ -200,6 +205,7 @@ export default function BanksPage() {
                 <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors dark:border-emerald-900/30 dark:hover:bg-emerald-500/5">
                   <td className="px-5 py-3.5 font-semibold text-slate-900 dark:text-emerald-50">{r.code}</td>
                   <td className="px-5 py-3.5 text-slate-700 dark:text-emerald-100/70">{r.name}</td>
+                  <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-100/60">{r.bank_code || '—'}</td>
                   <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-100/60">{r.branch || '—'}</td>
                   <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-100/60">{r.account_no || '—'}</td>
                   <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-100/60">{r.currency || 'LKR'}</td>
@@ -259,6 +265,15 @@ export default function BanksPage() {
                     value={form.name}
                     onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
                     placeholder="e.g. Amana Bank PLC"
+                    className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Bank Code</div>
+                  <input
+                    value={form.bank_code}
+                    onChange={(e) => setForm((p) => ({ ...p, bank_code: e.target.value }))}
+                    placeholder="e.g. 721"
                     className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
                   />
                 </div>

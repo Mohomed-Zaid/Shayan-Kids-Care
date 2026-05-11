@@ -17,6 +17,8 @@ const ACTION_ICONS = {
   create_journal_entry: BookOpen, delete_journal_entry: Trash2,
   save_payment: Wallet, delete_payment: Trash2, edit_payment: Edit3,
   save_purchase_payment: Wallet, delete_purchase_payment: Trash2, edit_purchase_payment: Edit3,
+  delete_receivable_payment: Trash2, delete_payable_payment: Trash2,
+  create_bank: Building2, edit_bank: Edit3, delete_bank: Trash2,
   backup_export: FileText, backup_restore: FileText,
 }
 
@@ -60,6 +62,11 @@ const ACTION_COLORS = {
   save_purchase_payment: 'text-emerald-600 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-900/30',
   delete_purchase_payment: 'text-red-600 bg-red-50 dark:text-red-300 dark:bg-red-900/30',
   edit_purchase_payment: 'text-amber-600 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30',
+  delete_receivable_payment: 'text-red-600 bg-red-50 dark:text-red-300 dark:bg-red-900/30',
+  delete_payable_payment: 'text-red-600 bg-red-50 dark:text-red-300 dark:bg-red-900/30',
+  create_bank: 'text-blue-600 bg-blue-50 dark:text-blue-300 dark:bg-blue-900/30',
+  edit_bank: 'text-amber-600 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30',
+  delete_bank: 'text-red-600 bg-red-50 dark:text-red-300 dark:bg-red-900/30',
   backup_export: 'text-blue-600 bg-blue-50 dark:text-blue-300 dark:bg-blue-900/30',
   backup_restore: 'text-amber-600 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30',
 }
@@ -78,6 +85,8 @@ const ACTION_LABELS = {
   create_journal_entry: 'Created Journal Entry', delete_journal_entry: 'Deleted Journal Entry',
   save_payment: 'Saved Payment', delete_payment: 'Deleted Payment', edit_payment: 'Edited Payment',
   save_purchase_payment: 'Saved Vendor Payment', delete_purchase_payment: 'Deleted Vendor Payment', edit_purchase_payment: 'Edited Vendor Payment',
+  delete_receivable_payment: 'Deleted Receivable Payment', delete_payable_payment: 'Deleted Payable Payment',
+  create_bank: 'Created Bank', edit_bank: 'Edited Bank', delete_bank: 'Deleted Bank',
   backup_export: 'Exported Backup', backup_restore: 'Restored Backup',
 }
 
@@ -94,6 +103,7 @@ const CATEGORY_COLORS = {
   journal: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
   payment: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300',
   backup: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  bank: 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-300',
 }
 
 const FILTER_OPTIONS = [
@@ -109,6 +119,7 @@ const FILTER_OPTIONS = [
   { value: 'return', label: 'Returns' },
   { value: 'journal', label: 'Journals' },
   { value: 'delete', label: 'Deletions' },
+  { value: 'bank', label: 'Banks' },
 ]
 
 function getCategory(action) {
@@ -123,12 +134,13 @@ function getCategory(action) {
   if (action.includes('return')) return 'return'
   if (action.includes('journal')) return 'journal'
   if (action.includes('payment')) return 'payment'
+  if (action.includes('bank')) return 'bank'
   if (action.includes('backup')) return 'backup'
   return 'order'
 }
 
 function getCategoryLabel(cat) {
-  const labels = { auth: 'Auth', order: 'Order', invoice: 'Invoice', product: 'Product', customer: 'Customer', vendor: 'Vendor', employee: 'Employee', purchase: 'Purchase', return: 'Return', journal: 'Journal', payment: 'Payment', backup: 'Backup' }
+  const labels = { auth: 'Auth', order: 'Order', invoice: 'Invoice', product: 'Product', customer: 'Customer', vendor: 'Vendor', employee: 'Employee', purchase: 'Purchase', return: 'Return', journal: 'Journal', payment: 'Payment', backup: 'Backup', bank: 'Bank' }
   return labels[cat] ?? cat
 }
 

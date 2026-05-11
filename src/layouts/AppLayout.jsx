@@ -50,6 +50,7 @@ const navItems = [
       { to: '/finance/cheques', label: 'Cheque Administration', icon: Landmark },
       { to: '/finance/bank-reconciliation', label: 'Bank Reconciliation', icon: Landmark },
       { to: '/finance/delete-receivable', label: 'Delete Receivable', icon: Trash2 },
+      { to: '/finance/delete-payable', label: 'Delete Payable', icon: Trash2 },
     ],
   },
   { to: '/orders', label: 'Orders & Invoices', icon: ShoppingCart },

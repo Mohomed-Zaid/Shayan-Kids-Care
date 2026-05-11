@@ -59,7 +59,7 @@ export default function ReceivablesPage() {
         .from('returns')
         .select('id, customer_id, total_amount')
         .order('created_at', { ascending: false }),
-      supabase.from('banks').select('id, code, name, branch').order('code'),
+      supabase.from('banks').select('id, code, name, bank_code, branch').order('code'),
     ])
 
     if (invRes.error) {
@@ -251,6 +251,8 @@ export default function ReceivablesPage() {
       {
         cheque_date: new Date().toISOString().slice(0, 10),
         cheque_number: '',
+        bank_code: '',
+        bank_name: '',
         amount: outstanding > 0 ? outstanding.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '',
       },
     ])
@@ -275,6 +277,8 @@ export default function ReceivablesPage() {
           return {
             cheque_date: c.cheque_date,
             cheque_number: String(c.cheque_number || '').trim(),
+            bank_code: String(c.bank_code || '').trim(),
+            bank_name: String(c.bank_name || '').trim(),
             amount,
           }
         })
@@ -298,6 +302,19 @@ export default function ReceivablesPage() {
           toast.error('Cheque amount must be greater than 0')
           return
         }
+      }
+
+      // Check for duplicate cheque numbers
+      const chequeNumbers = chequeRows.map((c) => c.cheque_number)
+      const { data: existing } = await supabase
+        .from('invoice_payments')
+        .select('reference')
+        .eq('method', 'cheque')
+        .in('reference', chequeNumbers)
+      if (existing && existing.length > 0) {
+        const dupes = existing.map((e) => e.reference).join(', ')
+        toast.error(`Cheque number already used: ${dupes}`)
+        return
       }
 
       totalAmount = chequeRows.reduce((s, c) => s + c.amount, 0)
@@ -346,7 +363,7 @@ export default function ReceivablesPage() {
               amount: Math.round(alloc * 100) / 100,
               paid_at: c.cheque_date,
               method: 'cheque',
-              bank_name: null,
+              bank_name: c.bank_name || null,
               reference: c.cheque_number,
               note: payForm.note.trim() || null,
             })
@@ -365,7 +382,8 @@ export default function ReceivablesPage() {
               customer_id: payForm.customer_id,
               cheque_date: c.cheque_date,
               cheque_number: c.cheque_number,
-              bank_name: null,
+              bank_name: c.bank_name || null,
+              bank_code: c.bank_code || null,
               amount: c.amount,
               status: 'in_hand',
             }, { onConflict: 'customer_id,cheque_number' })
@@ -599,6 +617,8 @@ export default function ReceivablesPage() {
                             {
                               cheque_date: new Date().toISOString().slice(0, 10),
                               cheque_number: '',
+                              bank_code: '',
+                              bank_name: '',
                               amount: '',
                             },
                           ])
@@ -611,53 +631,78 @@ export default function ReceivablesPage() {
 
                     <div className="space-y-2">
                       {cheques.map((c, idx) => (
-                        <div key={idx} className="grid grid-cols-1 sm:grid-cols-7 gap-2">
-                          <div className="sm:col-span-2">
-                            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cheque Date</div>
-                            <input
-                              type="date"
-                              value={c.cheque_date}
-                              onChange={(e) =>
-                                setCheques((prev) =>
-                                  prev.map((x, i) => (i === idx ? { ...x, cheque_date: e.target.value } : x))
-                                )
-                              }
-                              className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
-                            />
+                        <div key={idx} className="space-y-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
+                            <div className="sm:col-span-2">
+                              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cheque Date</div>
+                              <input
+                                type="date"
+                                value={c.cheque_date}
+                                onChange={(e) =>
+                                  setCheques((prev) =>
+                                    prev.map((x, i) => (i === idx ? { ...x, cheque_date: e.target.value } : x))
+                                  )
+                                }
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-3">
+                              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cheque Number</div>
+                              <input
+                                value={c.cheque_number}
+                                onChange={(e) => {
+                                  const digits = String(e.target.value || '').replace(/[^0-9]/g, '').slice(0, 13)
+                                  let formatted = digits
+                                  if (digits.length > 10) formatted = digits.slice(0, 6) + '-' + digits.slice(6, 10) + '-' + digits.slice(10)
+                                  else if (digits.length > 6) formatted = digits.slice(0, 6) + '-' + digits.slice(6)
+                                  setCheques((prev) => prev.map((x, i) => (i === idx ? { ...x, cheque_number: formatted } : x)))
+                                }}
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-2">
+                              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cheque Amount</div>
+                              <input
+                                value={c.amount}
+                                onChange={(e) => {
+                                  const raw = e.target.value.replace(/[^0-9.]/g, '')
+                                  const parts = raw.split('.')
+                                  const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+                                  const formatted = parts.length > 1 ? intPart + '.' + parts[1].slice(0, 2) : intPart
+                                  setCheques((prev) => prev.map((x, i) => (i === idx ? { ...x, amount: formatted } : x)))
+                                }}
+                                placeholder="0.00"
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                              />
+                            </div>
                           </div>
 
-                          <div className="sm:col-span-3">
-                            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cheque Number</div>
-                            <input
-                              value={c.cheque_number}
-                              onChange={(e) => {
-                                const digits = String(e.target.value || '').replace(/[^0-9]/g, '').slice(0, 13)
-                                let formatted = digits
-                                if (digits.length > 10) formatted = digits.slice(0, 6) + '-' + digits.slice(6, 10) + '-' + digits.slice(10)
-                                else if (digits.length > 6) formatted = digits.slice(0, 6) + '-' + digits.slice(6)
-                                setCheques((prev) => prev.map((x, i) => (i === idx ? { ...x, cheque_number: formatted } : x)))
-                              }}
-                              className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
-                            />
+                          <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
+                            <div className="sm:col-span-2">
+                              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Bank Code</div>
+                              <input
+                                value={c.bank_code}
+                                onChange={(e) => {
+                                  const val = e.target.value
+                                  const match = banks.find((b) => b.bank_code === val.trim())
+                                  setCheques((prev) => prev.map((x, i) => (i === idx ? { ...x, bank_code: val, bank_name: match ? match.name : (x.bank_name || '') } : x)))
+                                }}
+                                placeholder="e.g. 721"
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-5">
+                              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Bank Name</div>
+                              <div className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-sm text-slate-700 dark:text-slate-300 min-h-[42px] flex items-center">
+                                {c.bank_name || <span className="text-slate-400 dark:text-slate-500">Auto-filled from bank code</span>}
+                              </div>
+                            </div>
                           </div>
 
-                          <div className="sm:col-span-2">
-                            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cheque Amount</div>
-                            <input
-                              value={c.amount}
-                              onChange={(e) => {
-                                const raw = e.target.value.replace(/[^0-9.]/g, '')
-                                const parts = raw.split('.')
-                                const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-                                const formatted = parts.length > 1 ? intPart + '.' + parts[1].slice(0, 2) : intPart
-                                setCheques((prev) => prev.map((x, i) => (i === idx ? { ...x, amount: formatted } : x)))
-                              }}
-                              placeholder="0.00"
-                              className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
-                            />
-                          </div>
-
-                          <div className="sm:col-span-7 flex justify-end">
+                          <div className="flex justify-end">
                             {cheques.length > 1 ? (
                               <button
                                 type="button"
