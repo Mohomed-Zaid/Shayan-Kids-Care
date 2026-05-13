@@ -1,11 +1,12 @@
-import React, { useState } from 'react'
-import { Navigate, useNavigate } from 'react-router-dom'
+import React, { useMemo, useState } from 'react'
+import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { AlertTriangle, Eye, EyeOff } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, signInWithPassword } = useAuth()
 
   const [email, setEmail] = useState('')
@@ -13,6 +14,11 @@ export default function LoginPage() {
   const [showPw, setShowPw] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+
+  const force = useMemo(() => {
+    const params = new URLSearchParams(location.search || '')
+    return params.get('force') === '1'
+  }, [location.search])
 
   const onSubmit = async (e) => {
     e.preventDefault()
@@ -28,7 +34,7 @@ export default function LoginPage() {
     }
   }
 
-  if (user) return <Navigate to="/dashboard" replace />
+  if (user && !force) return <Navigate to="/dashboard" replace />
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center px-4">

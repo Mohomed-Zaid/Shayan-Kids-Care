@@ -1,14 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import { Search, Eye, FileText, Filter, Plus } from 'lucide-react'
+import html2pdf from 'html2pdf.js'
 
 const fmt = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
 export default function ReceivablesPage() {
   const toast = useToast()
+
+  const receiptRef = useRef(null)
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -40,6 +43,8 @@ export default function ReceivablesPage() {
       amount: '',
     },
   ])
+
+  const [receiptData, setReceiptData] = useState(null)
 
   const load = async () => {
     setLoading(true)
@@ -259,6 +264,46 @@ export default function ReceivablesPage() {
     setPayOpen(true)
   }
 
+  const downloadReceiptPdf = async (filename) => {
+    if (!receiptRef.current) return
+
+    const wrapper = document.createElement('div')
+    wrapper.className = 'pdf-export-wrapper'
+    const cloned = receiptRef.current.cloneNode(true)
+    wrapper.appendChild(cloned)
+    document.body.appendChild(wrapper)
+
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+    cloned.style.backgroundColor = '#ffffff'
+    cloned.style.color = '#000000'
+    cloned.querySelectorAll('*').forEach((el) => {
+      const cs = window.getComputedStyle(el)
+      const bg = cs.backgroundColor
+      const isTransparentBg = bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent'
+      const isWhiteBg = bg === 'rgb(255, 255, 255)'
+
+      if (!isTransparentBg && !isWhiteBg) {
+        el.style.backgroundColor = '#ffffff'
+      }
+      el.style.color = '#000000'
+    })
+
+    const opt = {
+      margin: 0,
+      filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true },
+      jsPDF: { unit: 'mm', format: [80, 297], orientation: 'portrait' },
+    }
+
+    try {
+      await html2pdf().set(opt).from(cloned).save()
+    } finally {
+      wrapper.remove()
+    }
+  }
+
   const savePayment = async () => {
     if (invoicesForPayCustomer.length === 0) {
       toast.error('No outstanding invoices')
@@ -326,6 +371,11 @@ export default function ReceivablesPage() {
       }
     }
 
+    const customerName =
+      invoices.find((inv) => inv.customer_id === payForm.customer_id)?.customers?.name ??
+      customersRows.find((r) => r.customer_id === payForm.customer_id)?.name ??
+      ''
+
     setPaySaving(true)
 
     // Distribute payment across outstanding invoices (oldest first)
@@ -347,6 +397,14 @@ export default function ReceivablesPage() {
       setPaySaving(false)
       return
     }
+
+    const settlementInvoices = payments
+      .map((p) => {
+        const inv = invoices.find((x) => x.id === p.invoice_id)
+        const invNo = inv?.invoice_number ?? ''
+        return invNo ? `INV-${String(invNo).padStart(4, '0')}` : `INV-${String(p.invoice_id).slice(0, 8)}`
+      })
+      .filter(Boolean)
 
     try {
       if (resolvedMethod === 'cheque') {
@@ -371,7 +429,10 @@ export default function ReceivablesPage() {
             chequeAlloc -= alloc
           }
         }
-        const { error: err } = await supabase.from('invoice_payments').insert(payload)
+        const { data: inserted, error: err } = await supabase
+          .from('invoice_payments')
+          .insert(payload)
+          .select('id, invoice_id, amount, paid_at, method, bank_name, reference, note, created_at')
         if (err) throw err
 
         // Sync cheques to customer_cheques (upsert by customer_id + cheque_number)
@@ -388,6 +449,22 @@ export default function ReceivablesPage() {
               status: 'in_hand',
             }, { onConflict: 'customer_id,cheque_number' })
         }
+
+        const totalPaid = (inserted ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0)
+        const balanceAfter = Number(totalOutstanding ?? 0) - totalPaid
+        const firstId = (inserted ?? [])[0]?.id
+        setReceiptData({
+          customerName,
+          settlement: settlementInvoices,
+          paidAt: chequeRows[0]?.cheque_date || payForm.paid_at,
+          method: 'cheque',
+          receiptNo: firstId ? `REC-${String(firstId).slice(0, 8)}` : 'REC',
+          amount: totalPaid,
+          balanceAfter,
+          cheques: chequeRows,
+        })
+        await new Promise((resolve) => requestAnimationFrame(resolve))
+        await downloadReceiptPdf(`Receipt-${customerName || 'Customer'}-${new Date().toISOString().slice(0, 10)}.pdf`)
       } else {
         const payload = payments.map((p) => ({
           invoice_id: p.invoice_id,
@@ -398,8 +475,28 @@ export default function ReceivablesPage() {
           reference: payForm.reference.trim() || null,
           note: payForm.note.trim() || null,
         }))
-        const { error: err } = await supabase.from('invoice_payments').insert(payload)
+        const { data: inserted, error: err } = await supabase
+          .from('invoice_payments')
+          .insert(payload)
+          .select('id, invoice_id, amount, paid_at, method, bank_name, reference, note, created_at')
         if (err) throw err
+
+        const totalPaid = (inserted ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0)
+        const balanceAfter = Number(totalOutstanding ?? 0) - totalPaid
+        const firstId = (inserted ?? [])[0]?.id
+        setReceiptData({
+          customerName,
+          settlement: settlementInvoices,
+          paidAt: payForm.paid_at,
+          method: resolvedMethod,
+          receiptNo: firstId ? `REC-${String(firstId).slice(0, 8)}` : 'REC',
+          amount: totalPaid,
+          balanceAfter,
+          bankName: resolvedMethod === 'bank' ? (payForm.bank_name || null) : null,
+          reference: payForm.reference.trim() || null,
+        })
+        await new Promise((resolve) => requestAnimationFrame(resolve))
+        await downloadReceiptPdf(`Receipt-${customerName || 'Customer'}-${new Date().toISOString().slice(0, 10)}.pdf`)
       }
 
       toast.success('Payment saved')
@@ -410,10 +507,76 @@ export default function ReceivablesPage() {
 
     setPaySaving(false)
     await load()
+    setPayOpen(false)
   }
 
   return (
     <div className="space-y-4">
+      <div className="fixed left-[-99999px] top-0">
+        {receiptData ? (
+          <div ref={receiptRef} className="bg-white text-black" style={{ width: '80mm' }}>
+            <div className="p-3 text-[11px] leading-tight">
+              <div className="text-center">
+                <div className="text-[16px] font-extrabold">SHAYAN KIDS CARE</div>
+                <div className="text-[10px] font-semibold">10/3 B, Attidiya Road, Kawdana, Dehiwala</div>
+                <div className="text-[10px] font-semibold">+94 75 384 1599</div>
+                <div className="mt-2 text-[12px] font-extrabold tracking-wide">RECEIPT</div>
+              </div>
+
+              <div className="mt-2 border-t border-b border-black py-2 space-y-1">
+                <div className="flex justify-between"><span className="font-bold">Receipt No</span><span>{receiptData.receiptNo}</span></div>
+                <div className="flex justify-between"><span className="font-bold">Date/Time</span><span>{new Date(receiptData.paidAt || Date.now()).toLocaleString()}</span></div>
+                <div className="flex justify-between"><span className="font-bold">Received From</span><span className="text-right max-w-[45mm]">{receiptData.customerName || '-'}</span></div>
+                <div className="flex justify-between"><span className="font-bold">Settlement</span><span className="text-right max-w-[45mm]">{(receiptData.settlement ?? []).slice(0, 5).join(', ')}{(receiptData.settlement ?? []).length > 5 ? '...' : ''}</span></div>
+              </div>
+
+              <div className="mt-2 space-y-1">
+                <div className="flex justify-between"><span className="font-bold">Method</span><span>{String(receiptData.method || '').toUpperCase()}</span></div>
+                <div className="flex justify-between"><span className="font-bold">Amount</span><span>{fmt(receiptData.amount)}</span></div>
+                <div className="flex justify-between"><span className="font-bold">Balance</span><span>{fmt(receiptData.balanceAfter)}</span></div>
+              </div>
+
+              {receiptData.method === 'cheque' ? (
+                <div className="mt-2 border border-black">
+                  <div className="bg-black text-white px-2 py-1 text-center font-bold">Cheque Details</div>
+                  <table className="w-full text-[10px]">
+                    <thead>
+                      <tr className="border-b border-black">
+                        <th className="text-left px-2 py-1">Date</th>
+                        <th className="text-left px-2 py-1">No</th>
+                        <th className="text-right px-2 py-1">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(receiptData.cheques ?? []).map((c, idx) => (
+                        <tr key={idx} className="border-b border-black/20">
+                          <td className="px-2 py-1">{c.cheque_date}</td>
+                          <td className="px-2 py-1">{c.cheque_number}</td>
+                          <td className="px-2 py-1 text-right">{fmt(c.amount)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+
+              {(receiptData.reference || receiptData.bankName) ? (
+                <div className="mt-2 border-t border-black pt-2 text-[10px]">
+                  {receiptData.bankName ? <div><span className="font-bold">Bank</span>: {receiptData.bankName}</div> : null}
+                  {receiptData.reference ? <div><span className="font-bold">Reference</span>: {receiptData.reference}</div> : null}
+                </div>
+              ) : null}
+
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px]">
+                <div className="border-t border-black pt-6">Prepared</div>
+                <div className="border-t border-black pt-6">Approved</div>
+                <div className="border-t border-black pt-6">Received</div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="text-sm text-slate-500 dark:text-slate-400">Invoice receivables by customer.</div>

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
-import { ScrollText, Search, Filter, Loader2, User, FileText, Trash2, Edit3, PlusCircle, LogIn, LogOut, Truck, ArrowRightLeft, XCircle, CheckCircle, ShoppingCart, Package, Users, Building2, BookOpen, Wallet, RotateCcw, Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ScrollText, Search, Filter, Loader2, User, FileText, Trash2, Edit3, PlusCircle, LogIn, LogOut, Truck, ArrowRightLeft, XCircle, CheckCircle, ShoppingCart, Package, Users, Building2, BookOpen, Wallet, RotateCcw, Calendar, ChevronLeft, ChevronRight, Download } from 'lucide-react'
 
 const ACTION_ICONS = {
   login: LogIn, logout: LogOut,
@@ -212,6 +212,42 @@ export default function AuditLogPage() {
 
   const formatAction = (action) => ACTION_LABELS[action] ?? action.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 
+  const exportToCSV = () => {
+    if (filtered.length === 0) {
+      toast.error('No logs to export')
+      return
+    }
+
+    const headers = ['Date', 'Time', 'Action', 'Category', 'User', 'Target', 'Details', 'Created By', 'Updated By']
+    const rows = filtered.map((log) => {
+      const date = new Date(log.created_at).toLocaleDateString()
+      const time = new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      const action = formatAction(log.action)
+      const category = getCategoryLabel(getCategory(log.action))
+      const user = log.user_name || ''
+      const target = log.target_label || ''
+      const details = log.details || ''
+      const createdBy = log.created_by || ''
+      const updatedBy = log.updated_by || ''
+
+      return [date, time, action, category, user, target, details, createdBy, updatedBy]
+        .map((field) => `"${String(field).replace(/"/g, '""')}"`)
+        .join(',')
+    })
+
+    const csvContent = [headers.join(','), ...rows].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    toast.success('Audit logs exported successfully')
+  }
+
   return (
     <div className="space-y-4">
       {/* Header */}
@@ -221,6 +257,9 @@ export default function AuditLogPage() {
           <div className="text-sm text-slate-500 dark:text-slate-400">Track every action — who did what and when</div>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={exportToCSV} disabled={filtered.length === 0} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 transition-colors">
+            <Download size={14} /> Export CSV
+          </button>
           <span className="text-xs text-slate-400 dark:text-slate-500">{filtered.length} entries</span>
           <ScrollText size={20} className="text-slate-400" />
         </div>
@@ -295,6 +334,9 @@ export default function AuditLogPage() {
                           <User size={11} />{log.user_name}
                         </div>
                         <div className="text-[11px] text-slate-400 dark:text-slate-500">{time}</div>
+                        {log.created_by && <div className="text-[10px] text-slate-400 dark:text-slate-500">Created by: {log.created_by}</div>}
+                        {log.updated_by && log.updated_by !== log.created_by && <div className="text-[10px] text-slate-400 dark:text-slate-500">Updated by: {log.updated_by}</div>}
+                        {log.updated_at && log.updated_at !== log.created_at && <div className="text-[10px] text-slate-400 dark:text-slate-500">Updated: {new Date(log.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>}
                       </div>
                     </div>
                   )

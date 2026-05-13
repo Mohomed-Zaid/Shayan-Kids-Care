@@ -19,6 +19,7 @@ import OrderViewPage from './pages/OrderViewPage'
 import OrderEditPage from './pages/OrderEditPage'
 import HomePage from './pages/HomePage'
 import PurchasePage from './pages/PurchasePage'
+import BeginningStockPage from './pages/BeginningStockPage'
 import VendorsPage from './pages/VendorsPage'
 import JournalsPage from './pages/JournalsPage'
 import JournalEntryPage from './pages/JournalEntryPage'
@@ -60,6 +61,7 @@ export default function App() {
             <Route path="/orders/:id/edit" element={<OrderEditPage />} />
             <Route path="/orders/:id" element={<OrderViewPage />} />
             <Route path="/inventory/purchase" element={<PurchasePage />} />
+            <Route path="/inventory/beginning-stock" element={<BeginningStockPage />} />
             <Route path="/vendors" element={<VendorsPage />} />
             <Route path="/journals" element={<JournalsPage />} />
             <Route path="/finance/journal-entry" element={<JournalEntryPage />} />

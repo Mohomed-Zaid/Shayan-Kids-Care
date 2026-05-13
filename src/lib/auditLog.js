@@ -19,6 +19,8 @@ export async function logAction({ action, targetType = null, targetId = null, ta
       target_id: targetId,
       target_label: targetLabel,
       details,
+      created_by: email,
+      updated_by: email,
     })
   } catch (e) {
     console.error('Audit log failed:', e?.message)

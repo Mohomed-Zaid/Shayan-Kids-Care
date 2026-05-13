@@ -256,7 +256,10 @@ export default function ChequeAdministrationPage() {
     setTab('deposited')
   }
 
-  const daysLabel = (chequeDate) => {
+  const daysLabel = (chequeDate, status) => {
+    if (status === STATUS_DEPOSITED) {
+      return { label: '0 days', className: 'text-slate-500 dark:text-emerald-100/70' }
+    }
     const dt = chequeDate ? new Date(`${String(chequeDate).slice(0, 10)}T00:00:00`) : null
     if (!dt) return { label: '-', className: 'text-slate-400' }
     const today = new Date()
@@ -409,7 +412,7 @@ export default function ChequeAdministrationPage() {
                 </tr>
               ) : (
                 showRows.map((r, idx) => {
-                  const days = daysLabel(r.cheque_date)
+                  const days = daysLabel(r.cheque_date, r.status)
                   const isPayable = r.cheque_type === 'payable'
                   const checked = !isPayable && selectedIds.has(r.id)
                   const name = isPayable ? r.vendors?.name : r.customers?.name
