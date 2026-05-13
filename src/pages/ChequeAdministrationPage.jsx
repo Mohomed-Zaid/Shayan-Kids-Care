@@ -23,6 +23,7 @@ export default function ChequeAdministrationPage() {
   const [chequesInHand, setChequesInHand] = useState([])
   const [chequesDeposited, setChequesDeposited] = useState([])
   const [payableCheques, setPayableCheques] = useState([])
+  const [banks, setBanks] = useState([])
 
   const [selectedIds, setSelectedIds] = useState(new Set())
 
@@ -30,12 +31,16 @@ export default function ChequeAdministrationPage() {
   const [depositFrom, setDepositFrom] = useState('')
   const [depositTo, setDepositTo] = useState('')
 
+  const [depositBankOpen, setDepositBankOpen] = useState(false)
+  const [depositBankSaving, setDepositBankSaving] = useState(false)
+  const [depositBankId, setDepositBankId] = useState('')
+
   const load = async () => {
     setLoading(true)
     setError(null)
 
     try {
-      const [handRes, depRes, payChequeRes] = await Promise.all([
+      const [handRes, depRes, payChequeRes, bankRes] = await Promise.all([
         supabase
           .from('customer_cheques')
           .select('id, cheque_date, cheque_number, amount, bank_name, customer_id, status, deposited_at, created_at, customers(name)')
@@ -51,6 +56,7 @@ export default function ChequeAdministrationPage() {
           .select('id, amount, paid_at, reference, method, created_at, purchases(vendor_id, vendors(name))')
           .eq('method', 'cheque')
           .order('paid_at', { ascending: false }),
+        supabase.from('banks').select('id, code, name, branch').order('code'),
       ])
 
       if (handRes.error) throw handRes.error
@@ -58,6 +64,10 @@ export default function ChequeAdministrationPage() {
 
       setChequesInHand(handRes.data ?? [])
       setChequesDeposited(depRes.data ?? [])
+      setBanks(bankRes?.data ?? [])
+      if (!depositBankId && (bankRes?.data ?? []).length > 0) {
+        setDepositBankId(bankRes.data[0].id)
+      }
 
       // Map payable cheques to same shape as customer cheques
       const payables = (payChequeRes.data ?? []).map((p) => ({
@@ -167,21 +177,73 @@ export default function ChequeAdministrationPage() {
       return
     }
 
-    const { error: err } = await supabase
-      .from('customer_cheques')
-      .update({ status: STATUS_DEPOSITED, deposited_at: new Date().toISOString() })
-      .in('id', ids)
-
-    if (err) {
-      toast.error(err.message)
+    if (banks.length === 0) {
+      toast.error('No banks found. Add a bank first.')
       return
     }
 
-    toast.success('Cheque(s) deposited')
-    logAction({ action: 'deposit_cheques', targetType: 'customer_cheque' })
-    setSelectedIds(new Set())
-    await load()
-    setTab('deposited')
+    setDepositBankOpen(true)
+  }
+
+  const confirmDepositToBank = async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) {
+      toast.error('Select at least one cheque')
+      return
+    }
+    if (!depositBankId) {
+      toast.error('Select a bank')
+      return
+    }
+
+    const selectedRows = filteredInHand.filter((r) => ids.includes(r.id))
+    if (selectedRows.length === 0) {
+      toast.error('No cheques to deposit')
+      return
+    }
+
+    setDepositBankSaving(true)
+    const nowIso = new Date().toISOString()
+    const trxDate = nowIso.slice(0, 10)
+
+    try {
+      const { error: err } = await supabase
+        .from('customer_cheques')
+        .update({ status: STATUS_DEPOSITED, deposited_at: nowIso })
+        .in('id', ids)
+      if (err) throw err
+
+      const reconPayload = selectedRows.map((r) => {
+        const customerName = r.customers?.name ?? ''
+        const chequeNo = r.cheque_number ?? ''
+        return {
+          bank_id: depositBankId,
+          trx_date: trxDate,
+          ref_no: `RCV-CHQ-${r.id}`,
+          post_date: trxDate,
+          description: `Receivable cheque deposit${customerName ? ` - ${customerName}` : ''}`,
+          due_date: r.cheque_date ? String(r.cheque_date).slice(0, 10) : null,
+          cheque_number: chequeNo || null,
+          amount: Number(r.amount ?? 0),
+          reconciled: false,
+        }
+      })
+
+      const { error: reconErr } = await supabase.from('bank_reconciliation_items').insert(reconPayload)
+      if (reconErr) throw reconErr
+
+      toast.success('Cheque(s) deposited to bank')
+      logAction({ action: 'deposit_cheques', targetType: 'customer_cheque' })
+      setSelectedIds(new Set())
+      setDepositBankOpen(false)
+      await load()
+      setTab('deposited')
+    } catch (e) {
+      console.error(e)
+      toast.error(e?.message ?? 'Failed to deposit cheques')
+    } finally {
+      setDepositBankSaving(false)
+    }
   }
 
   const handoverSelected = async () => {
@@ -507,6 +569,63 @@ export default function ChequeAdministrationPage() {
           )
         })()}
       </div>
+
+      {depositBankOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+              <div className="font-bold text-slate-900 dark:text-white">Deposit Cheques</div>
+              <button
+                onClick={() => !depositBankSaving && setDepositBankOpen(false)}
+                className="text-sm font-semibold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="text-sm text-slate-600 dark:text-slate-300">
+                Select the bank account you are depositing into. These cheques will be saved in Bank Reconciliation automatically.
+              </div>
+
+              <div>
+                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Bank</div>
+                <select
+                  value={depositBankId}
+                  onChange={(e) => setDepositBankId(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                >
+                  <option value="">Select bank</option>
+                  {banks.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {(b.code ? `${b.code} - ` : '') + (b.name ?? '') + (b.branch ? ` (${b.branch})` : '')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDepositBankOpen(false)}
+                  disabled={depositBankSaving}
+                  className="px-4 py-2.5 rounded-lg text-sm font-semibold border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDepositToBank}
+                  disabled={depositBankSaving || !depositBankId}
+                  className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-sky-600 hover:bg-sky-700 text-white disabled:opacity-50 transition-colors shadow-sm"
+                >
+                  {depositBankSaving ? 'Depositing...' : 'Deposit'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
