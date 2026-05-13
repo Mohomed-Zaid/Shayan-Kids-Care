@@ -4,6 +4,7 @@ import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import { Search, Landmark, ArrowRightCircle, HandHelping } from 'lucide-react'
 
+/** Receivable: add payment (cheque) → customer_cheques in_hand; Deposit here + bank → deposited + bank_reconciliation_items. See `src/lib/receivableChequeWorkflow.js`. */
 const fmtMoney = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
 const STATUS_IN_HAND = 'in_hand'
@@ -116,21 +117,29 @@ export default function ChequeAdministrationPage() {
     )
   }, [chequesInHand, search])
 
+  /** Calendar day in UTC (YYYY-MM-DD) for stable filtering across timezones */
+  const utcDayKey = (isoOrDate) => {
+    if (!isoOrDate) return ''
+    const d = new Date(isoOrDate)
+    if (Number.isNaN(d.getTime())) return ''
+    return d.toISOString().slice(0, 10)
+  }
+
   const depositedFiltered = useMemo(() => {
     const q = search.trim().toLowerCase()
-
-    const from = depositFrom ? new Date(`${depositFrom}T00:00:00`) : null
-    const to = depositTo ? new Date(`${depositTo}T23:59:59`) : null
 
     // Merge customer deposited + payable cheques
     const allDeposited = [...chequesDeposited, ...payableCheques]
 
     return allDeposited.filter((r) => {
-      if (from || to) {
-        const dt = r.deposited_at ? new Date(r.deposited_at) : null
-        if (!dt) return false
-        if (from && dt < from) return false
-        if (to && dt > to) return false
+      if (depositFrom || depositTo) {
+        const day =
+          utcDayKey(r.deposited_at) ||
+          utcDayKey(r.cheque_date) ||
+          utcDayKey(r.created_at)
+        if (!day) return false
+        if (depositFrom && day < depositFrom) return false
+        if (depositTo && day > depositTo) return false
       }
 
       if (!q) return true
@@ -196,7 +205,10 @@ export default function ChequeAdministrationPage() {
       return
     }
 
-    const selectedRows = filteredInHand.filter((r) => ids.includes(r.id))
+    // Use full in-hand list so search/filter cannot hide selected rows
+    const selectedRows = chequesInHand.filter((r) =>
+      ids.some((id) => String(id) === String(r.id))
+    )
     if (selectedRows.length === 0) {
       toast.error('No cheques to deposit')
       return
@@ -230,12 +242,20 @@ export default function ChequeAdministrationPage() {
       })
 
       const { error: reconErr } = await supabase.from('bank_reconciliation_items').insert(reconPayload)
-      if (reconErr) throw reconErr
-
-      toast.success('Cheque(s) deposited to bank')
+      if (reconErr) {
+        console.error(reconErr)
+        toast.error(
+          `Cheques deposited, but bank reconciliation could not be saved: ${reconErr.message}. Check RLS or table permissions.`
+        )
+      } else {
+        toast.success('Cheque(s) deposited to bank')
+      }
       logAction({ action: 'deposit_cheques', targetType: 'customer_cheque' })
       setSelectedIds(new Set())
       setDepositBankOpen(false)
+      // Clear date filters so newly deposited cheques are not hidden by an old range
+      setDepositFrom('')
+      setDepositTo('')
       await load()
       setTab('deposited')
     } catch (e) {
@@ -348,7 +368,10 @@ export default function ChequeAdministrationPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="text-lg font-semibold text-slate-900 dark:text-white">Cheque Administration</div>
-          <div className="text-sm text-slate-500 dark:text-emerald-100/70">Manage customer cheques in hand and deposited cheques.</div>
+          <div className="text-sm text-slate-500 dark:text-emerald-100/70 max-w-3xl">
+            Receivable cheque payments create rows under <span className="font-semibold text-slate-700 dark:text-emerald-50">Cheques In Hand</span>.
+            Select them and click <span className="font-semibold text-slate-700 dark:text-emerald-50">Deposit</span> — choose the <span className="font-semibold text-slate-700 dark:text-emerald-50">receiving bank</span> — they move to <span className="font-semibold text-slate-700 dark:text-emerald-50">Deposited Cheques</span> and a line is added for Bank Reconciliation.
+          </div>
         </div>
       </div>
 
@@ -584,8 +607,13 @@ export default function ChequeAdministrationPage() {
             </div>
 
             <div className="p-5 space-y-4">
-              <div className="text-sm text-slate-600 dark:text-slate-300">
-                Select the bank account you are depositing into. These cheques will be saved in Bank Reconciliation automatically.
+              <div className="text-sm text-slate-600 dark:text-slate-300 space-y-2">
+                <p>
+                  Choose the <span className="font-semibold">bank account</span> you are depositing these receivable cheques into.
+                </p>
+                <p>
+                  Confirming updates them to <span className="font-semibold">Deposited</span> and writes matching rows to <span className="font-semibold">Bank Reconciliation</span> for that bank.
+                </p>
               </div>
 
               <div>

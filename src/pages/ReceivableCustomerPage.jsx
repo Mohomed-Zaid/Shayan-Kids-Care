@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
+import { registerReceivableChequesInHand } from '../lib/receivableChequeWorkflow'
 import { ArrowLeft, Plus, FileText } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 
@@ -401,6 +402,13 @@ export default function ReceivableCustomerPage() {
         note: payForm.note.trim() || null,
       }))
 
+      const reg = await registerReceivableChequesInHand(supabase, { customerId, chequeRows: rows })
+      if (!reg.ok) {
+        toast.error(reg.error?.message ?? 'Could not register cheque')
+        setSaving(false)
+        return
+      }
+
       const { data: inserted, error: err } = await supabase
         .from('invoice_payments')
         .insert(payload)
@@ -410,21 +418,6 @@ export default function ReceivableCustomerPage() {
         toast.error(err.message)
         setSaving(false)
         return
-      }
-
-      // Sync cheques to customer_cheques (upsert by customer_id + cheque_number)
-      for (const c of rows) {
-        await supabase
-          .from('customer_cheques')
-          .upsert({
-            customer_id: customerId,
-            cheque_date: c.cheque_date,
-            cheque_number: c.cheque_number,
-            bank_name: c.bank_name || null,
-            bank_code: c.bank_code || null,
-            amount: c.amount,
-            status: 'in_hand',
-          }, { onConflict: 'customer_id,cheque_number' })
       }
 
       const totalPaid = (inserted ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0)

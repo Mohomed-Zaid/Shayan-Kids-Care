@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
+import { registerReceivableChequesInHand } from '../lib/receivableChequeWorkflow'
 import { Search, Eye, FileText, Filter, Plus } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 
@@ -429,26 +430,17 @@ export default function ReceivablesPage() {
             chequeAlloc -= alloc
           }
         }
+        const reg = await registerReceivableChequesInHand(supabase, {
+          customerId: payForm.customer_id,
+          chequeRows,
+        })
+        if (!reg.ok) throw reg.error
+
         const { data: inserted, error: err } = await supabase
           .from('invoice_payments')
           .insert(payload)
           .select('id, invoice_id, amount, paid_at, method, bank_name, reference, note, created_at')
         if (err) throw err
-
-        // Sync cheques to customer_cheques (upsert by customer_id + cheque_number)
-        for (const c of chequeRows) {
-          await supabase
-            .from('customer_cheques')
-            .upsert({
-              customer_id: payForm.customer_id,
-              cheque_date: c.cheque_date,
-              cheque_number: c.cheque_number,
-              bank_name: c.bank_name || null,
-              bank_code: c.bank_code || null,
-              amount: c.amount,
-              status: 'in_hand',
-            }, { onConflict: 'customer_id,cheque_number' })
-        }
 
         const totalPaid = (inserted ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0)
         const balanceAfter = Number(totalOutstanding ?? 0) - totalPaid
