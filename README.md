@@ -22,7 +22,8 @@ A modern admin dashboard for managing products, customers, orders, invoices, pur
 - **Payables** — Track purchase balances owed to vendors; view outstanding per vendor with aging (0-30/31-60/60+ days); make payments (cash/bank/cheque/other) with auto balance update; edit/delete vendor payments; cheque payments include bank code with auto-populated bank name; on **Save Payment** an **80mm receipt PDF auto-downloads**
 - **Delete Receivable** — Search and delete receivable payments with date filtering, confirmation, and audit logging
 - **Delete Payable** — Search and delete payable payments with date filtering, confirmation, and audit logging
-- **Cheque Administration** — View all customer and vendor cheques in one place with status tracking; when a **receivable cheque** is moved to **Deposited**, the **days** indicator resets to **0**
+- **Cheque Administration** — View all customer and vendor cheques in one place with status tracking; when a **receivable cheque** is moved from **Cheques In Hand** to **Deposited**, a popup asks **which bank** you are depositing into; confirming deposits the cheques and adds matching rows to **Bank Reconciliation** for that bank; when status is **Deposited**, the **days** indicator shows **0**
+- **Bank Reconciliation** — Load incoming/outgoing bank lines per bank and date range; mark lines as reconciled (Yes/No); lines created automatically when receivable cheques are deposited to a selected bank (`bank_reconciliation_items`)
 - **Invoice/Order/Return Print** — Professional A4 layout with logo, from/bill-to, items table, bank details (left-aligned above totals), subtotal/discount/total, signature section, and PDF download
 - **Audit Log** — Date-grouped timeline view with category badges (Order, Invoice, Purchase, Payment, Bank, etc.); search & filter by action, user; auto-cleanup of logs older than 90 days; tracks bank CRUD, payment deletions, and all entity changes
 - **Auth** — Email/password login via Supabase with personalized display name & role (configurable user map). Home page **Admin Login** forces the login screen even if you’re already signed in (`/login?force=1`).
@@ -84,6 +85,7 @@ npm run dev
 | `return_items` | Return line items with product_id, quantity, price, total |
 | `banks` | Bank accounts with name, code, account number, balance |
 | `customer_cheques` | Cheque payments from customers with cheque_date, cheque_number, bank_code, bank_name, amount, status |
+| `bank_reconciliation_items` | Bank reconciliation lines per `bank_id`: trx_date, ref_no, post_date, description, due_date, cheque_number, amount, reconciled |
 | `commissions` | Commission records linked to reps and invoices |
 | `audit_logs` | Audit trail with action, user_name, target_type, target_id, target_label, details; auto-cleaned after 90 days |
 
@@ -112,3 +114,5 @@ const USER_MAP = {
 2. Import repo on [vercel.com](https://vercel.com)
 3. Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as environment variables
 4. Deploy — Vercel auto-detects Vite
+
+If deploys fail with “not a member of the team”, invite the GitHub user as a **Vercel team member** (or connect their GitHub under Vercel account settings), or deploy from an account that owns the Vercel project.
