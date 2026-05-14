@@ -38,7 +38,7 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
   <div style="padding:12px 32px 8px;display:flex;justify-content:space-between;border-bottom:3px solid #1e293b">
     <div style="display:flex;align-items:center;gap:16px">
       <div>
-        <div style="font-size:24px;font-weight:700;line-height:1.2">Shayan Kids Care</div>
+        <div style="font-size:24px;font-weight:700;line-height:1.2">Shayan's Kids</div>
         <div style="font-size:16px;font-weight:600;color:#475569">&amp; Toys Store</div>
       </div>
     </div>
@@ -121,7 +121,7 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
       <div style="border-bottom:1px solid #cbd5e1;padding-bottom:8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:500">Customer Signature</div>
     </div>
     <div style="padding:4px 32px;border-top:3px solid #1e293b;text-align:center;font-size:12px;color:#64748b">
-      <div style="font-weight:600;color:#334155">Shayan Kids Care &amp; Toys Store</div>
+      <div style="font-weight:600;color:#334155">Shayan's Kids &amp; Toys Store</div>
       <div>shayankidscare@gmail.com</div>
     </div>
   </div>

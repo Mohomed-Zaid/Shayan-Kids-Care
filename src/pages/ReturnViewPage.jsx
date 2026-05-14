@@ -218,7 +218,7 @@ export default function ReturnViewPage() {
             <div className="flex items-center gap-4">
               <img src={logo} alt="Logo" className="h-24 w-24 rounded-lg object-contain" />
               <div>
-                <div className="text-2xl font-bold text-slate-900 dark:text-white leading-tight">Shayan Kids Care</div>
+                <div className="text-2xl font-bold text-slate-900 dark:text-white leading-tight">Shayan's Kids</div>
                 <div className="text-base font-semibold text-slate-600 dark:text-slate-400">&amp; Toys Store</div>
               </div>
             </div>
@@ -234,7 +234,7 @@ export default function ReturnViewPage() {
             <div>
               <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">From</div>
               <div className="text-sm text-slate-700 dark:text-slate-300 space-y-1">
-                <div className="font-bold text-slate-900 dark:text-white">Shayan Kids Care &amp; Toys Store</div>
+                <div className="font-bold text-slate-900 dark:text-white">Shayan's Kids &amp; Toys Store</div>
                 <div>10/3 B, Attidiya Road</div>
                 <div>Kawdana, Dehiwala</div>
                 <div>+94 75 384 1599</div>
@@ -341,7 +341,7 @@ export default function ReturnViewPage() {
             </div>
 
             <div className="px-8 py-1 border-t-2 border-red-700 dark:border-red-500 text-center text-xs text-slate-500 dark:text-slate-400">
-              <div className="font-semibold text-slate-700 dark:text-slate-300">Shayan Kids Care &amp; Toys Store</div>
+              <div className="font-semibold text-slate-700 dark:text-slate-300">Shayan's Kids &amp; Toys Store</div>
               <div>shayankidscare@gmail.com</div>
             </div>
           </div>

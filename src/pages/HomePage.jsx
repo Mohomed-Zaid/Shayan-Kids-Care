@@ -50,9 +50,9 @@ export default function HomePage() {
         <div className="max-w-6xl mx-auto px-4">
           <div className="h-16 flex items-center justify-between">
             <a href="#top" className="flex items-center gap-3">
-              <img src={logo} alt="Shayan Kids Care" className="h-10 w-10 rounded-xl object-cover shadow-sm" />
+              <img src={logo} alt="Shayan's Kids" className="h-10 w-10 rounded-xl object-cover shadow-sm" />
               <div>
-                <div className="text-sm font-extrabold text-slate-900 dark:text-white">Shayan Kids Care</div>
+                <div className="text-sm font-extrabold text-slate-900 dark:text-white">Shayan's Kids</div>
                 <div className="text-[11px] text-slate-500 dark:text-slate-400 -mt-0.5">Wholesale Supply for Retail Shops</div>
               </div>
             </a>
@@ -133,7 +133,7 @@ export default function HomePage() {
                         <Baby size={22} />
                       </div>
                       <div>
-                        <div className="text-sm font-extrabold text-slate-900 dark:text-white">Shayan Kids Care</div>
+                        <div className="text-sm font-extrabold text-slate-900 dark:text-white">Shayan's Kids</div>
                         <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">Wholesale Supply</div>
                       </div>
                     </div>
@@ -268,7 +268,7 @@ export default function HomePage() {
             </div>
 
             <div className="rounded-3xl border border-slate-200/70 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 shadow-sm">
-              <div className="text-sm font-extrabold text-slate-900 dark:text-white">Shayan Kids Care</div>
+              <div className="text-sm font-extrabold text-slate-900 dark:text-white">Shayan's Kids</div>
               <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">We're happy to help.</div>
 
               <div className="mt-5 space-y-3 text-sm">
@@ -309,7 +309,7 @@ export default function HomePage() {
 
       <footer className="border-t border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900">
         <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="text-xs text-slate-500 dark:text-slate-400">© {new Date().getFullYear()} Shayan Kids Care. All rights reserved.</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">© {new Date().getFullYear()} Shayan's Kids. All rights reserved.</div>
           <div className="text-xs text-slate-500 dark:text-slate-400">Built with care.</div>
         </div>
       </footer>

@@ -49,7 +49,7 @@ const buildBeginningStockHtml = ({ items, totals, date, refNo }) => {
   <div style="padding:12px 32px 8px;display:flex;justify-content:space-between;border-bottom:3px solid #1e293b">
     <div style="display:flex;align-items:center;gap:16px">
       <div>
-        <div style="font-size:24px;font-weight:700;line-height:1.2">Shayan Kids Care</div>
+        <div style="font-size:24px;font-weight:700;line-height:1.2">Shayan's Kids</div>
         <div style="font-size:16px;font-weight:600;color:#475569">&amp; Toys Store</div>
       </div>
     </div>
@@ -64,7 +64,7 @@ const buildBeginningStockHtml = ({ items, totals, date, refNo }) => {
     <div>
       <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Location</div>
       <div style="font-size:14px;color:#334155;line-height:1.6">
-        <div style="font-weight:700;color:#0f172a">Shayan Kids Care</div>
+        <div style="font-weight:700;color:#0f172a">Shayan's Kids</div>
         <div>10/3 B, Attidiya Road</div>
         <div>Kawdana, Dehiwala</div>
         <div>+94 75 384 1599</div>
@@ -115,7 +115,7 @@ const buildBeginningStockHtml = ({ items, totals, date, refNo }) => {
       <div style="border-bottom:1px solid #cbd5e1;padding-bottom:8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:500">Authorized by</div>
     </div>
     <div style="padding:4px 32px;border-top:3px solid #1e293b;text-align:center;font-size:12px;color:#64748b">
-      <div style="font-weight:600;color:#334155">Shayan Kids Care &amp; Toys Store</div>
+      <div style="font-weight:600;color:#334155">Shayan's Kids &amp; Toys Store</div>
       <div>shayankidscare@gmail.com</div>
     </div>
   </div>
@@ -444,7 +444,7 @@ export default function BeginningStockPage() {
                 <div className="flex items-center gap-4">
                   <img src={logo} alt="Logo" className="h-24 w-24 rounded-lg object-contain" />
                   <div>
-                    <div className="text-2xl font-bold leading-tight">Shayan Kids Care</div>
+                    <div className="text-2xl font-bold leading-tight">Shayan's Kids</div>
                     <div className="text-base font-semibold text-slate-600">&amp; Toys Store</div>
                   </div>
                 </div>
@@ -459,7 +459,7 @@ export default function BeginningStockPage() {
                 <div>
                   <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">Location</div>
                   <div className="text-sm text-slate-700 space-y-1">
-                    <div className="font-bold text-slate-900">Shayan Kids Care</div>
+                    <div className="font-bold text-slate-900">Shayan's Kids</div>
                     <div>10/3 B, Attidiya Road</div>
                     <div>Kawdana, Dehiwala</div>
                     <div>+94 75 384 1599</div>
@@ -539,7 +539,7 @@ export default function BeginningStockPage() {
                 </div>
 
                 <div className="px-8 py-1 border-t-2 border-slate-800 text-center text-xs text-slate-500">
-                  <div className="font-semibold text-slate-700">Shayan Kids Care &amp; Toys Store</div>
+                  <div className="font-semibold text-slate-700">Shayan's Kids &amp; Toys Store</div>
                   <div>shayankidscare@gmail.com</div>
                 </div>
               </div>

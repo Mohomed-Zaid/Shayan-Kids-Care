@@ -1,6 +1,6 @@
-# Shayan Kids Care — Wholesale Management System
+# Shayan's Kids — Wholesale Management System
 
-A modern admin dashboard for managing products, customers, orders, invoices, purchases, vendors, returns, commissions, and journals for **Shayan Kids Care & Toys Store**.
+A modern admin dashboard for managing products, customers, orders, invoices, purchases, vendors, returns, commissions, and journals for **Shayan's Kids & Toys Store**.
 
 ## Features
 

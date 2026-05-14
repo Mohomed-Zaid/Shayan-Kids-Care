@@ -41,7 +41,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <img src={logo} alt="Logo" className="h-16 w-16 rounded-xl object-cover shadow-md mx-auto" />
-          <h1 className="mt-4 text-2xl font-bold text-slate-900 dark:text-white">Shayan Kids Care</h1>
+          <h1 className="mt-4 text-2xl font-bold text-slate-900 dark:text-white">Shayan's Kids</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">Management System</p>
         </div>
 

@@ -384,7 +384,7 @@ export default function PayablesPage() {
           <div ref={receiptRef} className="bg-white text-black" style={{ width: '80mm' }}>
             <div className="p-3 text-[11px] leading-tight">
               <div className="text-center">
-                <div className="text-[16px] font-extrabold">SHAYAN KIDS CARE</div>
+                <div className="text-[16px] font-extrabold">SHAYAN'S KIDS</div>
                 <div className="text-[10px] font-semibold">10/3 B, Attidiya Road, Kawdana, Dehiwala</div>
                 <div className="text-[10px] font-semibold">+94 75 384 1599</div>
                 <div className="mt-2 text-[12px] font-extrabold tracking-wide">PAYMENT RECEIPT</div>

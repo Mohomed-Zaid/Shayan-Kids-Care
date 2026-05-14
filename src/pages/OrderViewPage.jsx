@@ -316,7 +316,7 @@ export default function OrderViewPage() {
             <div className="flex items-center gap-4">
               <img src={logo} alt="Logo" className="h-24 w-24 rounded-lg object-contain" />
               <div>
-                <div className="text-2xl font-bold text-slate-900 dark:text-white leading-tight">Shayan Kids Care</div>
+                <div className="text-2xl font-bold text-slate-900 dark:text-white leading-tight">Shayan's Kids</div>
                 <div className="text-base font-semibold text-slate-600 dark:text-slate-400">&amp; Toys Store</div>
               </div>
             </div>
@@ -445,7 +445,7 @@ export default function OrderViewPage() {
             </div>
 
             <div className="px-8 py-1 border-t-2 border-slate-800 dark:border-slate-600 text-center text-xs text-slate-500 dark:text-slate-400">
-              <div className="font-semibold text-slate-700 dark:text-slate-300">Shayan Kids Care &amp; Toys Store</div>
+              <div className="font-semibold text-slate-700 dark:text-slate-300">Shayan's Kids &amp; Toys Store</div>
               <div>{order?.payment_type === 'cash' ? 'Cash Order — Payment received.' : 'Credit Order — Total due in 30 days only.'}</div>
               <div>shayankidscare@gmail.com</div>
             </div>
