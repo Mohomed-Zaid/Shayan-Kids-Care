@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Package, Users, FileText, DollarSign, Plus, Eye, TrendingUp, ArrowUpRight, Truck, ShoppingCart, BookOpen, Wallet, Calendar, Landmark } from 'lucide-react'
+import { Package, Users, FileText, DollarSign, Plus, Eye, TrendingUp, ArrowUpRight, Truck, ShoppingCart, BookOpen, Wallet, Calendar, Landmark, RotateCcw, CreditCard } from 'lucide-react'
 import Chart from 'react-apexcharts'
 
 const statConfig = [
@@ -10,6 +10,9 @@ const statConfig = [
   { key: 'totalSales', label: 'Total Sales', icon: TrendingUp, gradient: 'from-rose-500 to-pink-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-rose-100', isCurrency: true },
   { key: 'todayPayments', label: 'Today Payments', icon: ShoppingCart, gradient: 'from-indigo-500 to-indigo-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-indigo-100', isCurrency: true },
   { key: 'totalPayments', label: 'Total Payments', icon: Wallet, gradient: 'from-teal-500 to-cyan-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-teal-100', isCurrency: true },
+  { key: 'chequeInHand', label: 'Cheque In Hand', icon: Landmark, gradient: 'from-violet-500 to-purple-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-violet-100', isCurrency: true },
+  { key: 'returnCheque', label: 'Return Cheque', icon: RotateCcw, gradient: 'from-orange-500 to-red-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-orange-100', isCurrency: true },
+  { key: 'payable', label: 'Payable', icon: CreditCard, gradient: 'from-pink-500 to-rose-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-pink-100', isCurrency: true },
   { key: 'products', label: 'Products', icon: Package, gradient: 'from-blue-500 to-blue-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-blue-100' },
   { key: 'customers', label: 'Customers', icon: Users, gradient: 'from-emerald-500 to-emerald-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-emerald-100' },
 ]
@@ -77,6 +80,9 @@ export default function DashboardPage() {
     todayPayments: 0,
     totalSales: 0,
     totalPayments: 0,
+    chequeInHand: 0,
+    returnCheque: 0,
+    payable: 0,
   })
   const [receivableCheques, setReceivableCheques] = useState([])
   const [recentPayments, setRecentPayments] = useState([])
@@ -118,7 +124,7 @@ export default function DashboardPage() {
         .order('paid_at', { ascending: false })
         .limit(10)
 
-      const [productsRes, customersRes, todaySalesRes, todayPaymentsRes, totalSalesRes, totalPaymentsRes, recentInvRes, allPayRes, recentPayRes, invForChartsRes, payForChartsRes, invItemsForProfitRes, purchaseItemsRes] = await Promise.all([
+      const [productsRes, customersRes, todaySalesRes, todayPaymentsRes, totalSalesRes, totalPaymentsRes, recentInvRes, allPayRes, recentPayRes, invForChartsRes, payForChartsRes, invItemsForProfitRes, purchaseItemsRes, chequeInHandRes, returnChequeRes, payableRes, purchasePaymentsRes] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }),
         supabase.from('customers').select('id', { count: 'exact', head: true }),
         supabase
@@ -170,6 +176,20 @@ export default function DashboardPage() {
           .select('product_id, cost, purchases(created_at)')
           .order('id', { ascending: false })
           .limit(5000),
+        supabase
+          .from('customer_cheques')
+          .select('amount')
+          .eq('status', 'in_hand'),
+        supabase
+          .from('customer_cheques')
+          .select('amount')
+          .eq('status', 'returned'),
+        supabase
+          .from('purchases')
+          .select('total_amount'),
+        supabase
+          .from('purchase_payments')
+          .select('amount'),
       ])
 
       if (!mounted) return
@@ -180,6 +200,11 @@ export default function DashboardPage() {
       const todayPayments = (todayPaymentsRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
       const totalSales = (totalSalesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
       const totalPayments = (totalPaymentsRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
+      const chequeInHand = (chequeInHandRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
+      const returnCheque = (returnChequeRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
+      const totalPurchases = (payableRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
+      const totalPurchasePayments = (purchasePaymentsRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
+      const payable = Math.max(0, totalPurchases - totalPurchasePayments)
 
       setStats({
         products: productsRes.count ?? 0,
@@ -188,6 +213,9 @@ export default function DashboardPage() {
         todayPayments,
         totalSales,
         totalPayments,
+        chequeInHand,
+        returnCheque,
+        payable,
       })
 
       setReceivableCheques(recentInvRes.data ?? [])
