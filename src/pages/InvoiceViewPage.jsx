@@ -6,6 +6,7 @@ import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import { ArrowLeft, Printer, Download, Trash2, Pencil } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
+import CompanyPhoneLines from '../components/CompanyPhoneLines'
 
 export default function InvoiceViewPage() {
   const { id } = useParams()
@@ -231,8 +232,7 @@ export default function InvoiceViewPage() {
                 <div className="font-bold text-slate-900 dark:text-white">REP — {rep?.name ?? 'N/A'}</div>
                 <div>10/3 B, Attidiya Road</div>
                 <div>Kawdana, Dehiwala</div>
-                <div>+94 75 384 1599</div>
-                <div>+94 75 38 41 599</div>
+                <CompanyPhoneLines />
                 <div className="text-slate-500 dark:text-slate-400">shayankidscare@gmail.com</div>
               </div>
             </div>

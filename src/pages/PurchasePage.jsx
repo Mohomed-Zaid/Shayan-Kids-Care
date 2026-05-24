@@ -5,6 +5,8 @@ import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import { Plus, Search, Trash2, Save, AlertTriangle, X } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
+import { companyPhonesHtml } from '../lib/companyInfo'
+import CompanyPhoneLines from '../components/CompanyPhoneLines'
 
 const fmt = (val) => `Rs. ${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
@@ -70,7 +72,7 @@ const buildGrnHtml = ({ purchase, vendor, items, totals, createdAt }) => {
         <div style="font-weight:700;color:#0f172a">Shayan's Kids</div>
         <div>10/3 B, Attidiya Road</div>
         <div>Kawdana, Dehiwala</div>
-        <div>+94 75 384 1599</div>
+        ${companyPhonesHtml()}
         <div style="color:#64748b">shayankidscare@gmail.com</div>
       </div>
     </div>
@@ -513,7 +515,7 @@ export default function PurchasePage() {
                     <div className="font-bold text-slate-900">Shayan's Kids</div>
                     <div>10/3 B, Attidiya Road</div>
                     <div>Kawdana, Dehiwala</div>
-                    <div>+94 75 384 1599</div>
+                    <CompanyPhoneLines />
                     <div className="text-slate-500">shayankidscare@gmail.com</div>
                   </div>
                 </div>

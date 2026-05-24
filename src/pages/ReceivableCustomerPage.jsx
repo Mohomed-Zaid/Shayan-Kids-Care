@@ -4,6 +4,15 @@ import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import { registerReceivableChequesInHand } from '../lib/receivableChequeWorkflow'
+import {
+  areChequeRowsValid,
+  extractBankCodeFromCheque,
+  getApprovedBankName,
+  isApprovedBankCode,
+  isChequeFormatValid,
+} from '../lib/chequeValidation'
+import ChequeNumberField, { ChequeBankNameDisplay } from '../components/ChequeNumberField'
+import CompanyPhoneLines from '../components/CompanyPhoneLines'
 import { ArrowLeft, Plus, FileText } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 
@@ -46,6 +55,8 @@ export default function ReceivableCustomerPage() {
     {
       cheque_date: new Date().toISOString().slice(0, 10),
       cheque_number: '',
+      bank_code: '',
+      bank_name: '',
       amount: '',
     },
   ])
@@ -332,6 +343,11 @@ export default function ReceivableCustomerPage() {
     setPayOpen(true)
   }
 
+  const isAllChequesValid = useMemo(() => {
+    if (payForm.method !== 'cheque') return true
+    return areChequeRowsValid(cheques)
+  }, [payForm.method, cheques])
+
   const savePayment = async () => {
     if (!payForm.invoice_id) {
       toast.error('Select an invoice')
@@ -369,6 +385,15 @@ export default function ReceivableCustomerPage() {
         }
         if (!c.cheque_number) {
           toast.error('Cheque number is required')
+          return
+        }
+        if (!isChequeFormatValid(c.cheque_number)) {
+          toast.error('Invalid cheque number format — expected XXXXXX-XXXX-XXX')
+          return
+        }
+        const code = extractBankCodeFromCheque(c.cheque_number)
+        if (!isApprovedBankCode(code)) {
+          toast.error('Invalid bank code in cheque number')
           return
         }
         if (!c.amount || c.amount <= 0) {
@@ -500,7 +525,7 @@ export default function ReceivableCustomerPage() {
               <div className="text-center">
                 <div className="text-[16px] font-extrabold">SHAYAN'S KIDS</div>
                 <div className="text-[10px] font-semibold">10/3 B, Attidiya Road, Kawdana, Dehiwala</div>
-                <div className="text-[10px] font-semibold">+94 75 384 1599</div>
+                <CompanyPhoneLines compact />
                 <div className="mt-2 text-[12px] font-extrabold tracking-wide">RECEIPT</div>
               </div>
 
@@ -848,17 +873,17 @@ export default function ReceivableCustomerPage() {
                             </div>
 
                             <div className="sm:col-span-3">
-                              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cheque Number</div>
-                              <input
+                              <ChequeNumberField
                                 value={c.cheque_number}
-                                onChange={(e) => {
-                                  const digits = String(e.target.value || '').replace(/[^0-9]/g, '').slice(0, 13)
-                                  let formatted = digits
-                                  if (digits.length > 10) formatted = digits.slice(0, 6) + '-' + digits.slice(6, 10) + '-' + digits.slice(10)
-                                  else if (digits.length > 6) formatted = digits.slice(0, 6) + '-' + digits.slice(6)
-                                  setCheques((prev) => prev.map((x, i) => (i === idx ? { ...x, cheque_number: formatted } : x)))
-                                }}
-                                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                                onChange={({ cheque_number, bank_code, bank_name }) =>
+                                  setCheques((prev) =>
+                                    prev.map((x, i) =>
+                                      i === idx
+                                        ? { ...x, cheque_number, bank_code, bank_name: bank_name || '' }
+                                        : x
+                                    )
+                                  )
+                                }
                               />
                             </div>
 
@@ -883,22 +908,20 @@ export default function ReceivableCustomerPage() {
                             <div className="sm:col-span-2">
                               <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Bank Code</div>
                               <input
-                                value={c.bank_code}
-                                onChange={(e) => {
-                                  const val = e.target.value
-                                  const match = banks.find((b) => b.bank_code === val.trim())
-                                  setCheques((prev) => prev.map((x, i) => (i === idx ? { ...x, bank_code: val, bank_name: match ? match.name : (x.bank_name || '') } : x)))
-                                }}
-                                placeholder="e.g. 721"
-                                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                                readOnly
+                                value={c.bank_code || extractBankCodeFromCheque(c.cheque_number)}
+                                placeholder="From cheque number"
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-sm text-slate-700 dark:text-slate-300"
                               />
                             </div>
 
                             <div className="sm:col-span-5">
                               <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Bank Name</div>
-                              <div className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-sm text-slate-700 dark:text-slate-300 min-h-[42px] flex items-center">
-                                {c.bank_name || <span className="text-slate-400 dark:text-slate-500">Auto-filled from bank code</span>}
-                              </div>
+                              <ChequeBankNameDisplay
+                                chequeNumber={c.cheque_number}
+                                bankCode={c.bank_code}
+                                bankName={c.bank_name || getApprovedBankName(c.bank_code)}
+                              />
                             </div>
                           </div>
 
@@ -1000,7 +1023,7 @@ export default function ReceivableCustomerPage() {
                 </button>
                 <button
                   onClick={savePayment}
-                  disabled={saving}
+                  disabled={saving || (payForm.method === 'cheque' && !isAllChequesValid)}
                   className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 transition-colors shadow-sm"
                 >
                   {saving ? 'Saving...' : 'Save Payment'}

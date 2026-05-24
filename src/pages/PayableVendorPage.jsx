@@ -3,6 +3,15 @@ import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
+import {
+  areChequeRowsValid,
+  extractBankCodeFromCheque,
+  getApprovedBankName,
+  isApprovedBankCode,
+  isChequeFormatValid,
+} from '../lib/chequeValidation'
+import ChequeNumberField from '../components/ChequeNumberField'
+import CompanyPhoneLines from '../components/CompanyPhoneLines'
 import { ArrowLeft, Plus, FileText, Trash2, Eye, Pencil, Save, X } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 
@@ -379,6 +388,11 @@ export default function PayableVendorPage() {
     return { purchased, paid, balance }
   }, [purRows])
 
+  const isAllChequesValid = useMemo(() => {
+    if (payForm.method !== 'cheque') return true
+    return areChequeRowsValid(cheques)
+  }, [payForm.method, cheques])
+
   const openPay = () => {
     const firstPur = purRows.find((x) => (x.balance ?? 0) > 0) ?? purRows[0]
     const balance = firstPur?.balance ?? 0
@@ -467,6 +481,14 @@ export default function PayableVendorPage() {
       for (const c of rows) {
         if (!c.cheque_date) { toast.error('Cheque date is required'); return }
         if (!c.cheque_number) { toast.error('Cheque number is required'); return }
+        if (!isChequeFormatValid(c.cheque_number)) {
+          toast.error('Invalid cheque number format — expected XXXXXX-XXXX-XXX')
+          return
+        }
+        if (!isApprovedBankCode(extractBankCodeFromCheque(c.cheque_number))) {
+          toast.error('Invalid bank code in cheque number')
+          return
+        }
         if (!c.amount || c.amount <= 0) { toast.error('Cheque amount must be greater than 0'); return }
       }
 
@@ -476,7 +498,7 @@ export default function PayableVendorPage() {
         amount: c.amount,
         paid_at: c.cheque_date,
         method: 'cheque',
-        bank_name: null,
+        bank_name: getApprovedBankName(extractBankCodeFromCheque(c.cheque_number)) || null,
         reference: c.cheque_number,
         note: payForm.note.trim() || null,
       }))
@@ -577,7 +599,7 @@ export default function PayableVendorPage() {
               <div className="text-center">
                 <div className="text-[16px] font-extrabold">SHAYAN'S KIDS</div>
                 <div className="text-[10px] font-semibold">10/3 B, Attidiya Road, Kawdana, Dehiwala</div>
-                <div className="text-[10px] font-semibold">+94 75 384 1599</div>
+                <CompanyPhoneLines compact />
                 <div className="mt-2 text-[12px] font-extrabold tracking-wide">PAYMENT RECEIPT</div>
               </div>
 
@@ -885,19 +907,18 @@ export default function PayableVendorPage() {
                               className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
                             />
                           </div>
-                          <div className="sm:col-span-2">
-                            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cheque Number</div>
-                            <input
+                          <div className="sm:col-span-3">
+                            <ChequeNumberField
                               value={c.cheque_number}
-                              onChange={(e) => {
-                                const digits = String(e.target.value || '').replace(/[^0-9]/g, '').slice(0, 13)
-                                let formatted = digits
-                                if (digits.length > 10) formatted = digits.slice(0, 6) + '-' + digits.slice(6, 10) + '-' + digits.slice(10)
-                                else if (digits.length > 6) formatted = digits.slice(0, 6) + '-' + digits.slice(6)
-                                setCheques((prev) => prev.map((x, i) => (i === idx ? { ...x, cheque_number: formatted } : x)))
-                              }}
-                              placeholder="111111-1111-111"
-                              className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                              onChange={({ cheque_number, bank_code, bank_name }) =>
+                                setCheques((prev) =>
+                                  prev.map((x, i) =>
+                                    i === idx
+                                      ? { ...x, cheque_number, bank_code, bank_name: bank_name || '' }
+                                      : x
+                                  )
+                                )
+                              }
                             />
                           </div>
                           <div className="sm:col-span-2">
@@ -1004,7 +1025,7 @@ export default function PayableVendorPage() {
                 </button>
                 <button
                   onClick={savePayment}
-                  disabled={saving}
+                  disabled={saving || (payForm.method === 'cheque' && !isAllChequesValid)}
                   className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 transition-colors shadow-sm"
                 >
                   {saving ? 'Saving...' : 'Save Payment'}

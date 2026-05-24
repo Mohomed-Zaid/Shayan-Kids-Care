@@ -1,13 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { Calculator, UserCheck, Calendar, DollarSign, FileText, Download, TrendingUp, RotateCcw, TrendingDown } from 'lucide-react'
-
-const COMMISSION_RATES = { munzir: 0.025, default: 0.01 }
-
-const months = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-]
+import { Calculator, UserCheck, Calendar, DollarSign, FileText, Download, TrendingUp, RotateCcw, TrendingDown, Wallet } from 'lucide-react'
+import { calculateRepCommission, COMMISSION_MONTHS as months } from '../lib/repCommission'
 
 export default function CommissionPage() {
   const [reps, setReps] = useState([])
@@ -55,63 +50,62 @@ export default function CommissionPage() {
     setInvoices([])
     setReturns([])
 
-    const startDate = new Date(selectedYear, selectedMonth, 1).toISOString()
-    const endDate = new Date(selectedYear, selectedMonth + 1, 1).toISOString()
+    const repName = reps.find((r) => String(r.id) === String(selectedRep))?.name ?? 'N/A'
 
-    const [invRes, retRes] = await Promise.all([
-      supabase
-        .from('invoices')
-        .select('id, invoice_number, total_amount, created_at, customers(name)')
-        .eq('rep_id', selectedRep)
-        .gte('created_at', startDate)
-        .lt('created_at', endDate)
-        .order('created_at', { ascending: false }),
-      supabase
-        .from('returns')
-        .select('id, return_number, total_amount, reason, created_at, invoice_id, customers(name), invoices(id, invoice_number, rep_id)')
-        .gte('created_at', startDate)
-        .lt('created_at', endDate)
-        .order('created_at', { ascending: false }),
-    ])
+    try {
+      const summary = await calculateRepCommission(supabase, {
+        repId: selectedRep,
+        month: selectedMonth,
+        year: selectedYear,
+        repName,
+      })
 
-    if (invRes.error) {
-      console.error(invRes.error)
-      setLoading(false)
-      return
+      const startDate = new Date(selectedYear, selectedMonth, 1).toISOString()
+      const endDate = new Date(selectedYear, selectedMonth + 1, 1).toISOString()
+
+      const [invRes, retRes] = await Promise.all([
+        supabase
+          .from('invoices')
+          .select('id, invoice_number, total_amount, created_at, customers(name)')
+          .eq('rep_id', selectedRep)
+          .gte('created_at', startDate)
+          .lt('created_at', endDate)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('returns')
+          .select('id, return_number, total_amount, reason, created_at, invoice_id, customers(name), invoices(id, invoice_number, rep_id)')
+          .gte('created_at', startDate)
+          .lt('created_at', endDate)
+          .order('created_at', { ascending: false }),
+      ])
+
+      if (invRes.error) throw invRes.error
+
+      const invoiceList = invRes.data ?? []
+      const returnList = (retRes.data ?? []).filter(
+        (r) => r.invoices && String(r.invoices.rep_id) === String(selectedRep)
+      )
+
+      setResult({
+        repName: summary.repName,
+        month: summary.month,
+        year: summary.year,
+        invoiceCount: summary.invoiceCount,
+        returnCount: summary.returnCount,
+        totalSales: summary.totalSales,
+        totalReturns: summary.totalReturns,
+        netSales: summary.netSales,
+        grossCommission: summary.grossCommission,
+        returnDeduction: summary.returnDeduction,
+        commission: summary.commission,
+        rate: summary.rate,
+      })
+
+      setInvoices(invoiceList)
+      setReturns(returnList)
+    } catch (e) {
+      console.error(e)
     }
-
-    const invoiceList = invRes.data ?? []
-    // Filter returns linked to this rep's invoices
-    const returnList = (retRes.data ?? []).filter(
-      (r) => r.invoices && String(r.invoices.rep_id) === String(selectedRep)
-    )
-
-    const totalSales = invoiceList.reduce((sum, inv) => sum + (inv.total_amount ?? 0), 0)
-    const totalReturns = returnList.reduce((sum, r) => sum + (r.total_amount ?? 0), 0)
-    const netSales = totalSales - totalReturns
-    const repName = reps.find(r => String(r.id) === String(selectedRep))?.name ?? 'N/A'
-    const rate = repName.toLowerCase().includes('munzir') ? COMMISSION_RATES.munzir : COMMISSION_RATES.default
-    const grossCommission = totalSales * rate
-    const returnDeduction = totalReturns * rate
-    const netCommission = netSales * rate
-
-    setResult({
-      repName,
-      month: months[selectedMonth],
-      year: selectedYear,
-      invoiceCount: invoiceList.length,
-      returnCount: returnList.length,
-      totalSales,
-      totalReturns,
-      netSales,
-      grossCommission,
-      returnDeduction,
-      commission: netCommission,
-      rate,
-    })
-
-    setInvoices(invoiceList)
-    setReturns(returnList)
     setLoading(false)
   }
 
@@ -154,14 +148,23 @@ export default function CommissionPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-6 shadow-lg">
-        <div className="flex items-center gap-3">
-          <div className="bg-white/10 p-3 rounded-xl">
-            <Calculator size={24} className="text-white" />
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-white/10 p-3 rounded-xl">
+              <Calculator size={24} className="text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-extrabold text-white">Commission Report</h1>
+              <p className="text-slate-400 text-sm mt-0.5">Calculate commission for sales representatives (Munzir: 2.5%, Others: 1%)</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-extrabold text-white">Commission Report</h1>
-            <p className="text-slate-400 text-sm mt-0.5">Calculate commission for sales representatives (Munzir: 2.5%, Others: 1%)</p>
-          </div>
+          <Link
+            to="/finance/rep-payments"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-white/10 text-white hover:bg-white/20 border border-white/20 transition-colors"
+          >
+            <Wallet size={16} />
+            Rep Payments
+          </Link>
         </div>
       </div>
 

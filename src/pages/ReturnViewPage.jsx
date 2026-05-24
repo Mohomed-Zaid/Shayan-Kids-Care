@@ -6,6 +6,7 @@ import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import { ArrowLeft, Printer, Download, Trash2, RotateCcw } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
+import CompanyPhoneLines from '../components/CompanyPhoneLines'
 
 export default function ReturnViewPage() {
   const { id } = useParams()
@@ -237,7 +238,7 @@ export default function ReturnViewPage() {
                 <div className="font-bold text-slate-900 dark:text-white">Shayan's Kids &amp; Toys Store</div>
                 <div>10/3 B, Attidiya Road</div>
                 <div>Kawdana, Dehiwala</div>
-                <div>+94 75 384 1599</div>
+                <CompanyPhoneLines />
                 <div className="text-slate-500 dark:text-slate-400">shayankidscare@gmail.com</div>
               </div>
             </div>

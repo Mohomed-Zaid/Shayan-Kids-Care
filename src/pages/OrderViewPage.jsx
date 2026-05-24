@@ -6,6 +6,7 @@ import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import { ArrowLeft, CheckCircle, XCircle, ArrowRightLeft, ShoppingCart, Printer, Download, Trash2, FileText, Pencil } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
+import CompanyPhoneLines from '../components/CompanyPhoneLines'
 
 const statusConfig = {
   pending: { label: 'Pending', bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-700' },
@@ -338,8 +339,7 @@ export default function OrderViewPage() {
                 <div className="font-bold text-slate-900 dark:text-white">REP — {rep?.name ?? 'N/A'}</div>
                 <div>10/3 B, Attidiya Road</div>
                 <div>Kawdana, Dehiwala</div>
-                <div>+94 75 384 1599</div>
-                <div>+94 75 38 41 599</div>
+                <CompanyPhoneLines />
                 <div className="text-slate-500 dark:text-slate-400">shayankidscare@gmail.com</div>
               </div>
             </div>

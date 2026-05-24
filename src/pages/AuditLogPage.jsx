@@ -18,6 +18,7 @@ const ACTION_ICONS = {
   save_payment: Wallet, delete_payment: Trash2, edit_payment: Edit3,
   save_purchase_payment: Wallet, delete_purchase_payment: Trash2, edit_purchase_payment: Edit3,
   delete_receivable_payment: Trash2, delete_payable_payment: Trash2,
+  save_rep_commission_payment: Wallet, delete_rep_commission_payment: Trash2,
   create_bank: Building2, edit_bank: Edit3, delete_bank: Trash2,
   backup_export: FileText, backup_restore: FileText,
 }
@@ -64,6 +65,8 @@ const ACTION_COLORS = {
   edit_purchase_payment: 'text-amber-600 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30',
   delete_receivable_payment: 'text-red-600 bg-red-50 dark:text-red-300 dark:bg-red-900/30',
   delete_payable_payment: 'text-red-600 bg-red-50 dark:text-red-300 dark:bg-red-900/30',
+  save_rep_commission_payment: 'text-emerald-600 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-900/30',
+  delete_rep_commission_payment: 'text-red-600 bg-red-50 dark:text-red-300 dark:bg-red-900/30',
   create_bank: 'text-blue-600 bg-blue-50 dark:text-blue-300 dark:bg-blue-900/30',
   edit_bank: 'text-amber-600 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30',
   delete_bank: 'text-red-600 bg-red-50 dark:text-red-300 dark:bg-red-900/30',
@@ -86,6 +89,7 @@ const ACTION_LABELS = {
   save_payment: 'Saved Payment', delete_payment: 'Deleted Payment', edit_payment: 'Edited Payment',
   save_purchase_payment: 'Saved Vendor Payment', delete_purchase_payment: 'Deleted Vendor Payment', edit_purchase_payment: 'Edited Vendor Payment',
   delete_receivable_payment: 'Deleted Receivable Payment', delete_payable_payment: 'Deleted Payable Payment',
+  save_rep_commission_payment: 'Saved Rep Commission Payment', delete_rep_commission_payment: 'Deleted Rep Commission Payment',
   create_bank: 'Created Bank', edit_bank: 'Edited Bank', delete_bank: 'Deleted Bank',
   backup_export: 'Exported Backup', backup_restore: 'Restored Backup',
 }

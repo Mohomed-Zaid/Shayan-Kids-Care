@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { Baby, HeartHandshake, Sparkles, PhoneCall, MapPin, Mail, Moon, Sun } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 import { useTheme } from '../contexts/ThemeContext'
+import CompanyPhoneLines from '../components/CompanyPhoneLines'
 
 function SectionTitle({ eyebrow, title, subtitle }) {
   return (
@@ -276,7 +277,7 @@ export default function HomePage() {
                   <div className="mt-0.5 text-rose-600"><PhoneCall size={16} /></div>
                   <div>
                     <div className="font-semibold text-slate-900 dark:text-white">Phone</div>
-                    <div className="text-slate-600 dark:text-slate-300">+94 75 384 1599</div>
+                    <CompanyPhoneLines className="text-slate-600 dark:text-slate-300" />
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
@@ -309,7 +310,10 @@ export default function HomePage() {
 
       <footer className="border-t border-slate-200/60 dark:border-slate-800 bg-white dark:bg-slate-900">
         <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="text-xs text-slate-500 dark:text-slate-400">© {new Date().getFullYear()} Shayan's Kids. All rights reserved.</div>
+          <div className="text-xs text-slate-500 dark:text-slate-400">
+            <div>© {new Date().getFullYear()} Shayan's Kids. All rights reserved.</div>
+            <CompanyPhoneLines className="mt-1 text-slate-500 dark:text-slate-400" />
+          </div>
           <div className="text-xs text-slate-500 dark:text-slate-400">Built with care.</div>
         </div>
       </footer>

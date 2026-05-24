@@ -12,6 +12,7 @@ import InvoicesPage from './pages/InvoicesPage'
 import InvoiceViewPage from './pages/InvoiceViewPage'
 import RepsPage from './pages/RepsPage'
 import CommissionPage from './pages/CommissionPage'
+import RepPaymentsPage from './pages/RepPaymentsPage'
 import InvoiceEditPage from './pages/InvoiceEditPage'
 import OrdersPage from './pages/OrdersPage'
 import OrderCreatePage from './pages/OrderCreatePage'
@@ -65,6 +66,7 @@ export default function App() {
             <Route path="/vendors" element={<VendorsPage />} />
             <Route path="/journals" element={<JournalsPage />} />
             <Route path="/finance/journal-entry" element={<JournalEntryPage />} />
+            <Route path="/finance/rep-payments" element={<RepPaymentsPage />} />
             <Route path="/finance/receivables" element={<ReceivablesPage />} />
             <Route path="/finance/receivables/:customerId" element={<ReceivableCustomerPage />} />
             <Route path="/finance/payables" element={<PayablesPage />} />

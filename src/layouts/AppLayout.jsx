@@ -45,6 +45,7 @@ const navItems = [
     icon: Wallet,
     children: [
       { to: '/finance/journal-entry', label: 'Journal Entry', icon: BookOpen },
+      { to: '/finance/rep-payments', label: 'Rep Payments', icon: UserCheck },
       { to: '/finance/receivables', label: 'Receivables', icon: FileText },
       { to: '/finance/payables', label: 'Payables', icon: HandCoins },
       { to: '/finance/banks', label: 'Banks', icon: Building2 },
@@ -82,6 +83,7 @@ function usePageTitle() {
     if (path.startsWith('/vendors')) return 'Vendors'
     if (path.startsWith('/journals')) return 'Journal'
     if (path.startsWith('/finance/journal-entry')) return 'Journal Entry'
+    if (path.startsWith('/finance/rep-payments')) return 'Rep Payments'
     if (path.startsWith('/finance/receivables')) return 'Receivables'
     if (path.startsWith('/finance/payables')) return 'Payables'
     if (path.startsWith('/finance/cheques')) return 'Cheque Administration'
