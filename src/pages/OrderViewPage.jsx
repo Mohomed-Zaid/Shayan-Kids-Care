@@ -4,7 +4,8 @@ import html2pdf from 'html2pdf.js'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
-import { ArrowLeft, CheckCircle, XCircle, ArrowRightLeft, ShoppingCart, Printer, Download, Trash2, FileText, Pencil } from 'lucide-react'
+import { pressDateISO, formatLocalDate } from '../lib/localDate'
+import { ArrowLeft, CheckCircle, XCircle, ArrowRightLeft, ShoppingCart, Printer, Download, Trash2, FileText, Pencil, Truck } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
 
@@ -14,6 +15,7 @@ const statusConfig = {
   invoiced: { label: 'Invoiced', bg: 'bg-emerald-100 dark:bg-emerald-900/40', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800' },
   converted: { label: 'Invoiced', bg: 'bg-emerald-100 dark:bg-emerald-900/40', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800' },
   cancelled: { label: 'Cancelled', bg: 'bg-red-100 dark:bg-red-900/40', text: 'text-red-700 dark:text-red-300', border: 'border-red-200 dark:border-red-800' },
+  delivered: { label: 'Delivered', bg: 'bg-green-100 dark:bg-green-900/40', text: 'text-green-700 dark:text-green-300', border: 'border-green-200 dark:border-green-800' },
 }
 
 export default function OrderViewPage() {
@@ -38,7 +40,7 @@ export default function OrderViewPage() {
       const [ordRes, itemsRes] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, order_number, total, status, created_at, customer_id, rep_id, payment_type, invoice_id, customers(name, address, phone), employees(name, is_rep)')
+          .select('id, order_number, total, status, created_at, customer_id, rep_id, payment_type, invoice_id, delivered_at, invoices(created_at), customers(name, address, phone), employees(name, is_rep)')
           .eq('id', id)
           .single(),
         supabase
@@ -117,6 +119,16 @@ export default function OrderViewPage() {
     navigate('/orders', { replace: true })
   }
 
+  const onDeliver = async () => {
+    if (!confirm('Mark this order as delivered?')) return
+    const deliveredAt = pressDateISO()
+    const { error } = await supabase.from('orders').update({ status: 'delivered', delivered_at: deliveredAt }).eq('id', id)
+    if (error) { toast.error(error.message); return }
+    toast.success('Order marked as delivered')
+    logAction({ action: 'deliver_order', targetType: 'order', targetId: id, targetLabel: orderNumber })
+    setOrder({ ...order, status: 'delivered', delivered_at: deliveredAt })
+  }
+
   const onConvert = async () => {
     if (order.status !== 'confirmed') {
       toast.error('Only confirmed orders can be invoiced')
@@ -184,12 +196,12 @@ export default function OrderViewPage() {
       await Promise.all(stockUpdates)
 
       // Mark order as invoiced and link to invoice
-      const { error: updErr } = await supabase.from('orders').update({ status: 'invoiced', invoice_id: invoice.id }).eq('id', id)
+      const { error: updErr } = await supabase.from('orders').update({ status: 'invoiced', invoice_id: invoice.id, delivered_at: null }).eq('id', id)
       if (updErr) { toast.error(updErr.message); setConverting(false); return }
 
       toast.success('Order invoiced successfully')
       logAction({ action: 'invoice_order', targetType: 'order', targetId: id, details: `Invoice INV-${String(invoice.id ?? '').padStart(4, '0')}` })
-      setOrder({ ...order, status: 'invoiced', invoice_id: invoice.id })
+      setOrder({ ...order, status: 'invoiced', invoice_id: invoice.id, delivered_at: null })
     } catch (e) {
       toast.error(e?.message ?? 'Conversion failed')
     } finally {
@@ -289,10 +301,16 @@ export default function OrderViewPage() {
             </button>
           )}
           {(order.status === 'invoiced' || order.status === 'converted') && order.invoice_id && (
-            <Link to={`/invoices/${order.invoice_id}`} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm">
-              <FileText size={15} />
-              View Invoice
-            </Link>
+            <>
+              <button onClick={onDeliver} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition-colors shadow-sm">
+                <Truck size={15} />
+                Mark Delivered
+              </button>
+              <Link to={`/invoices/${order.invoice_id}`} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm">
+                <FileText size={15} />
+                View Invoice
+              </Link>
+            </>
           )}
           {(order.status === 'pending' || order.status === 'confirmed') && (
             <button onClick={onCancel} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">
@@ -328,6 +346,12 @@ export default function OrderViewPage() {
               <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${st.bg} ${st.text} border ${st.border} mt-1`}>
                 {st.label}
               </span>
+              {order.invoices?.created_at && (
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">Invoiced: {formatLocalDate(order.invoices.created_at)}</div>
+              )}
+              {order.delivered_at && (
+                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Delivered: {formatLocalDate(order.delivered_at)}</div>
+              )}
             </div>
           </div>
 

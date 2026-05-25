@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
+import { pressDateISO, formatLocalDate } from '../lib/localDate'
 import { Plus, Eye, ShoppingCart, CheckCircle, XCircle, ArrowRightLeft, Trash2, FileText, Filter, Pencil, Search, ArrowUpDown, Truck } from 'lucide-react'
 
 const statusConfig = {
@@ -43,7 +44,7 @@ export default function OrdersPage() {
     const [ordRes, invRes] = await Promise.all([
       supabase
         .from('orders')
-        .select('id, order_number, total, status, created_at, customer_id, rep_id, payment_type, invoice_id, delivered_at, customers(name), employees(name)')
+        .select('id, order_number, total, status, created_at, customer_id, rep_id, payment_type, invoice_id, delivered_at, invoices(created_at), customers(name), employees(name)')
         .order('created_at', { ascending: false }),
       supabase
         .from('invoices')
@@ -101,8 +102,8 @@ export default function OrdersPage() {
 
   const onDeliver = async (order) => {
     if (!confirm('Mark this order as delivered?')) return
-    const now = new Date().toISOString()
-    const { error } = await supabase.from('orders').update({ status: 'delivered', delivered_at: now }).eq('id', order.id)
+    const deliveredAt = pressDateISO()
+    const { error } = await supabase.from('orders').update({ status: 'delivered', delivered_at: deliveredAt }).eq('id', order.id)
     if (error) { toast.error(error.message); return }
     toast.success('Order marked as delivered')
     logAction({ action: 'deliver_order', targetType: 'order', targetId: order.id, targetLabel: `ORD-${String(order.order_number ?? '').padStart(4, '0')}` })
@@ -182,7 +183,7 @@ export default function OrdersPage() {
     await Promise.all(stockUpdates)
 
     // Mark order as invoiced and link to invoice
-    const { error: updErr } = await supabase.from('orders').update({ status: 'invoiced', invoice_id: invoice.id }).eq('id', order.id)
+    const { error: updErr } = await supabase.from('orders').update({ status: 'invoiced', invoice_id: invoice.id, delivered_at: null }).eq('id', order.id)
     if (updErr) { toast.error(updErr.message); return }
 
     toast.success('Order invoiced successfully')
@@ -380,12 +381,12 @@ export default function OrdersPage() {
                 <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Rep</th>
                 <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Total</th>
                 <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Status</th>
-                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Date</th>
-                {activeTab === 'delivered' && (
-                  <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Delivered On</th>
+                <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Order Date</th>
+                {(activeTab === 'invoiced' || activeTab === 'delivered' || activeTab === 'all') && (
+                  <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Invoiced On</th>
                 )}
-                {(activeTab === 'invoiced' || activeTab === 'all') && (
-                  <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Delivered</th>
+                {(activeTab === 'invoiced' || activeTab === 'delivered' || activeTab === 'all') && (
+                  <th className="text-left font-semibold text-slate-600 dark:text-emerald-100/80 px-5 py-3 text-xs uppercase tracking-wider">Delivered On</th>
                 )}
                 <th className="px-5 py-3"></th>
               </tr>
@@ -393,7 +394,7 @@ export default function OrdersPage() {
             <tbody>
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={activeTab === 'delivered' || activeTab === 'invoiced' || activeTab === 'all' ? 8 : 7} className="px-5 py-12 text-slate-400 dark:text-emerald-100/60 text-center">
+                  <td colSpan={activeTab === 'delivered' || activeTab === 'invoiced' || activeTab === 'all' ? 9 : 7} className="px-5 py-12 text-slate-400 dark:text-emerald-100/60 text-center">
                     <ShoppingCart size={32} className="mx-auto text-slate-300 dark:text-emerald-200/30 mb-2" />
                     {activeTab === 'all' ? 'No orders yet. Create your first order!' : `No ${activeTab} orders.`}
                   </td>
@@ -412,13 +413,17 @@ export default function OrdersPage() {
                           {st.label}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{new Date(o.created_at).toLocaleDateString()}</td>
-                      {activeTab === 'delivered' && (
-                        <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{o.delivered_at ? new Date(o.delivered_at).toLocaleDateString() : '-'}</td>
+                      <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{formatLocalDate(o.created_at)}</td>
+                      {(activeTab === 'invoiced' || activeTab === 'delivered' || activeTab === 'all') && (
+                        <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">
+                          {o.invoices?.created_at ? formatLocalDate(o.invoices.created_at) : '—'}
+                        </td>
                       )}
-                      {(activeTab === 'invoiced' || activeTab === 'all') && (
+                      {(activeTab === 'invoiced' || activeTab === 'delivered' || activeTab === 'all') && (
                         <td className="px-5 py-3.5">
-                          {(o.status === 'invoiced' || o.status === 'converted') ? (
+                          {o.status === 'delivered' ? (
+                            <span className="text-slate-600 dark:text-emerald-100/70 font-medium">{formatLocalDate(o.delivered_at)}</span>
+                          ) : (o.status === 'invoiced' || o.status === 'converted') ? (
                             <button onClick={() => onDeliver(o)} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors border border-green-200 dark:border-green-800" title="Mark as Delivered">
                               <Truck size={13} />
                               Deliver
