@@ -225,52 +225,85 @@
   color: rgba(71, 85, 105, 0.65) !important;
 }
 
- .pdf-export-wrapper {
-   position: fixed;
-   left: -10000px;
-   top: 0;
-   width: 210mm;
-   background: white;
- }
+.pdf-export-wrapper {
+  position: fixed;
+  left: -10000px;
+  top: 0;
+  width: 210mm;
+  height: 297mm;
+  background: white;
+  overflow: hidden;
+}
 
- .pdf-export-wrapper .print-area {
-   width: 210mm;
-   min-height: 297mm;
-   background: white !important;
-   color: #0f172a !important;
-   border-radius: 0 !important;
-   border: none !important;
-   box-shadow: none !important;
- }
+.pdf-export-wrapper .print-area {
+  width: 210mm;
+  height: 297mm;
+  min-height: 297mm;
+  max-height: 297mm;
+  background: white !important;
+  color: #0f172a !important;
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
 
- .pdf-export-wrapper .print-area * {
-   color: #000000 !important;
-   border-color: #e2e8f0 !important;
- }
+.pdf-export-wrapper .print-area * {
+  color: #000000 !important;
+  border-color: #e2e8f0 !important;
+  page-break-inside: avoid !important;
+  break-inside: avoid !important;
+}
 
- .pdf-export-wrapper .print-area [class*="dark:bg-"] {
-   background-color: transparent !important;
- }
+.pdf-export-wrapper .print-area [class*="dark:bg-"] {
+  background-color: transparent !important;
+}
 
- .pdf-export-wrapper .print-area .bg-slate-800,
- .pdf-export-wrapper .print-area .bg-slate-900 {
-   background-color: #ffffff !important;
-   color: #000000 !important;
- }
+.pdf-export-wrapper .print-area .bg-slate-800,
+.pdf-export-wrapper .print-area .bg-slate-900 {
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
 
- .pdf-export-wrapper .print-area .bg-slate-800 *,
- .pdf-export-wrapper .print-area .bg-slate-900 * {
-   color: #000000 !important;
- }
+.pdf-export-wrapper .print-area .bg-slate-800 *,
+.pdf-export-wrapper .print-area .bg-slate-900 * {
+  color: #000000 !important;
+}
 
- .pdf-export-wrapper .print-area .bg-slate-50,
- .pdf-export-wrapper .print-area .bg-slate-100 {
-   background-color: #f8fafc !important;
- }
+.pdf-export-wrapper .print-area .bg-slate-50,
+.pdf-export-wrapper .print-area .bg-slate-100 {
+  background-color: #f8fafc !important;
+}
 
- .pdf-export-wrapper .print-area .text-white {
-   color: #000000 !important;
- }
+.pdf-export-wrapper .print-area .text-white {
+  color: #000000 !important;
+}
+
+/* Reduce padding for PDF export to fit everything */
+.pdf-export-wrapper .print-area .px-8 {
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+.pdf-export-wrapper .print-area .py-2 {
+  padding-top: 1px !important;
+  padding-bottom: 1px !important;
+}
+
+.pdf-export-wrapper .print-area .pt-3 {
+  padding-top: 3px !important;
+}
+
+.pdf-export-wrapper .print-area .pb-2 {
+  padding-bottom: 1px !important;
+}
+
+.pdf-export-wrapper .print-area .py-1.5 {
+  padding-top: 1px !important;
+  padding-bottom: 1px !important;
+}
 
 @keyframes slide-in {
   from {
@@ -284,6 +317,14 @@
 }
 
 @media print {
+  html, body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    overflow: hidden !important;
+  }
+
   body * {
     visibility: hidden;
   }
@@ -295,19 +336,49 @@
   }
 
   .print-area {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 297mm;
-    overflow: hidden;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    min-height: 297mm !important;
+    max-height: 297mm !important;
+    overflow: hidden !important;
     background: white !important;
     color: #0f172a !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Reduce padding for print to fit everything */
+  .print-area .px-8 {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .print-area .py-2 {
+    padding-top: 1px !important;
+    padding-bottom: 1px !important;
+  }
+
+  .print-area .pt-3 {
+    padding-top: 3px !important;
+  }
+
+  .print-area .pb-2 {
+    padding-bottom: 1px !important;
+  }
+
+  .print-area .py-1.5 {
+    padding-top: 1px !important;
+    padding-bottom: 1px !important;
   }
 
   .print-area * {
     color: #000000 !important;
     border-color: #e2e8f0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
   .print-area [class*="dark:bg-"] {

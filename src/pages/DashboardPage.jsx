@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Package, Users, FileText, DollarSign, Plus, Eye, TrendingUp, ArrowUpRight, Truck, ShoppingCart, BookOpen, Wallet, Calendar, Landmark, RotateCcw, CreditCard } from 'lucide-react'
+import { Package, Users, DollarSign, Plus, Eye, TrendingUp, ArrowUpRight, ShoppingCart, Wallet, Calendar, Landmark, RotateCcw, CreditCard } from 'lucide-react'
+import { usePermissions } from '../contexts/PermissionsContext'
+import PermissionGate from '../components/PermissionGate'
 import Chart from 'react-apexcharts'
 
 const statConfig = [
@@ -63,6 +65,7 @@ function buildLast12Months() {
 
 export default function DashboardPage() {
   const { user } = useAuth()
+  const { dashboardWidgets } = usePermissions()
 
   const displayName = (() => {
     const email = user?.email ?? ''
@@ -92,6 +95,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailPayment, setDetailPayment] = useState(null)
+  const show = (id) => dashboardWidgets[id] !== false
 
   const receivableSegments = useMemo(() => {
     return [
@@ -428,50 +432,59 @@ export default function DashboardPage() {
     )
   }
 
+  const visibleStatCards = statConfig.filter((cfg) => show(`stat_${cfg.key}`))
+
   return (
     <div className="space-y-6">
-      {/* Welcome Header */}
-      <div className="bg-gradient-to-r from-slate-800 to-slate-900 dark:from-emerald-950/60 dark:via-slate-950/60 dark:to-emerald-950/60 rounded-2xl p-6 shadow-lg dark:border dark:border-emerald-400/15">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-extrabold text-white">Welcome back, {displayName}</h1>
-            <p className="text-slate-400 dark:text-emerald-100/60 text-sm mt-1">Shayan's Kids &amp; Toys Store</p>
-            <div className="flex items-center gap-1.5 mt-2 text-xs text-slate-400 dark:text-emerald-100/50">
-              <Calendar size={12} />
-              {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} &middot; {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+      {show('welcome') && (
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 dark:from-emerald-950/60 dark:via-slate-950/60 dark:to-emerald-950/60 rounded-2xl p-6 shadow-lg dark:border dark:border-emerald-400/15">
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div>
+              <h1 className="text-2xl font-extrabold text-white">Welcome back, {displayName}</h1>
+              <p className="text-slate-400 dark:text-emerald-100/60 text-sm mt-1">Shayan's Kids &amp; Toys Store</p>
+              <div className="flex items-center gap-1.5 mt-2 text-xs text-slate-400 dark:text-emerald-100/50">
+                <Calendar size={12} />
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} &middot; {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+              </div>
             </div>
+            {show('quick_create_order') && (
+              <PermissionGate module="orders" action="create">
+                <Link
+                  to="/orders/new"
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-white dark:bg-emerald-950/40 dark:text-emerald-50 dark:border dark:border-emerald-400/15 text-slate-900 hover:bg-slate-100 dark:hover:bg-emerald-500/10 transition-colors shadow-md"
+                >
+                  <Plus size={16} />
+                  Create Order
+                </Link>
+              </PermissionGate>
+            )}
           </div>
-          <Link
-            to="/orders/new"
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-white dark:bg-emerald-950/40 dark:text-emerald-50 dark:border dark:border-emerald-400/15 text-slate-900 hover:bg-slate-100 dark:hover:bg-emerald-500/10 transition-colors shadow-md"
-          >
-            <Plus size={16} />
-            Create Order
-          </Link>
         </div>
-      </div>
+      )}
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-        {statConfig.map((cfg) => (
-          <StatCard
-            key={cfg.key}
-            label={cfg.label}
-            value={stats[cfg.key]}
-            icon={cfg.icon}
-            gradient={cfg.gradient}
-            iconBg={cfg.iconBg}
-            textColor={cfg.textColor}
-            valueColor={cfg.valueColor}
-            subColor={cfg.subColor}
-            isCurrency={cfg.isCurrency}
-          />
-        ))}
-      </div>
+      {visibleStatCards.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          {visibleStatCards.map((cfg) => (
+            <StatCard
+              key={cfg.key}
+              label={cfg.label}
+              value={stats[cfg.key]}
+              icon={cfg.icon}
+              gradient={cfg.gradient}
+              iconBg={cfg.iconBg}
+              textColor={cfg.textColor}
+              valueColor={cfg.valueColor}
+              subColor={cfg.subColor}
+              isCurrency={cfg.isCurrency}
+            />
+          ))}
+        </div>
+      )}
 
-      {/* Charts */}
+      {(show('chart_sales_profit') || show('chart_receivable')) && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 rounded-2xl overflow-hidden shadow-sm border border-slate-200/60 dark:border-emerald-400/15 bg-white dark:bg-emerald-950/25">
+        {show('chart_sales_profit') && (
+        <div className={`${show('chart_receivable') ? 'lg:col-span-2' : 'lg:col-span-3'} rounded-2xl overflow-hidden shadow-sm border border-slate-200/60 dark:border-emerald-400/15 bg-white dark:bg-emerald-950/25`}>
           <div className="p-5 flex items-start justify-between border-b border-slate-100 dark:border-emerald-900/40">
             <div>
               <div className="text-base font-bold text-slate-900 dark:text-emerald-50">Sales & Profit</div>
@@ -483,6 +496,7 @@ export default function DashboardPage() {
             <div className="rounded-xl overflow-hidden border border-slate-200/60 dark:border-emerald-900/40 bg-slate-900/90">
               <Chart options={areaOptions} series={areaSeries} type="area" height={260} />
             </div>
+            {show('chart_month_summary') && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
               <div className="rounded-xl border border-slate-200/60 dark:border-emerald-900/40 bg-white/60 dark:bg-emerald-950/15 px-4 py-3">
                 <div className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-emerald-100/60">Current Month Sales</div>
@@ -497,10 +511,13 @@ export default function DashboardPage() {
                 <div className="mt-1 text-base font-extrabold text-slate-900 dark:text-white">{profitPct.toFixed(2)}%</div>
               </div>
             </div>
+            )}
           </div>
         </div>
+        )}
 
-        <div className="rounded-2xl overflow-hidden shadow-sm border border-slate-200/60 dark:border-emerald-400/15 bg-white dark:bg-emerald-950/25">
+        {show('chart_receivable') && (
+        <div className={`rounded-2xl overflow-hidden shadow-sm border border-slate-200/60 dark:border-emerald-400/15 bg-white dark:bg-emerald-950/25 ${show('chart_sales_profit') ? '' : 'lg:col-span-3'}`}>
           <div className="p-5 border-b border-slate-100 dark:border-emerald-900/40">
             <div className="text-base font-bold text-slate-900 dark:text-emerald-50">Customer Receivable</div>
             <div className="text-xs text-slate-400 dark:text-emerald-100/60 mt-0.5">Due / Current Month / Received</div>
@@ -531,10 +548,13 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
+        )}
       </div>
+      )}
 
+      {(show('table_receivable_cheques') || show('table_customer_payments')) && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Receivable Cheques */}
+        {show('table_receivable_cheques') && (
         <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">
           <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-emerald-900/40">
             <div>
@@ -606,8 +626,9 @@ export default function DashboardPage() {
             </tbody>
           </table>
         </div>
+        )}
 
-        {/* Customer Payments */}
+        {show('table_customer_payments') && (
         <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">
           <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-emerald-900/40">
             <div>
@@ -670,9 +691,11 @@ export default function DashboardPage() {
             </tbody>
           </table>
         </div>
+        )}
       </div>
+      )}
 
-      {/* Payable Cheques */}
+      {show('table_payable_cheques') && (
       <div className="bg-white border border-slate-200/60 rounded-2xl overflow-hidden shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">
         <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-emerald-900/40">
           <div>
@@ -722,6 +745,7 @@ export default function DashboardPage() {
           </tbody>
         </table>
       </div>
+      )}
 
       {/* Payment Detail Modal */}
       {detailOpen && detailPayment ? (

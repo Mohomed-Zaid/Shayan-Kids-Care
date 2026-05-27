@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Plus, Pencil, Trash2, X, Users, AlertTriangle } from 'lucide-react'
+import PermissionGate from '../components/PermissionGate'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 
@@ -197,10 +198,12 @@ export default function CustomersPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div className="text-sm text-slate-500">Manage your customer list.</div>
-        <button onClick={onAdd} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
-          <Plus size={16} />
-          Add Customer
-        </button>
+        <PermissionGate module="customers" action="create">
+          <button onClick={onAdd} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
+            <Plus size={16} />
+            Add Customer
+          </button>
+        </PermissionGate>
       </div>
 
       <div className="bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">
@@ -245,12 +248,16 @@ export default function CustomersPage() {
                   <td className="px-5 py-3.5 text-slate-500 dark:text-emerald-100/60">{row.phone2 || '—'}</td>
                   <td className="px-5 py-3.5 text-right">
                     <div className="inline-flex gap-1">
-                      <button onClick={() => onEdit(row)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors" title="Edit">
-                        <Pencil size={15} />
-                      </button>
-                      <button onClick={() => onDelete(row)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete">
-                        <Trash2 size={15} />
-                      </button>
+                      <PermissionGate module="customers" action="edit">
+                        <button onClick={() => onEdit(row)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors" title="Edit">
+                          <Pencil size={15} />
+                        </button>
+                      </PermissionGate>
+                      <PermissionGate module="customers" action="delete">
+                        <button onClick={() => onDelete(row)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete">
+                          <Trash2 size={15} />
+                        </button>
+                      </PermissionGate>
                     </div>
                   </td>
                 </tr>

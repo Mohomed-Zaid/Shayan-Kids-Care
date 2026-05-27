@@ -10,7 +10,7 @@ import {
   isApprovedBankCode,
   isChequeFormatValid,
 } from '../lib/chequeValidation'
-import ChequeNumberField from '../components/ChequeNumberField'
+import ChequeNumberField, { ChequeBankNameDisplay } from '../components/ChequeNumberField'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
 import { Search, Eye, FileText, Plus } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
@@ -35,11 +35,11 @@ export default function PayablesPage() {
   const [paySaving, setPaySaving] = useState(false)
   const [payForm, setPayForm] = useState({
     vendor_id: '',
-    purchase_id: '',
     paid_at: new Date().toISOString().slice(0, 10),
     amount: '',
     method: 'cash',
     bank_name: '',
+    sub_method: 'other',
     reference: '',
     note: '',
   })
@@ -48,6 +48,8 @@ export default function PayablesPage() {
     {
       cheque_date: new Date().toISOString().slice(0, 10),
       cheque_number: '',
+      bank_code: '',
+      bank_name: '',
       amount: '',
     },
   ])
@@ -67,7 +69,7 @@ export default function PayablesPage() {
         .from('purchase_payments')
         .select('id, purchase_id, amount, paid_at, method')
         .order('paid_at', { ascending: false }),
-      supabase.from('banks').select('id, code, name, branch').order('code'),
+      supabase.from('banks').select('id, code, name, bank_code, branch').order('code'),
     ])
 
     if (purRes.error) {
@@ -181,6 +183,13 @@ export default function PayablesPage() {
     return { purchased, paid, balance }
   }, [vendorRows])
 
+  const referencePlaceholder = useMemo(() => {
+    if (payForm.method === 'cheque') return 'Cheque number'
+    if (payForm.method === 'bank') return 'Bank reference'
+    if (payForm.method === 'other') return 'Reference'
+    return 'Reference'
+  }, [payForm.method])
+
   const purchasesForPayVendor = useMemo(() => {
     if (!payForm.vendor_id) return []
     return purchases
@@ -191,7 +200,18 @@ export default function PayablesPage() {
         const balance = total - paid
         return { ...pur, paid, balance }
       })
+      .filter((pur) => pur.balance > 0)
   }, [purchases, paymentSumByPurchase, payForm.vendor_id])
+
+  const totalOutstanding = useMemo(() => {
+    return purchasesForPayVendor.reduce((s, pur) => s + pur.balance, 0)
+  }, [purchasesForPayVendor])
+
+  const chequeTotals = useMemo(() => {
+    const total = cheques.reduce((s, c) => s + Number(String(c.amount || '').replace(/,/g, '') || 0), 0)
+    const remaining = totalOutstanding - total
+    return { total, remaining }
+  }, [cheques, totalOutstanding])
 
   const isAllChequesValid = useMemo(() => {
     if (payForm.method !== 'cheque') return true
@@ -199,24 +219,18 @@ export default function PayablesPage() {
   }, [payForm.method, cheques])
 
   const openPay = (vendorId) => {
-    const vendorPurchases = purchases
-      .filter((x) => x.vendor_id === vendorId)
-      .map((pur) => {
-        const paid = paymentSumByPurchase.get(pur.id) ?? 0
-        const total = Number(pur.total_amount ?? 0)
-        const balance = total - paid
-        return { ...pur, paid, balance }
-      })
-    const list = vendorPurchases.filter((x) => (x.balance ?? 0) > 0)
-    const first = list[0] ?? vendorPurchases[0]
-    const balance = first?.balance ?? 0
+    const vendorPurchases = purchases.filter((pur) => pur.vendor_id === vendorId)
+    const outstanding = vendorPurchases.reduce((s, pur) => {
+      const paid = paymentSumByPurchase.get(pur.id) ?? 0
+      return s + Math.max(0, Number(pur.total_amount ?? 0) - paid)
+    }, 0)
     setPayForm({
       vendor_id: vendorId,
-      purchase_id: first?.id ?? '',
       paid_at: new Date().toISOString().slice(0, 10),
-      amount: balance ? balance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '',
+      amount: outstanding > 0 ? outstanding.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '',
       method: 'cash',
       bank_name: '',
+      sub_method: 'other',
       reference: '',
       note: '',
     })
@@ -224,7 +238,9 @@ export default function PayablesPage() {
       {
         cheque_date: new Date().toISOString().slice(0, 10),
         cheque_number: '',
-        amount: balance ? balance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '',
+        bank_code: '',
+        bank_name: '',
+        amount: outstanding > 0 ? outstanding.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '',
       },
     ])
     setPayOpen(true)
@@ -271,132 +287,204 @@ export default function PayablesPage() {
   }
 
   const savePayment = async () => {
-    if (!payForm.purchase_id) {
-      toast.error('Select a purchase')
+    if (purchasesForPayVendor.length === 0) {
+      toast.error('No outstanding purchases')
       return
     }
 
-    const selectedPurchase = purchasesForPayVendor.find((p) => p.id === payForm.purchase_id) ?? null
-    const vendorName = purchases.find((p) => p.vendor_id === payForm.vendor_id)?.vendors?.name ?? ''
-    const purchaseLabel = selectedPurchase?.ref_no || (selectedPurchase ? `PUR-${String(selectedPurchase.id).slice(0, 8)}` : '')
+    const resolvedMethod = payForm.method === 'other' ? (payForm.sub_method || 'other') : payForm.method
 
-    if (payForm.method === 'cheque') {
-      const rows = cheques
-        .map((c) => ({
-          cheque_date: c.cheque_date,
-          cheque_number: String(c.cheque_number || '').trim(),
-          amount: Number(String(c.amount || '').replace(/,/g, '')),
-        }))
+    let totalAmount = 0
+    let chequeRows = []
+
+    if (resolvedMethod === 'cheque') {
+      chequeRows = cheques
+        .map((c) => {
+          const amount = Number(String(c.amount || '').replace(/,/g, ''))
+          return {
+            cheque_date: c.cheque_date,
+            cheque_number: String(c.cheque_number || '').trim(),
+            bank_code: String(c.bank_code || '').trim(),
+            bank_name: String(c.bank_name || '').trim(),
+            amount,
+          }
+        })
         .filter((c) => c.cheque_date || c.cheque_number || c.amount)
 
-      if (rows.length === 0) {
+      if (chequeRows.length === 0) {
         toast.error('Add at least one cheque')
         return
       }
-      for (const c of rows) {
-        if (!c.cheque_date) { toast.error('Cheque date is required'); return }
-        if (!c.cheque_number) { toast.error('Cheque number is required'); return }
+
+      for (const c of chequeRows) {
+        if (!c.cheque_date) {
+          toast.error('Cheque date is required')
+          return
+        }
+        if (!c.cheque_number) {
+          toast.error('Cheque number is required')
+          return
+        }
         if (!isChequeFormatValid(c.cheque_number)) {
           toast.error('Invalid cheque number format — expected XXXXXX-XXXX-XXX')
           return
         }
-        if (!isApprovedBankCode(extractBankCodeFromCheque(c.cheque_number))) {
+        const code = extractBankCodeFromCheque(c.cheque_number)
+        if (!isApprovedBankCode(code)) {
           toast.error('Invalid bank code in cheque number')
           return
         }
-        if (!c.amount || c.amount <= 0) { toast.error('Cheque amount must be greater than 0'); return }
+        if (!c.amount || c.amount <= 0) {
+          toast.error('Cheque amount must be greater than 0')
+          return
+        }
       }
 
-      setPaySaving(true)
-      const payload = rows.map((c) => ({
-        purchase_id: payForm.purchase_id,
-        amount: c.amount,
-        paid_at: c.cheque_date,
-        method: 'cheque',
-        bank_name: getApprovedBankName(extractBankCodeFromCheque(c.cheque_number)) || null,
-        reference: c.cheque_number,
-        note: payForm.note.trim() || null,
-      }))
-
-      const { data: inserted, error: err } = await supabase.from('purchase_payments').insert(payload).select('id, amount, paid_at, method, reference, created_at')
-      if (err) {
-        toast.error(err.message)
-        setPaySaving(false)
+      // Check for duplicate cheque numbers (in purchase_payments)
+      const chequeNumbers = chequeRows.map((c) => c.cheque_number)
+      const { data: existing } = await supabase
+        .from('purchase_payments')
+        .select('reference')
+        .eq('method', 'cheque')
+        .in('reference', chequeNumbers)
+      if (existing && existing.length > 0) {
+        const dupes = existing.map((e) => e.reference).join(', ')
+        toast.error(`Cheque number already used: ${dupes}`)
         return
+      }
+
+      totalAmount = chequeRows.reduce((s, c) => s + c.amount, 0)
+    } else {
+      totalAmount = Number(String(payForm.amount || '').replace(/,/g, ''))
+      if (!totalAmount || totalAmount <= 0) {
+        toast.error('Enter a valid amount')
+        return
+      }
+    }
+
+    const vendorName =
+      purchases.find((pur) => pur.vendor_id === payForm.vendor_id)?.vendors?.name ??
+      vendorRows.find((r) => r.vendor_id === payForm.vendor_id)?.name ??
+      ''
+
+    setPaySaving(true)
+
+    // Distribute payment across outstanding purchases (oldest first)
+    const sorted = [...purchasesForPayVendor].sort(
+      (a, b) => new Date(a.date ?? a.created_at) - new Date(b.date ?? b.created_at)
+    )
+    let remaining = totalAmount
+    const payments = []
+
+    for (const pur of sorted) {
+      if (remaining <= 0) break
+      const alloc = Math.min(remaining, pur.balance)
+      payments.push({ purchase_id: pur.id, amount: Math.round(alloc * 100) / 100 })
+      remaining -= alloc
+    }
+
+    if (payments.length === 0) {
+      toast.error('No purchases to allocate payment to')
+      setPaySaving(false)
+      return
+    }
+
+    const settlementPurchases = payments
+      .map((p) => {
+        const pur = purchases.find((x) => x.id === p.purchase_id)
+        const purNo = pur?.ref_no ?? ''
+        return purNo ? `PUR-${purNo}` : `PUR-${String(p.purchase_id).slice(0, 8)}`
+      })
+      .filter(Boolean)
+
+    try {
+      if (resolvedMethod === 'cheque') {
+        // Each cheque becomes a separate payment, distributed across purchases
+        const payload = []
+        let chequeRemaining = totalAmount
+        for (const c of chequeRows) {
+          let chequeAlloc = c.amount
+          for (const p of payments) {
+            if (chequeAlloc <= 0) break
+            const alloc = Math.min(chequeAlloc, p.amount)
+            payload.push({
+              purchase_id: p.purchase_id,
+              amount: Math.round(alloc * 100) / 100,
+              paid_at: c.cheque_date,
+              method: 'cheque',
+              bank_name: c.bank_name || null,
+              reference: c.cheque_number,
+              note: payForm.note.trim() || null,
+            })
+            p.amount -= alloc
+            chequeAlloc -= alloc
+          }
+        }
+
+        const { data: inserted, error: err } = await supabase
+          .from('purchase_payments')
+          .insert(payload)
+          .select('id, purchase_id, amount, paid_at, method, bank_name, reference, note, created_at')
+        if (err) throw err
+
+        const totalPaid = (inserted ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0)
+        const balanceAfter = Number(totalOutstanding ?? 0) - totalPaid
+        const firstId = (inserted ?? [])[0]?.id
+        setReceiptData({
+          vendorName,
+          settlement: settlementPurchases,
+          paidAt: chequeRows[0]?.cheque_date || payForm.paid_at,
+          method: 'cheque',
+          paymentNo: firstId ? `PAY-${String(firstId).slice(0, 8)}` : 'PAY',
+          amount: totalPaid,
+          balanceAfter,
+          cheques: chequeRows,
+        })
+        await new Promise((resolve) => requestAnimationFrame(resolve))
+        await downloadReceiptPdf(`Payment-Receipt-${vendorName || 'Vendor'}-${new Date().toISOString().slice(0, 10)}.pdf`)
+      } else {
+        const payload = payments.map((p) => ({
+          purchase_id: p.purchase_id,
+          amount: p.amount,
+          paid_at: payForm.paid_at,
+          method: resolvedMethod,
+          bank_name: resolvedMethod === 'bank' ? (payForm.bank_name || null) : null,
+          reference: payForm.reference.trim() || null,
+          note: payForm.note.trim() || null,
+        }))
+        const { data: inserted, error: err } = await supabase
+          .from('purchase_payments')
+          .insert(payload)
+          .select('id, purchase_id, amount, paid_at, method, bank_name, reference, note, created_at')
+        if (err) throw err
+
+        const totalPaid = (inserted ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0)
+        const balanceAfter = Number(totalOutstanding ?? 0) - totalPaid
+        const firstId = (inserted ?? [])[0]?.id
+        setReceiptData({
+          vendorName,
+          settlement: settlementPurchases,
+          paidAt: payForm.paid_at,
+          method: resolvedMethod,
+          paymentNo: firstId ? `PAY-${String(firstId).slice(0, 8)}` : 'PAY',
+          amount: totalPaid,
+          balanceAfter,
+          bankName: resolvedMethod === 'bank' ? (payForm.bank_name || null) : null,
+          reference: payForm.reference.trim() || null,
+        })
+        await new Promise((resolve) => requestAnimationFrame(resolve))
+        await downloadReceiptPdf(`Payment-Receipt-${vendorName || 'Vendor'}-${new Date().toISOString().slice(0, 10)}.pdf`)
       }
 
       toast.success('Payment saved')
       logAction({ action: 'save_purchase_payment', targetType: 'purchase_payment' })
-
-      const totalPaid = (inserted ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0)
-      const balanceAfter = selectedPurchase ? Number(selectedPurchase.balance ?? 0) - totalPaid : 0
-      const firstId = (inserted ?? [])[0]?.id
-      setReceiptData({
-        vendorName,
-        purchaseLabel,
-        purchaseId: payForm.purchase_id,
-        paidAt: rows[0]?.cheque_date || payForm.paid_at,
-        method: 'cheque',
-        paymentNo: firstId ? `PAY-${String(firstId).slice(0, 8)}` : 'PAY',
-        amount: totalPaid,
-        balanceAfter,
-        cheques: rows,
-      })
-      await new Promise((resolve) => requestAnimationFrame(resolve))
-      await downloadReceiptPdf(`Payment-Receipt-${purchaseLabel || 'Purchase'}.pdf`)
-
-      setPaySaving(false)
-      setPayOpen(false)
-      await load()
-      return
+    } catch (e) {
+      toast.error(e?.message ?? 'Failed to save payment')
     }
-
-    const amount = Number(String(payForm.amount || '').replace(/,/g, ''))
-    if (!amount || amount <= 0) {
-      toast.error('Enter a valid amount')
-      return
-    }
-
-    setPaySaving(true)
-    const { data: inserted, error: err } = await supabase.from('purchase_payments').insert({
-      purchase_id: payForm.purchase_id,
-      amount,
-      paid_at: payForm.paid_at,
-      method: payForm.method,
-      bank_name: payForm.method === 'bank' ? 'Bank' : null,
-      reference: payForm.reference.trim() || null,
-      note: payForm.note.trim() || null,
-    }).select('id, amount, paid_at, method, bank_name, reference, created_at')
-
-    if (err) {
-      toast.error(err.message)
-      setPaySaving(false)
-      return
-    }
-
-    toast.success('Payment saved')
-    logAction({ action: 'save_purchase_payment', targetType: 'purchase_payment' })
-
-    const paymentRow = Array.isArray(inserted) ? inserted[0] : null
-    const balanceAfter = selectedPurchase ? Number(selectedPurchase.balance ?? 0) - amount : 0
-    setReceiptData({
-      vendorName,
-      purchaseLabel,
-      purchaseId: payForm.purchase_id,
-      paidAt: payForm.paid_at,
-      method: payForm.method,
-      paymentNo: paymentRow?.id ? `PAY-${String(paymentRow.id).slice(0, 8)}` : 'PAY',
-      amount,
-      balanceAfter,
-      bankName: payForm.method === 'bank' ? 'Bank' : null,
-      reference: payForm.reference.trim() || null,
-    })
-    await new Promise((resolve) => requestAnimationFrame(resolve))
-    await downloadReceiptPdf(`Payment-Receipt-${purchaseLabel || 'Purchase'}.pdf`)
 
     setPaySaving(false)
-    setPayOpen(false)
     await load()
+    setPayOpen(false)
   }
 
   return (
@@ -416,7 +504,7 @@ export default function PayablesPage() {
                 <div className="flex justify-between"><span className="font-bold">Payment No</span><span>{receiptData.paymentNo}</span></div>
                 <div className="flex justify-between"><span className="font-bold">Date/Time</span><span>{new Date(receiptData.paidAt || Date.now()).toLocaleString()}</span></div>
                 <div className="flex justify-between"><span className="font-bold">Paid For</span><span className="text-right max-w-[45mm]">{receiptData.vendorName || '-'}</span></div>
-                <div className="flex justify-between"><span className="font-bold">Settlement</span><span className="text-right max-w-[45mm]">{receiptData.purchaseLabel || '-'}</span></div>
+                <div className="flex justify-between"><span className="font-bold">Settlement</span><span className="text-right max-w-[45mm]">{(receiptData.settlement ?? []).slice(0, 5).join(', ')}{(receiptData.settlement ?? []).length > 5 ? '...' : ''}</span></div>
               </div>
 
               <div className="mt-2 space-y-1">
@@ -538,7 +626,7 @@ export default function PayablesPage() {
               </tr>
             ) : vendorRows.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-5 py-10 text-slate-400 dark:text-emerald-101/60 text-center">
+                <td colSpan={8} className="px-5 py-10 text-slate-400 dark:text-emerald-100/60 text-center">
                   <FileText size={24} className="mx-auto mb-2 opacity-40 dark:text-emerald-200/30" />
                   No payables found.
                 </td>
@@ -548,9 +636,9 @@ export default function PayablesPage() {
                 <tr key={r.vendor_id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors dark:border-emerald-900/30 dark:hover:bg-emerald-500/5">
                   <td className="px-5 py-3.5">
                     <div className="font-semibold text-slate-900 dark:text-emerald-50">{r.name}</div>
-                    <div className="text-xs text-slate-400 dark:text-emerald-101/60">{r.phone || '—'}</div>
+                    <div className="text-xs text-slate-400 dark:text-emerald-100/60">{r.phone || '—'}</div>
                   </td>
-                  <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-101/70">{r.purchasesCount}</td>
+                  <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-100/70">{r.purchasesCount}</td>
                   <td className="px-5 py-3.5 text-right font-medium text-slate-900 dark:text-emerald-50">{fmt(r.purchased)}</td>
                   <td className="px-5 py-3.5 text-right font-medium text-slate-900 dark:text-emerald-50">{fmt(r.paid)}</td>
                   <td className={`px-5 py-3.5 text-right font-extrabold ${r.balance < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-emerald-50'}`}>{fmt(r.balance)}</td>
@@ -628,13 +716,7 @@ export default function PayablesPage() {
                       <button
                         key={m}
                         type="button"
-                        onClick={() =>
-                          setPayForm((p) => ({
-                            ...p,
-                            method: m,
-                            bank_name: m === 'bank' ? 'Bank' : '',
-                          }))
-                        }
+                        onClick={() => setPayForm((p) => ({ ...p, method: m }))}
                         className={`px-3 py-2 rounded-md text-xs font-bold border transition-colors ${
                           payForm.method === m
                             ? 'bg-slate-900 text-white border-slate-900 dark:bg-emerald-500/15 dark:text-emerald-50 dark:border-emerald-400/20'
@@ -646,6 +728,20 @@ export default function PayablesPage() {
                     ))}
                   </div>
                 </div>
+
+                {payForm.method === 'other' && (
+                  <div className="sm:col-span-2">
+                    <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Type</div>
+                    <select
+                      value={payForm.sub_method || 'other'}
+                      onChange={(e) => setPayForm((p) => ({ ...p, sub_method: e.target.value }))}
+                      className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                    >
+                      <option value="other">Other</option>
+                      <option value="card">Card</option>
+                    </select>
+                  </div>
+                )}
 
                 {payForm.method === 'cheque' && (
                   <div className="sm:col-span-2 space-y-2">
@@ -659,6 +755,8 @@ export default function PayablesPage() {
                             {
                               cheque_date: new Date().toISOString().slice(0, 10),
                               cheque_number: '',
+                              bank_code: '',
+                              bank_name: '',
                               amount: '',
                             },
                           ])
@@ -671,117 +769,182 @@ export default function PayablesPage() {
 
                     <div className="space-y-2">
                       {cheques.map((c, idx) => (
-                        <div key={idx} className="grid grid-cols-1 sm:grid-cols-7 gap-2">
-                          <div className="sm:col-span-2">
-                            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cheque Date</div>
-                            <input
-                              type="date"
-                              value={c.cheque_date}
-                              onChange={(e) =>
-                                setCheques((prev) =>
-                                  prev.map((x, i) => (i === idx ? { ...x, cheque_date: e.target.value } : x))
-                                )
-                              }
-                              className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
-                            />
-                          </div>
-                          <div className="sm:col-span-3">
-                            <ChequeNumberField
-                              value={c.cheque_number}
-                              onChange={({ cheque_number, bank_code, bank_name }) =>
-                                setCheques((prev) =>
-                                  prev.map((x, i) =>
-                                    i === idx
-                                      ? { ...x, cheque_number, bank_code, bank_name: bank_name || '' }
-                                      : x
+                        <div key={idx} className="space-y-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
+                            <div className="sm:col-span-2">
+                              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cheque Date</div>
+                              <input
+                                type="date"
+                                value={c.cheque_date}
+                                onChange={(e) =>
+                                  setCheques((prev) =>
+                                    prev.map((x, i) => (i === idx ? { ...x, cheque_date: e.target.value } : x))
                                   )
-                                )
-                              }
-                            />
+                                }
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-3">
+                              <ChequeNumberField
+                                value={c.cheque_number}
+                                onChange={({ cheque_number, bank_code, bank_name }) =>
+                                  setCheques((prev) =>
+                                    prev.map((x, i) =>
+                                      i === idx
+                                        ? { ...x, cheque_number, bank_code, bank_name: bank_name || '' }
+                                        : x
+                                    )
+                                  )
+                                }
+                              />
+                            </div>
+
+                            <div className="sm:col-span-2">
+                              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cheque Amount</div>
+                              <input
+                                value={c.amount}
+                                onChange={(e) => {
+                                  const raw = e.target.value.replace(/[^0-9.]/g, '')
+                                  const parts = raw.split('.')
+                                  const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+                                  const formatted = parts.length > 1 ? intPart + '.' + parts[1].slice(0, 2) : intPart
+                                  setCheques((prev) => prev.map((x, i) => (i === idx ? { ...x, amount: formatted } : x)))
+                                }}
+                                placeholder="0.00"
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                              />
+                            </div>
                           </div>
-                          <div className="sm:col-span-2">
-                            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Amount</div>
-                            <input
-                              value={c.amount}
-                              onChange={(e) => {
-                                const raw = e.target.value.replace(/[^0-9.]/g, '')
-                                const parts = raw.split('.')
-                                const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-                                const formatted = parts.length > 1 ? intPart + '.' + parts[1].slice(0, 2) : intPart
-                                setCheques((prev) =>
-                                  prev.map((x, i) => (i === idx ? { ...x, amount: formatted } : x))
-                                )
-                              }}
-                              placeholder="0.00"
-                              className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
-                            />
+
+                          <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
+                            <div className="sm:col-span-2">
+                              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Bank Code</div>
+                              <input
+                                readOnly
+                                value={c.bank_code || extractBankCodeFromCheque(c.cheque_number)}
+                                placeholder="From cheque number"
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-sm text-slate-700 dark:text-slate-300"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-5">
+                              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Bank Name</div>
+                              <ChequeBankNameDisplay
+                                chequeNumber={c.cheque_number}
+                                bankCode={c.bank_code}
+                                bankName={c.bank_name || getApprovedBankName(c.bank_code)}
+                              />
+                            </div>
                           </div>
-                          <div className="flex items-end">
-                            {cheques.length > 1 && (
+
+                          <div className="flex justify-end">
+                            {cheques.length > 1 ? (
                               <button
                                 type="button"
                                 onClick={() => setCheques((prev) => prev.filter((_, i) => i !== idx))}
-                                className="px-3 py-2.5 rounded-lg text-xs font-bold border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                className="px-3 py-2 rounded-lg text-xs font-bold border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                               >
                                 Remove
                               </button>
-                            )}
+                            ) : null}
                           </div>
                         </div>
                       ))}
                     </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                        Total Cheque Payment: <span className="font-extrabold text-slate-900 dark:text-white">{fmt(chequeTotals.total)}</span>
+                      </div>
+                      <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 sm:text-right">
+                        Remaining: <span className="font-extrabold text-slate-900 dark:text-white">{fmt(chequeTotals.remaining)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {payForm.method === 'bank' && (
+                  <div className="sm:col-span-2">
+                    <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Bank</div>
+                    <select
+                      value={payForm.bank_name || ''}
+                      onChange={(e) => setPayForm((p) => ({ ...p, bank_name: e.target.value }))}
+                      className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                    >
+                      <option value="">Select bank</option>
+                      {banks.map((b) => (
+                        <option key={b.id} value={`${b.code} - ${b.name}`}>{b.code} - {b.name}{b.branch ? ` (${b.branch})` : ''}</option>
+                      ))}
+                    </select>
                   </div>
                 )}
 
                 <div className="sm:col-span-2">
-                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Purchase</div>
-                  <select
-                    value={payForm.purchase_id}
-                    onChange={(e) => {
-                      const purId = e.target.value
-                      const pur = purchasesForPayVendor.find((p) => p.id === purId)
-                      const bal = pur ? pur.balance : 0
-                      setPayForm((p) => ({
-                        ...p,
-                        purchase_id: purId,
-                        amount: bal > 0 ? bal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '',
-                      }))
-                    }}
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
-                  >
-                    {purchasesForPayVendor.map((pur) => (
-                      <option key={pur.id} value={pur.id}>
-                        PUR-{String(pur.id).slice(0, 8)} — {pur.ref_no || pur.date} — Balance {fmt(pur.balance)}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Outstanding Purchases</div>
+                  {purchasesForPayVendor.length === 0 ? (
+                    <div className="text-xs text-slate-400 py-2">No outstanding purchases</div>
+                  ) : (
+                    <div className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead className="bg-slate-50 dark:bg-slate-800">
+                          <tr>
+                            <th className="text-left px-3 py-1.5 font-semibold text-slate-500 dark:text-slate-400">Purchase</th>
+                            <th className="text-right px-3 py-1.5 font-semibold text-slate-500 dark:text-slate-400">Total</th>
+                            <th className="text-right px-3 py-1.5 font-semibold text-slate-500 dark:text-slate-400">Paid</th>
+                            <th className="text-right px-3 py-1.5 font-semibold text-slate-500 dark:text-slate-400">Balance</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {purchasesForPayVendor.map((pur) => (
+                            <tr key={pur.id} className="border-t border-slate-100 dark:border-slate-700/50">
+                              <td className="px-3 py-1.5 text-slate-900 dark:text-white font-medium">PUR-{pur.ref_no || String(pur.id).slice(0, 8)}</td>
+                              <td className="px-3 py-1.5 text-right text-slate-600 dark:text-slate-300">{fmt(pur.total_amount)}</td>
+                              <td className="px-3 py-1.5 text-right text-slate-600 dark:text-slate-300">{fmt(pur.paid)}</td>
+                              <td className="px-3 py-1.5 text-right font-bold text-slate-900 dark:text-white">{fmt(pur.balance)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot className="bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+                          <tr>
+                            <td colSpan={3} className="px-3 py-1.5 font-bold text-slate-700 dark:text-slate-200 text-right">Total Outstanding</td>
+                            <td className="px-3 py-1.5 text-right font-extrabold text-slate-900 dark:text-white">{fmt(totalOutstanding)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Amount</div>
-                  <input
-                    value={payForm.amount}
-                    onChange={(e) => {
-                      const raw = e.target.value.replace(/[^0-9.]/g, '')
-                      const parts = raw.split('.')
-                      const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-                      const formatted = parts.length > 1 ? intPart + '.' + parts[1].slice(0, 2) : intPart
-                      setPayForm((p) => ({ ...p, amount: formatted }))
-                    }}
-                    placeholder="0.00"
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
-                  />
-                </div>
+                {payForm.method !== 'cheque' ? (
+                  <>
+                    <div>
+                      <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Amount</div>
+                      <input
+                        value={payForm.amount}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/[^0-9.]/g, '')
+                          const parts = raw.split('.')
+                          const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+                          const formatted = parts.length > 1 ? intPart + '.' + parts[1].slice(0, 2) : intPart
+                          setPayForm((p) => ({ ...p, amount: formatted }))
+                        }}
+                        placeholder="0.00"
+                        className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                      />
+                    </div>
 
-                <div>
-                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Reference</div>
-                  <input
-                    value={payForm.reference}
-                    onChange={(e) => setPayForm((p) => ({ ...p, reference: e.target.value }))}
-                    placeholder="Reference"
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
-                  />
-                </div>
+                    <div>
+                      <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Reference</div>
+                      <input
+                        value={payForm.reference}
+                        onChange={(e) => setPayForm((p) => ({ ...p, reference: e.target.value }))}
+                        placeholder={referencePlaceholder}
+                        className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                      />
+                    </div>
+                  </>
+                ) : null}
 
                 <div className="sm:col-span-2">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Note</div>

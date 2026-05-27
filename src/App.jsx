@@ -1,8 +1,11 @@
 import React from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
+import { PermissionsProvider } from './contexts/PermissionsContext'
 import { ToastProvider } from './contexts/ToastContext'
 import ProtectedRoute from './components/ProtectedRoute'
+import PermissionRoute from './components/PermissionRoute'
+import PermissionActiveGuard from './components/PermissionActiveGuard'
 import AppLayout from './layouts/AppLayout'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
@@ -38,54 +41,70 @@ import BackupPage from './pages/BackupPage'
 import AuditLogPage from './pages/AuditLogPage'
 import ChequeAdministrationPage from './pages/ChequeAdministrationPage'
 import BankReconciliationPage from './pages/BankReconciliationPage'
+import UserPrivilegePage from './pages/UserPrivilegePage'
+import BackorderReportPage from './pages/BackorderReportPage'
+
+function P({ module, action = 'view', children }) {
+  return (
+    <PermissionRoute module={module} action={action}>
+      {children}
+    </PermissionRoute>
+  )
+}
 
 export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/login" element={<LoginPage />} />
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/login" element={<LoginPage />} />
 
-        <Route element={<ProtectedRoute />}>
-          <Route element={<AppLayout />}>
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/products" element={<ProductsPage />} />
-            <Route path="/customers" element={<CustomersPage />} />
-            <Route path="/reps" element={<RepsPage />} />
-            <Route path="/invoices" element={<InvoicesPage />} />
-            <Route path="/invoices/:id" element={<InvoiceViewPage />} />
-            <Route path="/invoices/:id/edit" element={<InvoiceEditPage />} />
-            <Route path="/commission" element={<CommissionPage />} />
-            <Route path="/orders" element={<OrdersPage />} />
-            <Route path="/orders/new" element={<OrderCreatePage />} />
-            <Route path="/orders/:id/edit" element={<OrderEditPage />} />
-            <Route path="/orders/:id" element={<OrderViewPage />} />
-            <Route path="/inventory/purchase" element={<PurchasePage />} />
-            <Route path="/inventory/beginning-stock" element={<BeginningStockPage />} />
-            <Route path="/vendors" element={<VendorsPage />} />
-            <Route path="/journals" element={<JournalsPage />} />
-            <Route path="/finance/journal-entry" element={<JournalEntryPage />} />
-            <Route path="/finance/rep-payments" element={<RepPaymentsPage />} />
-            <Route path="/finance/receivables" element={<ReceivablesPage />} />
-            <Route path="/finance/receivables/:customerId" element={<ReceivableCustomerPage />} />
-            <Route path="/finance/payables" element={<PayablesPage />} />
-            <Route path="/finance/payables/:vendorId" element={<PayableVendorPage />} />
-            <Route path="/finance/banks" element={<BanksPage />} />
-            <Route path="/finance/cheques" element={<ChequeAdministrationPage />} />
-            <Route path="/finance/bank-reconciliation" element={<BankReconciliationPage />} />
-            <Route path="/finance/delete-receivable" element={<DeleteReceivablePage />} />
-            <Route path="/finance/delete-payable" element={<DeletePayablePage />} />
-            <Route path="/returns" element={<ReturnsPage />} />
-            <Route path="/returns/new" element={<ReturnCreatePage />} />
-            <Route path="/returns/:id" element={<ReturnViewPage />} />
-            <Route path="/backup" element={<BackupPage />} />
-            <Route path="/audit-log" element={<AuditLogPage />} />
+          <Route element={<ProtectedRoute />}>
+            <Route element={<PermissionsProvider />}>
+              <Route element={<PermissionActiveGuard />}>
+                <Route element={<AppLayout />}>
+                  <Route path="/dashboard" element={<P module="dashboard"><DashboardPage /></P>} />
+                  <Route path="/products" element={<P module="products"><ProductsPage /></P>} />
+                  <Route path="/customers" element={<P module="customers"><CustomersPage /></P>} />
+                  <Route path="/reps" element={<P module="employees"><RepsPage /></P>} />
+                  <Route path="/master-data/user-privileges" element={<P module="user_privileges"><UserPrivilegePage /></P>} />
+                  <Route path="/vendors" element={<P module="vendors"><VendorsPage /></P>} />
+                  <Route path="/journals" element={<P module="journals"><JournalsPage /></P>} />
+                  <Route path="/invoices" element={<P module="invoices"><InvoicesPage /></P>} />
+                  <Route path="/invoices/:id" element={<P module="invoices"><InvoiceViewPage /></P>} />
+                  <Route path="/invoices/:id/edit" element={<P module="invoices" action="edit"><InvoiceEditPage /></P>} />
+                  <Route path="/commission" element={<P module="commission"><CommissionPage /></P>} />
+                  <Route path="/orders" element={<P module="orders"><OrdersPage /></P>} />
+                  <Route path="/orders/new" element={<P module="orders" action="create"><OrderCreatePage /></P>} />
+                  <Route path="/orders/:id/edit" element={<P module="orders" action="edit"><OrderEditPage /></P>} />
+                  <Route path="/orders/:id" element={<P module="orders"><OrderViewPage /></P>} />
+                  <Route path="/inventory/purchase" element={<P module="inventory_purchase"><PurchasePage /></P>} />
+                  <Route path="/inventory/beginning-stock" element={<P module="inventory_beginning_stock"><BeginningStockPage /></P>} />
+                  <Route path="/inventory/backorder-report" element={<P module="products"><BackorderReportPage /></P>} />
+                  <Route path="/finance/journal-entry" element={<P module="finance_journal_entry"><JournalEntryPage /></P>} />
+                  <Route path="/finance/rep-payments" element={<P module="finance_rep_payments"><RepPaymentsPage /></P>} />
+                  <Route path="/finance/receivables" element={<P module="finance_receivables"><ReceivablesPage /></P>} />
+                  <Route path="/finance/receivables/:customerId" element={<P module="finance_receivables"><ReceivableCustomerPage /></P>} />
+                  <Route path="/finance/payables" element={<P module="finance_payables"><PayablesPage /></P>} />
+                  <Route path="/finance/payables/:vendorId" element={<P module="finance_payables"><PayableVendorPage /></P>} />
+                  <Route path="/finance/banks" element={<P module="finance_banks"><BanksPage /></P>} />
+                  <Route path="/finance/cheques" element={<P module="finance_cheques"><ChequeAdministrationPage /></P>} />
+                  <Route path="/finance/bank-reconciliation" element={<P module="finance_bank_reconciliation"><BankReconciliationPage /></P>} />
+                  <Route path="/finance/delete-receivable" element={<P module="finance_delete_receivable"><DeleteReceivablePage /></P>} />
+                  <Route path="/finance/delete-payable" element={<P module="finance_delete_payable"><DeletePayablePage /></P>} />
+                  <Route path="/returns" element={<P module="returns"><ReturnsPage /></P>} />
+                  <Route path="/returns/new" element={<P module="returns" action="create"><ReturnCreatePage /></P>} />
+                  <Route path="/returns/:id" element={<P module="returns"><ReturnViewPage /></P>} />
+                  <Route path="/backup" element={<P module="admin_backup"><BackupPage /></P>} />
+                  <Route path="/audit-log" element={<P module="admin_audit_log"><AuditLogPage /></P>} />
+                </Route>
+              </Route>
+            </Route>
           </Route>
-        </Route>
 
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
-      </Routes>
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
       </ToastProvider>
     </AuthProvider>
   )

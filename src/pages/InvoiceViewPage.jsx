@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import { ArrowLeft, Printer, Download, Trash2, Pencil } from 'lucide-react'
+import PermissionGate from '../components/PermissionGate'
 import logo from '../pictures/logo.jpeg'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
 
@@ -184,22 +185,30 @@ export default function InvoiceViewPage() {
           {location.state?.from ? 'Back to Receivables' : 'Back to Orders & Invoices'}
         </Link>
         <div className="flex items-center gap-2">
-          <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-            <Printer size={15} />
-            Print
-          </button>
-          <button onClick={downloadPdf} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
-            <Download size={15} />
-            Download PDF
-          </button>
-          <Link to={`/invoices/${id}/edit`} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
-            <Pencil size={15} />
-            Edit
-          </Link>
-          <button onClick={onDelete} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">
-            <Trash2 size={15} />
-            Delete
-          </button>
+          <PermissionGate module="invoices" action="print">
+            <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+              <Printer size={15} />
+              Print
+            </button>
+          </PermissionGate>
+          <PermissionGate module="invoices" action="download_pdf">
+            <button onClick={downloadPdf} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
+              <Download size={15} />
+              Download PDF
+            </button>
+          </PermissionGate>
+          <PermissionGate module="invoices" action="edit">
+            <Link to={`/invoices/${id}/edit`} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
+              <Pencil size={15} />
+              Edit
+            </Link>
+          </PermissionGate>
+          <PermissionGate module="invoices" action="delete">
+            <button onClick={onDelete} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">
+              <Trash2 size={15} />
+              Delete
+            </button>
+          </PermissionGate>
         </div>
       </div>
 
@@ -211,7 +220,7 @@ export default function InvoiceViewPage() {
           {/* Header */}
           <div className="px-8 pt-3 pb-2 flex items-start justify-between border-b-2 border-slate-800 dark:border-slate-600">
             <div className="flex items-center gap-4">
-              <img src={logo} alt="Logo" className="h-24 w-24 rounded-lg object-contain" />
+              <img src={logo} alt="Logo" className="h-20 w-20 rounded-lg object-contain" />
               <div>
                 <div className="text-2xl font-bold text-slate-900 dark:text-white leading-tight">Shayan's Kids</div>
                 <div className="text-base font-semibold text-slate-600 dark:text-slate-400">&amp; Toys Store</div>
@@ -277,15 +286,15 @@ export default function InvoiceViewPage() {
                     <td className="px-3 py-1.5 text-right text-slate-900 dark:text-white font-semibold">Rs. {Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                   </tr>
                 ))}
-                {Array.from({ length: Math.max(0, 14 - items.length) }).map((_, i) => (
+                {Array.from({ length: Math.max(0, 6 - items.length) }).map((_, i) => (
                   <tr key={`empty-${i}`} className="border-b border-slate-100 dark:border-slate-700">
-                    <td className="px-3 py-1">&nbsp;</td>
-                    <td className="px-3 py-1"></td>
-                    <td className="px-3 py-1"></td>
-                    <td className="px-3 py-1"></td>
-                    <td className="px-3 py-1"></td>
-                    <td className="px-3 py-1"></td>
-                    <td className="px-3 py-1"></td>
+                    <td className="px-3 py-0.5">&nbsp;</td>
+                    <td className="px-3 py-0.5"></td>
+                    <td className="px-3 py-0.5"></td>
+                    <td className="px-3 py-0.5"></td>
+                    <td className="px-3 py-0.5"></td>
+                    <td className="px-3 py-0.5"></td>
+                    <td className="px-3 py-0.5"></td>
                   </tr>
                 ))}
               </tbody>
@@ -342,9 +351,12 @@ export default function InvoiceViewPage() {
               </div>
             </div>
 
-            <div className="px-8 py-1 border-t-2 border-slate-800 dark:border-slate-600 text-center text-xs text-slate-500 dark:text-slate-400">
-              <div className="font-semibold text-slate-700 dark:text-slate-300">Shayan's Kids &amp; Toys Store</div>
-              <div>shayankidscare@gmail.com</div>
+            <div className="px-8 py-2 border-t-2 border-slate-800 dark:border-slate-600 text-center text-xs text-slate-500 dark:text-slate-400">
+              <div className="flex items-center justify-center gap-2">
+                <span className="font-bold text-slate-900 dark:text-slate-100">Shayan's Kids &amp; Toys Store</span>
+                <span className="text-slate-600 dark:text-slate-400">|</span>
+                <span className="text-slate-700 dark:text-slate-300">shayankidscare@gmail.com</span>
+              </div>
             </div>
           </div>
         </div>

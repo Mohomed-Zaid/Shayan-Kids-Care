@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw, Shield, ScrollText, HandCoins, Landmark, Trash2 } from 'lucide-react'
+import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw, Shield, ScrollText, HandCoins, Landmark, Trash2, UserCog, AlertTriangle } from 'lucide-react'
+import { usePermissions } from '../contexts/PermissionsContext'
+import { NAV_PERMISSION_MAP } from '../lib/permissions'
 import logo from '../pictures/logo.jpeg'
 import { useTheme } from '../contexts/ThemeContext'
 
@@ -28,6 +30,7 @@ const navItems = [
       { to: '/products', label: 'Products', icon: Package },
       { to: '/vendors', label: 'Vendors', icon: Truck },
       { to: '/journals', label: 'Journal', icon: BookOpen },
+      { to: '/master-data/user-privileges', label: 'User Privilege', icon: UserCog },
     ],
   },
   {
@@ -37,6 +40,7 @@ const navItems = [
     children: [
       { to: '/inventory/purchase', label: 'New Purchase', icon: ShoppingCart },
       { to: '/inventory/beginning-stock', label: 'Beginning Stock', icon: Package },
+      { to: '/inventory/backorder-report', label: 'Backorder Report', icon: AlertTriangle },
     ],
   },
   {
@@ -89,6 +93,7 @@ function usePageTitle() {
     if (path.startsWith('/finance/cheques')) return 'Cheque Administration'
     if (path.startsWith('/finance/bank-reconciliation')) return 'Bank Reconciliation'
     if (path.startsWith('/finance')) return 'Finance'
+    if (path.startsWith('/master-data/user-privileges')) return 'User Privilege'
     if (path.startsWith('/reps')) return 'Employees'
     if (path === '/returns/new') return 'New Return'
     if (path.startsWith('/returns/') && path.endsWith('/edit')) return 'Edit Return'
@@ -100,6 +105,7 @@ function usePageTitle() {
     if (path.startsWith('/admin')) return 'Admin'
     if (path.startsWith('/inventory/purchase')) return 'New Purchase'
     if (path.startsWith('/inventory/beginning-stock')) return 'Beginning Stock'
+    if (path.startsWith('/inventory/backorder-report')) return 'Backorder Report'
     if (path.startsWith('/inventory')) return 'Inventory'
     if (path === '/orders/new') return 'Create Order'
     if (path.endsWith('/edit') && path.startsWith('/orders/')) return 'Edit Order'
@@ -114,16 +120,43 @@ export default function AppLayout() {
   const navigate = useNavigate()
   const { signOut, user } = useAuth()
 
+  const { can, loading: permLoading, record: privilegeRecord } = usePermissions()
+
   const displayName = (() => {
     const email = user?.email ?? ''
     const mapped = USER_MAP[email]
+    if (privilegeRecord?.display_name) {
+      return {
+        name: privilegeRecord.display_name,
+        role: privilegeRecord.is_super_admin ? 'Super Admin' : (privilegeRecord.user_type || mapped?.role || 'User'),
+      }
+    }
     return mapped ?? { name: email.split('@')[0], role: 'User' }
   })()
-
-  const isOwner = user?.email === 'shayankidscare@gmail.com'
   const { theme, toggleTheme } = useTheme()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [openGroups, setOpenGroups] = useState({})
+
+  const canViewNav = (to) => {
+    if (permLoading) return true
+    const mod = NAV_PERMISSION_MAP[to]
+    if (!mod) return true
+    return can(mod, 'view')
+  }
+
+  const visibleNavItems = useMemo(() => {
+    return navItems
+      .map((item) => {
+        if (item.children) {
+          const children = item.children.filter((c) => canViewNav(c.to))
+          if (children.length === 0) return null
+          return { ...item, children }
+        }
+        if (!item.to || !canViewNav(item.to)) return null
+        return item
+      })
+      .filter(Boolean)
+  }, [can, permLoading])
 
   const onLogout = async () => {
     await signOut()
@@ -154,7 +187,7 @@ export default function AppLayout() {
         </div>
 
         <nav className="flex-1 p-3 space-y-1">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             if (item.children) {
               const Icon = item.icon
               const isOpen = !!openGroups[item.key]

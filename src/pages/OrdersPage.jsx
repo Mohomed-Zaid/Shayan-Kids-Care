@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
+import PermissionGate from '../components/PermissionGate'
 import { pressDateISO, formatLocalDate } from '../lib/localDate'
 import { Plus, Eye, ShoppingCart, CheckCircle, XCircle, ArrowRightLeft, Trash2, FileText, Filter, Pencil, Search, ArrowUpDown, Truck } from 'lucide-react'
 
@@ -268,10 +269,12 @@ export default function OrdersPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Link to="/orders/new" className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
-            <Plus size={16} />
-            Create Order
-          </Link>
+          <PermissionGate module="orders" action="create">
+            <Link to="/orders/new" className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
+              <Plus size={16} />
+              Create Order
+            </Link>
+          </PermissionGate>
         </div>
       </div>
 
@@ -424,10 +427,12 @@ export default function OrdersPage() {
                           {o.status === 'delivered' ? (
                             <span className="text-slate-600 dark:text-emerald-100/70 font-medium">{formatLocalDate(o.delivered_at)}</span>
                           ) : (o.status === 'invoiced' || o.status === 'converted') ? (
-                            <button onClick={() => onDeliver(o)} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors border border-green-200 dark:border-green-800" title="Mark as Delivered">
-                              <Truck size={13} />
-                              Deliver
-                            </button>
+                            <PermissionGate module="orders" action="deliver">
+                              <button onClick={() => onDeliver(o)} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300 hover:bg-green-100 dark:hover:bg-green-900/50 transition-colors border border-green-200 dark:border-green-800" title="Mark as Delivered">
+                                <Truck size={13} />
+                                Deliver
+                              </button>
+                            </PermissionGate>
                           ) : (
                             <span className="text-slate-300 dark:text-slate-600">—</span>
                           )}
@@ -439,33 +444,45 @@ export default function OrdersPage() {
                             <Eye size={15} />
                           </Link>
                           {(o.status === 'pending' || o.status === 'confirmed') && (
-                            <Link to={`/orders/${o.id}/edit`} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Edit">
-                              <Pencil size={15} />
-                            </Link>
+                            <PermissionGate module="orders" action="edit">
+                              <Link to={`/orders/${o.id}/edit`} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Edit">
+                                <Pencil size={15} />
+                              </Link>
+                            </PermissionGate>
                           )}
                           {o.status === 'pending' && (
-                            <button onClick={() => onConfirm(o)} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Confirm">
-                              <CheckCircle size={15} />
-                            </button>
+                            <PermissionGate module="orders" action="approve">
+                              <button onClick={() => onConfirm(o)} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors" title="Confirm">
+                                <CheckCircle size={15} />
+                              </button>
+                            </PermissionGate>
                           )}
                           {o.status === 'confirmed' && (
-                            <button onClick={() => onConvert(o)} className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors" title="Convert to Invoice">
-                              <ArrowRightLeft size={15} />
-                            </button>
+                            <PermissionGate module="orders" action="convert_to_invoice">
+                              <button onClick={() => onConvert(o)} className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors" title="Convert to Invoice">
+                                <ArrowRightLeft size={15} />
+                              </button>
+                            </PermissionGate>
                           )}
                           {((o.status === 'invoiced' || o.status === 'converted' || o.status === 'delivered') && o.invoice_id) && (
-                            <Link to={`/invoices/${o.invoice_id}`} className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors" title="View Invoice">
-                              <FileText size={15} />
-                            </Link>
+                            <PermissionGate module="invoices" action="view">
+                              <Link to={`/invoices/${o.invoice_id}`} className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors" title="View Invoice">
+                                <FileText size={15} />
+                              </Link>
+                            </PermissionGate>
                           )}
                           {(o.status === 'pending' || o.status === 'confirmed') && (
-                            <button onClick={() => onCancel(o)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Cancel">
-                              <XCircle size={15} />
-                            </button>
+                            <PermissionGate module="orders" action="delete">
+                              <button onClick={() => onCancel(o)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Cancel">
+                                <XCircle size={15} />
+                              </button>
+                            </PermissionGate>
                           )}
-                          <button onClick={() => onDelete(o)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete">
-                            <Trash2 size={15} />
-                          </button>
+                          <PermissionGate module="orders" action="delete">
+                            <button onClick={() => onDelete(o)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors" title="Delete">
+                              <Trash2 size={15} />
+                            </button>
+                          </PermissionGate>
                         </div>
                       </td>
                     </tr>

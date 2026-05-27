@@ -8,6 +8,7 @@ import { pressDateISO, formatLocalDate } from '../lib/localDate'
 import { ArrowLeft, CheckCircle, XCircle, ArrowRightLeft, ShoppingCart, Printer, Download, Trash2, FileText, Pencil, Truck } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
+import PermissionGate from '../components/PermissionGate'
 
 const statusConfig = {
   pending: { label: 'Pending', bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-700' },
@@ -138,23 +139,9 @@ export default function OrderViewPage() {
     setConverting(true)
 
     try {
-      // Check stock availability
+      // Get current products for stock update
       const { data: products } = await supabase.from('products').select('id, name, stock')
       const productMap = new Map((products ?? []).map(p => [p.id, p]))
-
-      const stockErrors = []
-      for (const it of items) {
-        const p = productMap.get(it.product_id)
-        if (!p || it.quantity > (p.stock ?? 0)) {
-          stockErrors.push(`${p?.name ?? 'Product'}: requested ${it.quantity}, only ${p?.stock ?? 0} in stock`)
-        }
-      }
-
-      if (stockErrors.length > 0) {
-        toast.error('Insufficient stock: ' + stockErrors.join('; '))
-        setConverting(false)
-        return
-      }
 
       // Create invoice — carry VAT from order
       const orderVatRate = Number(order.vat_rate ?? 0)
@@ -187,10 +174,10 @@ export default function OrderViewPage() {
       const { error: iiErr } = await supabase.from('invoice_items').insert(invoiceItems)
       if (iiErr) { toast.error(iiErr.message); setConverting(false); return }
 
-      // Deduct stock
+      // Deduct stock (allow negative)
       const stockUpdates = items.map(it => {
         const p = productMap.get(it.product_id)
-        const newStock = Math.max(0, (p?.stock ?? 0) - it.quantity)
+        const newStock = (p?.stock ?? 0) - it.quantity
         return supabase.from('products').update({ stock: newStock }).eq('id', it.product_id)
       })
       await Promise.all(stockUpdates)
@@ -275,10 +262,12 @@ export default function OrderViewPage() {
         </Link>
         <div className="flex items-center gap-2">
           {(order.status === 'pending' || order.status === 'confirmed') && (
-            <Link to={`/orders/${id}/edit`} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
-              <Pencil size={15} />
-              Edit
-            </Link>
+            <PermissionGate module="orders" action="edit">
+              <Link to={`/orders/${id}/edit`} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                <Pencil size={15} />
+                Edit
+              </Link>
+            </PermissionGate>
           )}
           <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
             <Printer size={15} />
@@ -289,39 +278,51 @@ export default function OrderViewPage() {
             Download PDF
           </button>
           {order.status === 'pending' && (
-            <button onClick={onConfirm} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
-              <CheckCircle size={15} />
-              Confirm
-            </button>
+            <PermissionGate module="orders" action="approve">
+              <button onClick={onConfirm} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
+                <CheckCircle size={15} />
+                Confirm
+              </button>
+            </PermissionGate>
           )}
           {order.status === 'confirmed' && (
-            <button onClick={onConvert} disabled={converting} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm">
-              <ArrowRightLeft size={15} />
-              {converting ? 'Invoicing...' : 'Convert to Invoice'}
-            </button>
+            <PermissionGate module="orders" action="convert_to_invoice">
+              <button onClick={onConvert} disabled={converting} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors shadow-sm">
+                <ArrowRightLeft size={15} />
+                {converting ? 'Invoicing...' : 'Convert to Invoice'}
+              </button>
+            </PermissionGate>
           )}
           {(order.status === 'invoiced' || order.status === 'converted') && order.invoice_id && (
             <>
-              <button onClick={onDeliver} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition-colors shadow-sm">
-                <Truck size={15} />
-                Mark Delivered
-              </button>
-              <Link to={`/invoices/${order.invoice_id}`} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm">
-                <FileText size={15} />
-                View Invoice
-              </Link>
+              <PermissionGate module="orders" action="deliver">
+                <button onClick={onDeliver} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-green-600 text-white hover:bg-green-700 transition-colors shadow-sm">
+                  <Truck size={15} />
+                  Mark Delivered
+                </button>
+              </PermissionGate>
+              <PermissionGate module="invoices" action="view">
+                <Link to={`/invoices/${order.invoice_id}`} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm">
+                  <FileText size={15} />
+                  View Invoice
+                </Link>
+              </PermissionGate>
             </>
           )}
           {(order.status === 'pending' || order.status === 'confirmed') && (
-            <button onClick={onCancel} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">
-              <XCircle size={15} />
-              Cancel
-            </button>
+            <PermissionGate module="orders" action="delete">
+              <button onClick={onCancel} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">
+                <XCircle size={15} />
+                Cancel
+              </button>
+            </PermissionGate>
           )}
-          <button onClick={onDelete} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">
-            <Trash2 size={15} />
-            Delete
-          </button>
+          <PermissionGate module="orders" action="delete">
+            <button onClick={onDelete} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">
+              <Trash2 size={15} />
+              Delete
+            </button>
+          </PermissionGate>
         </div>
       </div>
 
@@ -333,7 +334,7 @@ export default function OrderViewPage() {
           {/* Header */}
           <div className="px-8 pt-3 pb-2 flex items-start justify-between border-b-2 border-slate-800 dark:border-slate-600">
             <div className="flex items-center gap-4">
-              <img src={logo} alt="Logo" className="h-24 w-24 rounded-lg object-contain" />
+              <img src={logo} alt="Logo" className="h-20 w-20 rounded-lg object-contain" />
               <div>
                 <div className="text-2xl font-bold text-slate-900 dark:text-white leading-tight">Shayan's Kids</div>
                 <div className="text-base font-semibold text-slate-600 dark:text-slate-400">&amp; Toys Store</div>
@@ -407,15 +408,15 @@ export default function OrderViewPage() {
                     <td className="px-3 py-1.5 text-right text-slate-900 dark:text-white font-semibold">Rs. {Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                   </tr>
                 ))}
-                {Array.from({ length: Math.max(0, 14 - items.length) }).map((_, i) => (
+                {Array.from({ length: Math.max(0, 6 - items.length) }).map((_, i) => (
                   <tr key={`empty-${i}`} className="border-b border-slate-100 dark:border-slate-700">
-                    <td className="px-3 py-1">&nbsp;</td>
-                    <td className="px-3 py-1"></td>
-                    <td className="px-3 py-1"></td>
-                    <td className="px-3 py-1"></td>
-                    <td className="px-3 py-1"></td>
-                    <td className="px-3 py-1"></td>
-                    <td className="px-3 py-1"></td>
+                    <td className="px-3 py-0.5">&nbsp;</td>
+                    <td className="px-3 py-0.5"></td>
+                    <td className="px-3 py-0.5"></td>
+                    <td className="px-3 py-0.5"></td>
+                    <td className="px-3 py-0.5"></td>
+                    <td className="px-3 py-0.5"></td>
+                    <td className="px-3 py-0.5"></td>
                   </tr>
                 ))}
               </tbody>
@@ -468,10 +469,13 @@ export default function OrderViewPage() {
               </div>
             </div>
 
-            <div className="px-8 py-1 border-t-2 border-slate-800 dark:border-slate-600 text-center text-xs text-slate-500 dark:text-slate-400">
-              <div className="font-semibold text-slate-700 dark:text-slate-300">Shayan's Kids &amp; Toys Store</div>
+            <div className="px-8 py-2 border-t-2 border-slate-800 dark:border-slate-600 text-center text-xs text-slate-500 dark:text-slate-400">
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <span className="font-bold text-slate-900 dark:text-slate-100">Shayan's Kids &amp; Toys Store</span>
+                <span className="text-slate-600 dark:text-slate-400">|</span>
+                <span className="text-slate-700 dark:text-slate-300">shayankidscare@gmail.com</span>
+              </div>
               <div>{order?.payment_type === 'cash' ? 'Cash Order — Payment received.' : 'Credit Order — Total due in 30 days only.'}</div>
-              <div>shayankidscare@gmail.com</div>
             </div>
           </div>
         </div>

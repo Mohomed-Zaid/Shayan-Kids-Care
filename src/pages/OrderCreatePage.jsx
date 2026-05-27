@@ -126,19 +126,7 @@ export default function OrderCreatePage() {
       return
     }
 
-    // Check stock availability
-    const stockErrors = []
-    for (const l of cleanedLines) {
-      const product = productById.get(l.product_id)
-      const available = product?.stock ?? 0
-      if (l.quantity > available) {
-        stockErrors.push(`${product?.name ?? 'Product'}: requested ${l.quantity}, only ${available} in stock`)
-      }
-    }
-    if (stockErrors.length > 0) {
-      setError('Insufficient stock: ' + stockErrors.join('; '))
-      return
-    }
+
 
     setSaving(true)
     try {

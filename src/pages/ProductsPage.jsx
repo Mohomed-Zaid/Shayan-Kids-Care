@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { Plus, Pencil, Trash2, X, Package, AlertTriangle, Search, ArrowUpDown, Filter, Printer } from 'lucide-react'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
-import { useAuth } from '../contexts/AuthContext'
+import PermissionGate from '../components/PermissionGate'
 
 function ProductForm({ initialValue, onCancel, onSave }) {
   const [name, setName] = useState(initialValue?.name ?? '')
@@ -78,7 +78,6 @@ function ProductForm({ initialValue, onCancel, onSave }) {
               <label className="block text-sm font-medium text-slate-700">Stock</label>
               <input
                 type="number"
-                min="0"
                 value={stock}
                 onChange={(e) => setStock(e.target.value)}
                 className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
@@ -135,8 +134,6 @@ function ProductForm({ initialValue, onCancel, onSave }) {
 }
 
 export default function ProductsPage() {
-  const { user } = useAuth()
-  const canEdit = user?.email === 'zaidn2848@gmail.com'
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -292,12 +289,12 @@ export default function ProductsPage() {
             <Printer size={16} />
             Print
           </button>
-          {canEdit && (
-          <button onClick={onAdd} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
-            <Plus size={16} />
-            Add Product
-          </button>
-          )}
+          <PermissionGate module="products" action="create">
+            <button onClick={onAdd} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
+              <Plus size={16} />
+              Add Product
+            </button>
+          </PermissionGate>
         </div>
       </div>
 
@@ -379,12 +376,36 @@ export default function ProductsPage() {
                   </td>
                   <td className="px-5 py-3.5 font-medium text-slate-900 dark:text-white">{Number(row.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                   <td className="px-5 py-3.5">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
-                      (row.stock ?? 0) <= 0 ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300' : (row.stock ?? 0) <= 5 ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300' : 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300'
-                    }`}>
-                      {(row.stock ?? 0) <= 0 && <AlertTriangle size={10} />}
-                      {row.stock ?? 0}
-                    </span>
+                    {(() => {
+                      const stock = Number(row.stock ?? 0)
+                      if (stock < 0) {
+                        return (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
+                            <AlertTriangle size={10} />
+                            Backorder: {Math.abs(stock)} units needed
+                          </span>
+                        )
+                      } else if (stock === 0) {
+                        return (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
+                            <AlertTriangle size={10} />
+                            Out of Stock
+                          </span>
+                        )
+                      } else if (stock <= 5) {
+                        return (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
+                            {stock}
+                          </span>
+                        )
+                      } else {
+                        return (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300">
+                            {stock}
+                          </span>
+                        )
+                      }
+                    })()}
                   </td>
                   <td className="px-5 py-3.5">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${statusBadge(row.status)}`}>
@@ -393,16 +414,16 @@ export default function ProductsPage() {
                   </td>
                   <td className="px-5 py-3.5 text-right no-print">
                     <div className="inline-flex gap-1">
-                      {canEdit ? (
-                      <button onClick={() => onEdit(row)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" title="Edit">
-                        <Pencil size={15} />
-                      </button>
-                      ) : null}
-                      {canEdit ? (
-                      <button onClick={() => onDelete(row)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors" title="Delete">
-                        <Trash2 size={15} />
-                      </button>
-                      ) : null}
+                      <PermissionGate module="products" action="edit">
+                        <button onClick={() => onEdit(row)} className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors" title="Edit">
+                          <Pencil size={15} />
+                        </button>
+                      </PermissionGate>
+                      <PermissionGate module="products" action="delete">
+                        <button onClick={() => onDelete(row)} className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors" title="Delete">
+                          <Trash2 size={15} />
+                        </button>
+                      </PermissionGate>
                     </div>
                   </td>
                 </tr>
