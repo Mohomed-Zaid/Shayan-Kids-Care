@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { usePermissions } from '../contexts/PermissionsContext'
 import { logAction } from '../lib/auditLog'
 import {
   areChequeRowsValid,
@@ -12,6 +13,7 @@ import {
 } from '../lib/chequeValidation'
 import ChequeNumberField, { ChequeBankNameDisplay } from '../components/ChequeNumberField'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
+import ControlledDateField from '../components/ControlledDateField'
 import { Search, Eye, FileText, Plus } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 
@@ -19,6 +21,7 @@ const fmt = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimum
 
 export default function PayablesPage() {
   const toast = useToast()
+  const { isSuperAdmin } = usePermissions()
 
   const receiptRef = useRef(null)
 
@@ -368,6 +371,9 @@ export default function PayablesPage() {
       ''
 
     setPaySaving(true)
+    
+    const today = new Date().toISOString().split('T')[0]
+    const effectivePaidAt = isSuperAdmin ? payForm.paid_at : today
 
     // Distribute payment across outstanding purchases (oldest first)
     const sorted = [...purchasesForPayVendor].sort(
@@ -446,7 +452,7 @@ export default function PayablesPage() {
         const payload = payments.map((p) => ({
           purchase_id: p.purchase_id,
           amount: p.amount,
-          paid_at: payForm.paid_at,
+          paid_at: effectivePaidAt,
           method: resolvedMethod,
           bank_name: resolvedMethod === 'bank' ? (payForm.bank_name || null) : null,
           reference: payForm.reference.trim() || null,
@@ -699,15 +705,11 @@ export default function PayablesPage() {
 
             <div className="p-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Payment Date</div>
-                  <input
-                    type="date"
-                    value={payForm.paid_at}
-                    onChange={(e) => setPayForm((p) => ({ ...p, paid_at: e.target.value }))}
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
-                  />
-                </div>
+                <ControlledDateField
+                  label="Payment Date"
+                  value={payForm.paid_at}
+                  onChange={(newDate) => setPayForm((p) => ({ ...p, paid_at: newDate }))}
+                />
 
                 <div className="sm:col-span-2">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Method</div>

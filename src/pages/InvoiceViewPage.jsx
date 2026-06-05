@@ -11,6 +11,10 @@ import CompanyPhoneLines from '../components/CompanyPhoneLines'
 
 export default function InvoiceViewPage() {
   const { id } = useParams()
+
+  useEffect(() => {
+    document.title = "Invoice | Shayan's Kids"
+  }, [])
   const navigate = useNavigate()
   const location = useLocation()
   const toast = useToast()

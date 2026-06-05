@@ -135,6 +135,10 @@ function ProductForm({ initialValue, onCancel, onSave }) {
 
 export default function ProductsPage() {
   const [rows, setRows] = useState([])
+
+  useEffect(() => {
+    document.title = "Products | Shayan's Kids"
+  }, [])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 

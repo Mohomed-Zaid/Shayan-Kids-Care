@@ -28,6 +28,10 @@ const statusTabs = [
 export default function OrdersPage() {
   const VAT_RATE = 0.18
 
+  useEffect(() => {
+    document.title = "Orders | Shayan's Kids"
+  }, [])
+
   const [orders, setOrders] = useState([])
   const [invoices, setInvoices] = useState([])
   const [loading, setLoading] = useState(true)

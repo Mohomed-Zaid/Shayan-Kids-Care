@@ -67,6 +67,10 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const { dashboardWidgets } = usePermissions()
 
+  useEffect(() => {
+    document.title = "Dashboard | Shayan's Kids"
+  }, [])
+
   const displayName = (() => {
     const email = user?.email ?? ''
     const USER_MAP = {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Baby, HeartHandshake, Sparkles, PhoneCall, MapPin, Mail, Moon, Sun } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
@@ -32,6 +32,10 @@ export default function HomePage() {
   const [shopName, setShopName] = useState('')
   const [phone, setPhone] = useState('')
   const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    document.title = "Home | Shayan's Kids"
+  }, [])
 
   const onSendEmail = () => {
     const subject = `Wholesale Inquiry${shopName ? ` - ${shopName}` : ''}`

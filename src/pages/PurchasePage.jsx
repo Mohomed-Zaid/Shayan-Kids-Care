@@ -2,11 +2,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import html2pdf from 'html2pdf.js'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { usePermissions } from '../contexts/PermissionsContext'
 import { logAction } from '../lib/auditLog'
 import { Plus, Search, Trash2, Save, AlertTriangle, X } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 import { companyPhonesHtml } from '../lib/companyInfo'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
+import ControlledDateField from '../components/ControlledDateField'
 
 const fmt = (val) => `Rs. ${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
@@ -165,6 +167,7 @@ const stripCommas = (val) => String(val).replace(/,/g, '')
 
 export default function PurchasePage() {
   const toast = useToast()
+  const { isSuperAdmin } = usePermissions()
   const productSearchRef = React.useRef(null)
   const grnRef = useRef(null)
 
@@ -413,11 +416,14 @@ export default function PurchasePage() {
       return
     }
 
+    const today = new Date().toISOString().split('T')[0]
+    const effectiveDate = isSuperAdmin ? date : today
+
     setSaving(true)
     try {
       const { data: purchase, error: pErr } = await supabase
         .from('purchases')
-        .insert({ vendor_id: vendorId, date, ref_no: refNo.trim() || null, type, payment_type: paymentType, total_amount: totals.totalAmount })
+        .insert({ vendor_id: vendorId, date: effectiveDate, ref_no: refNo.trim() || null, type, payment_type: paymentType, total_amount: totals.totalAmount })
         .select('*')
         .single()
 
@@ -626,12 +632,10 @@ export default function PurchasePage() {
             </div>
 
             <div className="md:col-span-3">
-              <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-emerald-100/70">Date</div>
-              <input
-                type="date"
+              <ControlledDateField
+                label="Date"
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 dark:border-emerald-900/60 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-emerald-50"
+                onChange={setDate}
               />
             </div>
 

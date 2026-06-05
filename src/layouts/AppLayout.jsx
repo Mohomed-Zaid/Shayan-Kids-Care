@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw, Shield, ScrollText, HandCoins, Landmark, Trash2, UserCog, AlertTriangle } from 'lucide-react'
+import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw, Shield, ScrollText, HandCoins, Landmark, Trash2, UserCog, AlertTriangle, MessageSquare } from 'lucide-react'
 import { usePermissions } from '../contexts/PermissionsContext'
 import { NAV_PERMISSION_MAP } from '../lib/permissions'
 import logo from '../pictures/logo.jpeg'
@@ -60,6 +60,7 @@ const navItems = [
     ],
   },
   { to: '/orders', label: 'Orders & Invoices', icon: ShoppingCart },
+  { to: '/sms-service', label: 'SMS Service', icon: MessageSquare },
   { to: '/returns', label: 'Returns', icon: RotateCcw },
   { to: '/commission', label: 'Commission', icon: Calculator },
   {
@@ -78,39 +79,44 @@ function usePageTitle() {
 
   return useMemo(() => {
     const path = location.pathname
+    if (path.startsWith('/dashboard')) return 'Dashboard'
     if (path.startsWith('/products')) return 'Products'
     if (path.startsWith('/customers')) return 'Customers'
-
-    if (path.endsWith('/edit')) return 'Edit Invoice'
-    if (path.startsWith('/invoices/')) return 'Invoice'
-    if (path.startsWith('/invoices')) return 'Orders & Invoices'
-    if (path.startsWith('/vendors')) return 'Vendors'
-    if (path.startsWith('/journals')) return 'Journal'
-    if (path.startsWith('/finance/journal-entry')) return 'Journal Entry'
-    if (path.startsWith('/finance/rep-payments')) return 'Rep Payments'
-    if (path.startsWith('/finance/receivables')) return 'Receivables'
-    if (path.startsWith('/finance/payables')) return 'Payables'
-    if (path.startsWith('/finance/cheques')) return 'Cheque Administration'
-    if (path.startsWith('/finance/bank-reconciliation')) return 'Bank Reconciliation'
-    if (path.startsWith('/finance')) return 'Finance'
-    if (path.startsWith('/master-data/user-privileges')) return 'User Privilege'
     if (path.startsWith('/reps')) return 'Employees'
-    if (path === '/returns/new') return 'New Return'
-    if (path.startsWith('/returns/') && path.endsWith('/edit')) return 'Edit Return'
-    if (path.startsWith('/returns/')) return 'Return Note'
-    if (path.startsWith('/returns')) return 'Returns'
+    if (path.startsWith('/master-data/user-privileges')) return 'User Privilege'
+    if (path.startsWith('/vendors')) return 'Vendors'
+    if (path.startsWith('/journals')) return 'Journals'
     if (path.startsWith('/commission')) return 'Commission'
-    if (path.startsWith('/backup')) return 'Backup & Safety'
-    if (path.startsWith('/audit-log')) return 'Audit Log'
-    if (path.startsWith('/admin')) return 'Admin'
+    if (path.startsWith('/sms-service')) return 'SMS Service'
     if (path.startsWith('/inventory/purchase')) return 'New Purchase'
     if (path.startsWith('/inventory/beginning-stock')) return 'Beginning Stock'
     if (path.startsWith('/inventory/backorder-report')) return 'Backorder Report'
     if (path.startsWith('/inventory')) return 'Inventory'
+    if (path.startsWith('/finance/journal-entry')) return 'Journal Entry'
+    if (path.startsWith('/finance/rep-payments')) return 'Rep Payments'
+    if (path.startsWith('/finance/receivables/')) return 'Customer Receivable'
+    if (path.startsWith('/finance/receivables')) return 'Receivables'
+    if (path.startsWith('/finance/payables/')) return 'Vendor Payable'
+    if (path.startsWith('/finance/payables')) return 'Payables'
+    if (path.startsWith('/finance/banks')) return 'Banks'
+    if (path.startsWith('/finance/cheques')) return 'Cheque Administration'
+    if (path.startsWith('/finance/bank-reconciliation')) return 'Bank Reconciliation'
+    if (path.startsWith('/finance/delete-receivable')) return 'Delete Receivable'
+    if (path.startsWith('/finance/delete-payable')) return 'Delete Payable'
+    if (path.startsWith('/finance')) return 'Finance'
     if (path === '/orders/new') return 'Create Order'
-    if (path.endsWith('/edit') && path.startsWith('/orders/')) return 'Edit Order'
+    if (path.startsWith('/orders/') && path.endsWith('/edit')) return 'Edit Order'
     if (path.startsWith('/orders/')) return 'Order'
-    if (path.startsWith('/orders')) return 'Orders & Invoices'
+    if (path.startsWith('/orders')) return 'Orders'
+    if (path.startsWith('/invoices/') && path.endsWith('/edit')) return 'Edit Invoice'
+    if (path.startsWith('/invoices/')) return 'Invoice'
+    if (path.startsWith('/invoices')) return 'Invoices'
+    if (path === '/returns/new') return 'New Return'
+    if (path.startsWith('/returns/') && path.endsWith('/edit')) return 'Edit Return'
+    if (path.startsWith('/returns/')) return 'Return Note'
+    if (path.startsWith('/returns')) return 'Returns'
+    if (path.startsWith('/backup')) return 'Backup & Safety'
+    if (path.startsWith('/audit-log')) return 'Audit Log'
     return 'Dashboard'
   }, [location.pathname])
 }
@@ -119,6 +125,10 @@ export default function AppLayout() {
   const title = usePageTitle()
   const navigate = useNavigate()
   const { signOut, user } = useAuth()
+
+  useEffect(() => {
+    document.title = `${title} | Shayan's Kids`
+  }, [title])
 
   const { can, loading: permLoading, record: privilegeRecord } = usePermissions()
 

@@ -43,6 +43,7 @@ import ChequeAdministrationPage from './pages/ChequeAdministrationPage'
 import BankReconciliationPage from './pages/BankReconciliationPage'
 import UserPrivilegePage from './pages/UserPrivilegePage'
 import BackorderReportPage from './pages/BackorderReportPage'
+import SMSServicePage from './pages/SMSServicePage'
 
 function P({ module, action = 'view', children }) {
   return (
@@ -79,6 +80,7 @@ export default function App() {
                   <Route path="/orders/new" element={<P module="orders" action="create"><OrderCreatePage /></P>} />
                   <Route path="/orders/:id/edit" element={<P module="orders" action="edit"><OrderEditPage /></P>} />
                   <Route path="/orders/:id" element={<P module="orders"><OrderViewPage /></P>} />
+                  <Route path="/sms-service" element={<P module="dashboard"><SMSServicePage /></P>} />
                   <Route path="/inventory/purchase" element={<P module="inventory_purchase"><PurchasePage /></P>} />
                   <Route path="/inventory/beginning-stock" element={<P module="inventory_beginning_stock"><BeginningStockPage /></P>} />
                   <Route path="/inventory/backorder-report" element={<P module="products"><BackorderReportPage /></P>} />

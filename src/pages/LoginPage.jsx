@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { AlertTriangle, Eye, EyeOff } from 'lucide-react'
@@ -14,6 +14,10 @@ export default function LoginPage() {
   const [showPw, setShowPw] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+
+  useEffect(() => {
+    document.title = "Login | Shayan's Kids"
+  }, [])
 
   const force = useMemo(() => {
     const params = new URLSearchParams(location.search || '')

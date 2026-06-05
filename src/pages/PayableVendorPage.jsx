@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { usePermissions } from '../contexts/PermissionsContext'
 import { logAction } from '../lib/auditLog'
 import {
   areChequeRowsValid,
@@ -14,12 +15,14 @@ import ChequeNumberField from '../components/ChequeNumberField'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
 import { ArrowLeft, Plus, FileText, Trash2, Eye, Pencil, Save, X } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
+import ControlledDateField from '../components/ControlledDateField'
 
 const fmt = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
 export default function PayableVendorPage() {
   const { vendorId } = useParams()
   const toast = useToast()
+  const { isSuperAdmin } = usePermissions()
 
   const receiptRef = useRef(null)
 
@@ -361,14 +364,13 @@ export default function PayableVendorPage() {
       toast.error('Enter a valid amount')
       return
     }
-    if (!editPayForm.paid_at) {
-      toast.error('Select a date')
-      return
-    }
+
+    const today = new Date().toISOString().split('T')[0]
+    const effectivePaidAt = isSuperAdmin ? editPayForm.paid_at : today
 
     const { error: err } = await supabase
       .from('purchase_payments')
-      .update({ amount, paid_at: editPayForm.paid_at })
+      .update({ amount, paid_at: effectivePaidAt })
       .eq('id', editingPaymentId)
 
     if (err) {
@@ -493,10 +495,13 @@ export default function PayableVendorPage() {
       }
 
       setSaving(true)
+      const today = new Date().toISOString().split('T')[0]
+      const effectivePaidAt = isSuperAdmin ? payForm.paid_at : today
+
       const payload = rows.map((c) => ({
         purchase_id: payForm.purchase_id,
         amount: c.amount,
-        paid_at: c.cheque_date,
+        paid_at: effectivePaidAt,
         method: 'cheque',
         bank_name: getApprovedBankName(extractBankCodeFromCheque(c.cheque_number)) || null,
         reference: c.cheque_number,
@@ -541,11 +546,14 @@ export default function PayableVendorPage() {
       return
     }
 
+    const today = new Date().toISOString().split('T')[0]
+    const effectivePaidAt = isSuperAdmin ? payForm.paid_at : today
+
     setSaving(true)
     const { data: inserted, error: err } = await supabase.from('purchase_payments').insert({
       purchase_id: payForm.purchase_id,
       amount,
-      paid_at: payForm.paid_at,
+      paid_at: effectivePaidAt,
       method: payForm.method,
       bank_name: payForm.method === 'bank' ? 'Bank' : null,
       reference: payForm.reference.trim() || null,
@@ -834,12 +842,10 @@ export default function PayableVendorPage() {
             <div className="p-5 space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Payment Date</div>
-                  <input
-                    type="date"
+                  <ControlledDateField
+                    label="Payment Date"
                     value={payForm.paid_at}
-                    onChange={(e) => setPayForm((p) => ({ ...p, paid_at: e.target.value }))}
-                    className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                    onChange={(newDate) => setPayForm((p) => ({ ...p, paid_at: newDate }))}
                   />
                 </div>
 
@@ -1069,11 +1075,11 @@ export default function PayableVendorPage() {
                         <tr key={p.id} className="border-b border-slate-50 dark:border-emerald-900/30 align-middle">
                           <td className="px-4 py-3.5 text-slate-700 dark:text-slate-200 align-middle">
                             {editingPaymentId === p.id ? (
-                              <input
-                                type="date"
+                              <ControlledDateField
+                                label=""
                                 value={editPayForm.paid_at}
-                                onChange={(e) => setEditPayForm((x) => ({ ...x, paid_at: e.target.value }))}
-                                className="w-full max-w-[170px] px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                                onChange={(newDate) => setEditPayForm((x) => ({ ...x, paid_at: newDate }))}
+                                className="w-full max-w-[170px]"
                               />
                             ) : (
                               p.paid_at ? new Date(p.paid_at).toLocaleDateString() : '—'

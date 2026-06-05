@@ -105,6 +105,10 @@ function CustomerForm({ initialValue, onCancel, onSave }) {
 
 export default function CustomersPage() {
   const [rows, setRows] = useState([])
+
+  useEffect(() => {
+    document.title = "Customers | Shayan's Kids"
+  }, [])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 

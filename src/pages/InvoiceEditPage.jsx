@@ -11,6 +11,10 @@ function emptyLine() {
 
 export default function InvoiceEditPage() {
   const { id } = useParams()
+
+  useEffect(() => {
+    document.title = "Edit Invoice | Shayan's Kids"
+  }, [])
   const navigate = useNavigate()
   const toast = useToast()
 

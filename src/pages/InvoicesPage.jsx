@@ -7,6 +7,10 @@ import { logAction } from '../lib/auditLog'
 
 export default function InvoicesPage() {
   const [rows, setRows] = useState([])
+
+  useEffect(() => {
+    document.title = "Invoices | Shayan's Kids"
+  }, [])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 

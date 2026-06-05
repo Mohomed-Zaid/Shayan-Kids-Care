@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { usePermissions } from '../contexts/PermissionsContext'
 import { logAction } from '../lib/auditLog'
 import { Plus, Save, Trash2, Search, ChevronDown, ChevronRight } from 'lucide-react'
+import ControlledDateField from '../components/ControlledDateField'
 
 const fmt = (val) => `Rs. ${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
@@ -28,6 +30,7 @@ const emptyLine = () => ({
 
 export default function JournalEntryPage() {
   const toast = useToast()
+  const { isSuperAdmin } = usePermissions()
 
   const [journals, setJournals] = useState([])
   const [loading, setLoading] = useState(true)
@@ -131,11 +134,6 @@ export default function JournalEntryPage() {
       }))
       .filter((l) => l.journal_id && (l.debit > 0 || l.credit > 0 || l.description))
 
-    if (!date) {
-      toast.error('Please select date')
-      return
-    }
-
     if (cleaned.length === 0) {
       toast.error('Add at least one valid row')
       return
@@ -152,11 +150,14 @@ export default function JournalEntryPage() {
       return
     }
 
+    const today = new Date().toISOString().split('T')[0]
+    const effectiveDate = isSuperAdmin ? date : today
+
     setSaving(true)
     try {
       const { data: entry, error: eErr } = await supabase
         .from('journal_entries')
-        .insert({ date })
+        .insert({ date: effectiveDate })
         .select('id')
         .single()
 
@@ -259,12 +260,10 @@ export default function JournalEntryPage() {
         <div className="lg:col-span-9 bg-white dark:bg-emerald-950/35 border border-slate-200/60 dark:border-emerald-900/40 rounded-xl shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-200/60 dark:border-emerald-900/40 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
             <div className="md:col-span-3">
-              <div className="text-[11px] uppercase tracking-wider font-bold text-slate-500 dark:text-emerald-100/70">Date</div>
-              <input
-                type="date"
+              <ControlledDateField
+                label="Date"
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="mt-1 w-full rounded-lg border border-slate-300 dark:border-emerald-900/60 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-emerald-50"
+                onChange={setDate}
               />
             </div>
 
