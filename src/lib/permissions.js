@@ -278,6 +278,17 @@ export const PERMISSION_CATALOG = [
     route: '/audit-log',
     actions: [{ id: 'view', label: 'View' }],
   },
+  {
+    id: 'sms',
+    label: 'SMS Service',
+    group: 'General',
+    route: '/sms-service',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'send_single', label: 'Send Single SMS' },
+      { id: 'send_bulk', label: 'Send Bulk SMS' },
+    ],
+  },
 ]
 
 export const MODULE_BY_ID = Object.fromEntries(PERMISSION_CATALOG.map((m) => [m.id, m]))
@@ -352,10 +363,12 @@ export const NAV_PERMISSION_MAP = {
   '/finance/delete-payable': 'finance_delete_payable',
   '/backup': 'admin_backup',
   '/audit-log': 'admin_audit_log',
+  '/sms-service': 'sms',
 }
 
 export function moduleForPath(pathname) {
   const path = pathname.split('?')[0]
+  if (path.startsWith('/sms-service')) return 'sms'
   if (path.startsWith('/finance/receivables')) return 'finance_receivables'
   if (path.startsWith('/finance/payables')) return 'finance_payables'
   if (path.startsWith('/finance/')) {

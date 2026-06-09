@@ -3,11 +3,13 @@ import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { MessageSquare, Search, Send, Users, FileText, CheckCircle, AlertCircle } from 'lucide-react'
 import { sendSingleSMS, sendBulkSMS } from '../lib/sms'
+import PermissionGate from '../components/PermissionGate'
 
 // Pre-defined SMS templates
 const SMS_TEMPLATES = [
   { name: "Order Confirmation", text: "Hi {customer_name}, your order has been confirmed! Thank you for shopping with Shayan Kids Care!" },
   { name: "Payment Reminder", text: "Hi {customer_name}, just a reminder about your pending payment. Please reach out if you have any questions!" },
+  { name: "Payment Received", text: "Payment of Rs. {amount} received for Invoice {invoice_no}. Remaining balance: Rs. {balance}. Thank you." },
   { name: "Thank You", text: "Hi {customer_name}, thank you for your purchase! We hope you love your items!" },
   { name: "Promotion", text: "Hi {customer_name}, we have a special promotion just for you! Visit us in-store for more details!" },
 ]
@@ -287,28 +289,32 @@ export default function SMSServicePage() {
                   placeholder="e.g. 0771234567"
                   className="flex-1 px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
                 />
-                <button
-                  onClick={sendSingle}
-                  disabled={sending || !singleNumber || !message}
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center gap-2"
-                >
-                  <Send size={16} />
-                  {sending ? 'Sending...' : 'Send'}
-                </button>
+                <PermissionGate module="sms" action="send_single">
+                  <button
+                    onClick={sendSingle}
+                    disabled={sending || !singleNumber || !message}
+                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                  >
+                    <Send size={16} />
+                    {sending ? 'Sending...' : 'Send'}
+                  </button>
+                </PermissionGate>
               </div>
             </div>
 
             {/* Bulk Send Button */}
             {selectedCustomers.length > 0 && (
               <div className="border-t border-slate-100 dark:border-slate-700 pt-4">
-                <button
-                  onClick={sendBulk}
-                  disabled={sending || !message}
-                  className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
-                >
-                  <Send size={18} />
-                  {sending ? 'Sending...' : `Send Bulk SMS to ${selectedCustomers.length} Customers`}
-                </button>
+                <PermissionGate module="sms" action="send_bulk">
+                  <button
+                    onClick={sendBulk}
+                    disabled={sending || !message}
+                    className="w-full px-4 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg font-medium transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Send size={18} />
+                    {sending ? 'Sending...' : `Send Bulk SMS to ${selectedCustomers.length} Customers`}
+                  </button>
+                </PermissionGate>
               </div>
             )}
           </div>

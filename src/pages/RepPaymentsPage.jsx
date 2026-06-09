@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { usePermissions } from '../contexts/PermissionsContext'
 import { logAction } from '../lib/auditLog'
+import { sendSingleSMS } from '../lib/sms'
 import {
   calculateRepCommission,
   COMMISSION_MONTHS,
@@ -23,6 +24,8 @@ import {
   TrendingUp,
   Banknote,
   Trash2,
+  MessageSquare,
+  Settings,
 } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 
@@ -33,6 +36,29 @@ const METHODS = [
   { value: 'bank', label: 'Bank Transfer' },
   { value: 'cheque', label: 'Cheque' },
 ]
+
+// Format date as dd/mm/yyyy
+const formatDate = (dateStr) => {
+  const date = new Date(dateStr)
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const year = date.getFullYear()
+  return `${day}/${month}/${year}`
+}
+
+// Generate SMS message
+const generateSMSTemplate = (repName, amount, paymentDate, paymentMethod) => {
+  const methodLabel = paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)
+  return `Dear ${repName},
+
+Your commission payment of ${fmt(amount)} has been successfully processed on ${formatDate(paymentDate)}.
+
+Payment Method: ${methodLabel}
+
+Thank you for your valuable contribution to Shayan Kids & Toys Store.
+
+- Shayan Kids & Toys Store`
+}
 
 export default function RepPaymentsPage() {
   const toast = useToast()
@@ -51,6 +77,9 @@ export default function RepPaymentsPage() {
   const [loadingPeriod, setLoadingPeriod] = useState(false)
   const [saving, setSaving] = useState(false)
   const [tableMissing, setTableMissing] = useState(false)
+  const [smsEnabledGlobally, setSmsEnabledGlobally] = useState(true)
+  const [showSettings, setShowSettings] = useState(false)
+  const [savingSetting, setSavingSetting] = useState(false)
 
   const [payForm, setPayForm] = useState({
     amount: '',
@@ -62,11 +91,13 @@ export default function RepPaymentsPage() {
     cheque_number: '',
     bank_code: '',
     bank_name_cheque: '',
+    sendSms: true,
   })
 
   const [receiptData, setReceiptData] = useState(null)
   const [histOpen, setHistOpen] = useState(false)
   const [deletingId, setDeletingId] = useState('')
+  const [repPhone, setRepPhone] = useState('')
 
   const yearOptions = useMemo(() => {
     const current = new Date().getFullYear()
@@ -77,6 +108,26 @@ export default function RepPaymentsPage() {
     () => reps.find((r) => String(r.id) === String(selectedRep))?.name ?? '',
     [reps, selectedRep]
   )
+
+  // Auto-fetch phone number when rep is selected with hard-coded numbers for specific reps
+  useEffect(() => {
+    if (selectedRep) {
+      const rep = reps.find((r) => String(r.id) === String(selectedRep))
+      if (rep) {
+        // Hard-coded phone numbers for specific reps
+        const phoneNumbers = {
+          'Mohomed': '0777531318',
+          'Manjula': '0775401354',
+          'Mohamed Munzir': '0771193121'
+        }
+        // Check if rep name matches any hard-coded entry, otherwise use database phone1
+        const hardcodedPhone = phoneNumbers[rep.name]
+        setRepPhone(hardcodedPhone || rep.phone1 || '')
+      }
+    } else {
+      setRepPhone('')
+    }
+  }, [selectedRep, reps])
 
   const paymentStatus = useMemo(() => {
     if (!summary) return null
@@ -104,14 +155,28 @@ export default function RepPaymentsPage() {
     return true
   }, [selectedRep, summary, remainingBalance, payAmountNum, payForm])
 
+  // Load reps with phone numbers and system settings
   useEffect(() => {
     const load = async () => {
-      const [repRes, bankRes] = await Promise.all([
-        supabase.from('employees').select('id, name').eq('is_rep', true).order('name'),
-        supabase.from('banks').select('id, code, name, branch').order('code'),
-      ])
-      setReps(repRes.data ?? [])
-      setBanks(bankRes.data ?? [])
+      try {
+        const [repRes, bankRes, settingRes] = await Promise.all([
+          supabase.from('employees').select('id, name, phone').eq('is_rep', true).order('name'),
+          supabase.from('banks').select('id, code, name, branch').order('code'),
+          supabase.from('system_settings').select('*').eq('key', 'rep_payment_sms_enabled').single(),
+        ])
+        setReps(repRes.data ?? [])
+        setBanks(bankRes.data ?? [])
+        setSmsEnabledGlobally(settingRes.data ? settingRes.data.value === 'true' : true)
+      } catch (e) {
+        console.error('Load error:', e)
+        // Fallback to basic loading if system_settings table doesn't exist
+        const [repRes, bankRes] = await Promise.all([
+          supabase.from('employees').select('id, name, phone').eq('is_rep', true).order('name'),
+          supabase.from('banks').select('id, code, name, branch').order('code'),
+        ])
+        setReps(repRes.data ?? [])
+        setBanks(bankRes.data ?? [])
+      }
       setLoadingReps(false)
     }
     load().catch(() => {
@@ -140,12 +205,12 @@ export default function RepPaymentsPage() {
       setSummary(commission)
 
       const { data: payRows, error: payErr } = await supabase
-        .from('rep_commission_payments')
-        .select('id, amount, paid_at, method, reference, bank_name, note, created_at')
-        .eq('rep_id', selectedRep)
-        .eq('period_month', selectedMonth)
-        .eq('period_year', selectedYear)
-        .order('paid_at', { ascending: false })
+      .from('rep_commission_payments')
+      .select('id, amount, paid_at, method, reference, bank_name, note, created_at, sms_sent, sms_sent_at')
+      .eq('rep_id', selectedRep)
+      .eq('period_month', selectedMonth)
+      .eq('period_year', selectedYear)
+      .order('paid_at', { ascending: false })
 
       if (payErr) {
         if (payErr.code === '42P01' || payErr.message?.includes('does not exist')) {
@@ -226,6 +291,41 @@ export default function RepPaymentsPage() {
     })
   }
 
+  // Helper to log SMS
+  const logRepSms = async (repId, paymentId, repName, phoneNumber, message, status, errorMessage = null) => {
+    try {
+      await supabase.from('rep_sms_log').insert({
+        rep_id: repId,
+        payment_id: paymentId,
+        rep_name: repName,
+        phone_number: phoneNumber,
+        message,
+        status,
+        error_message: errorMessage,
+      })
+    } catch (e) {
+      console.error('Failed to log SMS:', e)
+    }
+  }
+
+  // Save setting function
+  const saveSmsSetting = async (enabled) => {
+    setSavingSetting(true)
+    try {
+      await supabase.from('system_settings').upsert({
+        key: 'rep_payment_sms_enabled',
+        value: enabled ? 'true' : 'false',
+        description: 'Enable/disable automatic SMS notifications for rep commission payments',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'key' })
+      setSmsEnabledGlobally(enabled)
+      toast.success('Setting saved')
+    } catch (e) {
+      toast.error('Failed to save setting')
+    }
+    setSavingSetting(false)
+  }
+
   const savePayment = async () => {
     if (!selectedRep || !summary) return
     if (payAmountNum > remainingBalance + 0.005) {
@@ -264,6 +364,7 @@ export default function RepPaymentsPage() {
               : null,
         reference,
         note: payForm.note.trim() || null,
+        sms_sent: false,
       })
       .select('id, amount, paid_at, method, reference, bank_name, note')
       .single()
@@ -271,7 +372,7 @@ export default function RepPaymentsPage() {
     if (error) {
       if (error.code === '42P01' || error.message?.includes('does not exist')) {
         setTableMissing(true)
-        toast.error('Run supabase/rep_commission_payments.sql in Supabase first')
+        toast.error('Run supabase/rep_commission_payments.sql and rep_payment_sms.sql in Supabase first')
       } else {
         toast.error(error.message)
       }
@@ -279,7 +380,81 @@ export default function RepPaymentsPage() {
       return
     }
 
-    toast.success('Rep payment saved')
+    let smsSentSuccessfully = false
+    let smsFailed = false
+    let smsErrorMessage = null
+
+    // Check if we should send SMS
+    const shouldSendSms = 
+      smsEnabledGlobally && 
+      payForm.sendSms && 
+      repPhone && 
+      repPhone.trim().length > 0
+
+    if (shouldSendSms) {
+      try {
+        const message = generateSMSTemplate(
+          repName,
+          payAmountNum,
+          effectivePaidAt,
+          payForm.method
+        )
+        
+        await sendSingleSMS(repPhone, message)
+        
+        // Mark as sent in payment record
+        await supabase
+          .from('rep_commission_payments')
+          .update({ 
+            sms_sent: true, 
+            sms_sent_at: new Date().toISOString() 
+          })
+          .eq('id', inserted.id)
+        
+        await logRepSms(
+          selectedRep,
+          inserted.id,
+          repName,
+          repPhone,
+          message,
+          'sent'
+        )
+
+        logAction({
+          action: 'Rep Payment SMS Sent',
+          targetType: 'rep_payment',
+          targetId: inserted.id,
+          targetLabel: `${repName} - ${fmt(payAmountNum)}`,
+          details: `Phone: ${repPhone}, Amount: ${fmt(payAmountNum)}`,
+        })
+
+        smsSentSuccessfully = true
+      } catch (e) {
+        console.error('SMS send failed:', e)
+        smsFailed = true
+        smsErrorMessage = e?.message || 'Unknown error'
+        
+        await logRepSms(
+          selectedRep,
+          inserted.id,
+          repName,
+          repPhone,
+          '',
+          'failed',
+          smsErrorMessage
+        )
+      }
+    }
+
+    // Show appropriate toast
+    if (smsSentSuccessfully) {
+      toast.success('Rep payment saved and SMS sent successfully')
+    } else if (smsFailed) {
+      toast.warning('Rep payment saved successfully. SMS delivery failed.')
+    } else {
+      toast.success('Rep payment saved')
+    }
+
     logAction({
       action: 'save_rep_commission_payment',
       targetType: 'rep_payment',
@@ -300,6 +475,7 @@ export default function RepPaymentsPage() {
       bank_code: '',
       bank_name_cheque: '',
       note: '',
+      sendSms: true,
     }))
 
     await loadPeriod()
@@ -719,15 +895,62 @@ export default function RepPaymentsPage() {
                     />
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={savePayment}
-                    disabled={!canSavePayment || saving || tableMissing}
-                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50"
-                  >
-                    <Save size={16} />
-                    {saving ? 'Saving...' : 'Save & Print Receipt'}
-                  </button>
+                  {/* Phone Number Field */}
+                  <div>
+                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1 block">
+                      <MessageSquare size={12} className="inline mr-1" />
+                      Rep Phone Number (for SMS)
+                    </label>
+                    <input
+                      value={repPhone}
+                      onChange={(e) => setRepPhone(e.target.value)}
+                      placeholder="e.g. 0771234567"
+                      className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"
+                    />
+                    {!repPhone && smsEnabledGlobally && payForm.sendSms && (
+                      <p className="mt-1 text-xs text-amber-600 font-semibold">
+                        No phone number - SMS won&apos;t be sent
+                      </p>
+                    )}
+                  </div>
+
+                  {/* SMS Notification Checkbox */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="sendSms"
+                      checked={payForm.sendSms}
+                      onChange={(e) => setPayForm((p) => ({ ...p, sendSms: e.target.checked }))}
+                      disabled={!smsEnabledGlobally}
+                      className="w-4 h-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    <label htmlFor="sendSms" className="text-sm text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                      <MessageSquare size={14} />
+                      Send SMS Notification
+                      {!smsEnabledGlobally && <span className="text-xs text-slate-400">(Disabled globally)</span>}
+                    </label>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={savePayment}
+                      disabled={!canSavePayment || saving || tableMissing}
+                      className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50"
+                    >
+                      <Save size={16} />
+                      {saving ? 'Saving...' : 'Save & Print Receipt'}
+                    </button>
+                    
+                    {/* Settings Button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowSettings(true)}
+                      className="inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                    >
+                      <Settings size={16} />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -764,6 +987,51 @@ export default function RepPaymentsPage() {
         </>
       ) : null}
 
+      {/* SMS Settings Modal */}
+      {showSettings ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+              <div className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Settings size={18} />
+                SMS Notification Settings
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSettings(false)}
+                className="text-sm font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <MessageSquare size={20} className="text-slate-600 dark:text-slate-300" />
+                  <div>
+                    <div className="font-semibold text-slate-900 dark:text-white">Enable SMS Notifications</div>
+                    <div className="text-xs text-slate-500 dark:text-slate-400">Send automatic SMS to reps when payment is recorded</div>
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={smsEnabledGlobally}
+                    onChange={(e) => saveSmsSetting(e.target.checked)}
+                    disabled={savingSetting}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-slate-300 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 dark:peer-focus:ring-emerald-800 rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-500 peer-checked:bg-emerald-600"></div>
+                </label>
+              </div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <strong>Note:</strong> Ensure reps have valid phone numbers in their employee records.
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {histOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <div className="w-full max-w-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden max-h-[85vh] flex flex-col">
@@ -787,6 +1055,7 @@ export default function RepPaymentsPage() {
                       <th className="text-left px-4 py-2 font-semibold text-slate-500">Date</th>
                       <th className="text-left px-4 py-2 font-semibold text-slate-500">Method</th>
                       <th className="text-right px-4 py-2 font-semibold text-slate-500">Amount</th>
+                      <th className="text-left px-4 py-2 font-semibold text-slate-500">SMS</th>
                       <th className="text-right px-4 py-2 font-semibold text-slate-500">Action</th>
                     </tr>
                   </thead>
@@ -796,6 +1065,16 @@ export default function RepPaymentsPage() {
                         <td className="px-4 py-2">{p.paid_at}</td>
                         <td className="px-4 py-2 capitalize">{p.method}</td>
                         <td className="px-4 py-2 text-right font-semibold">{fmt(p.amount)}</td>
+                        <td className="px-4 py-2">
+                          {p.sms_sent ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                              <MessageSquare size={12} />
+                              Sent
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-400">Not sent</span>
+                          )}
+                        </td>
                         <td className="px-4 py-2 text-right">
                           <div className="inline-flex items-center justify-end gap-2">
                             <button
