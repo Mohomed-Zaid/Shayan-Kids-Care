@@ -10,7 +10,7 @@ import Chart from 'react-apexcharts'
 const statConfig = [
   { key: 'todaySales', label: 'Today Sales', icon: DollarSign, gradient: 'from-amber-500 to-orange-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-amber-100', isCurrency: true },
   { key: 'totalSales', label: 'Total Sales', icon: TrendingUp, gradient: 'from-rose-500 to-pink-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-rose-100', isCurrency: true },
-  { key: 'todayPayments', label: 'Today Payments', icon: ShoppingCart, gradient: 'from-indigo-500 to-indigo-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-indigo-100', isCurrency: true },
+  { key: 'totalExpenses', label: 'Total Expenses', icon: ShoppingCart, gradient: 'from-indigo-500 to-indigo-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-indigo-100', isCurrency: true },
   { key: 'totalPayments', label: 'Total Payments', icon: Wallet, gradient: 'from-teal-500 to-cyan-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-teal-100', isCurrency: true },
   { key: 'chequeInHand', label: 'Cheque In Hand', icon: Landmark, gradient: 'from-violet-500 to-purple-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-violet-100', isCurrency: true },
   { key: 'returnCheque', label: 'Return Cheque', icon: RotateCcw, gradient: 'from-orange-500 to-red-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-orange-100', isCurrency: true },
@@ -84,7 +84,7 @@ export default function DashboardPage() {
     products: 0,
     customers: 0,
     todaySales: 0,
-    todayPayments: 0,
+    totalExpenses: 0,
     totalSales: 0,
     totalPayments: 0,
     chequeInHand: 0,
@@ -132,7 +132,7 @@ export default function DashboardPage() {
         .order('paid_at', { ascending: false })
         .limit(10)
 
-      const [productsRes, customersRes, todaySalesRes, todayPaymentsRes, totalSalesRes, totalPaymentsRes, recentInvRes, allPayRes, recentPayRes, invForChartsRes, payForChartsRes, invItemsForProfitRes, purchaseItemsRes, chequeInHandRes, returnChequeRes, payableRes, purchasePaymentsRes] = await Promise.all([
+      const [productsRes, customersRes, todaySalesRes, todayPaymentsRes, totalExpensesRes, totalSalesRes, totalPaymentsRes, recentInvRes, allPayRes, recentPayRes, invForChartsRes, payForChartsRes, invItemsForProfitRes, purchaseItemsRes, chequeInHandRes, returnChequeRes, payableRes, purchasePaymentsRes] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }),
         supabase.from('customers').select('id', { count: 'exact', head: true }),
         supabase
@@ -145,6 +145,9 @@ export default function DashboardPage() {
           .select('amount, paid_at')
           .gte('paid_at', todayStart.toISOString())
           .lte('paid_at', todayEnd.toISOString()),
+        supabase
+          .from('journals')
+          .select('budget, s_balance, h_balance'),
         supabase.from('invoices').select('total_amount'),
         supabase.from('invoice_payments').select('amount'),
         supabase
@@ -206,6 +209,7 @@ export default function DashboardPage() {
 
       const todaySales = (todaySalesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
       const todayPayments = (todayPaymentsRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
+      const totalExpenses = (totalExpensesRes.data ?? []).reduce((sum, row) => sum + (Number(row.budget ?? 0) + Number(row.s_balance ?? 0) + Number(row.h_balance ?? 0)), 0)
       const totalSales = (totalSalesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
       const totalPayments = (totalPaymentsRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
       const chequeInHand = (chequeInHandRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
@@ -218,7 +222,7 @@ export default function DashboardPage() {
         products: productsRes.count ?? 0,
         customers: customersRes.count ?? 0,
         todaySales,
-        todayPayments,
+        totalExpenses,
         totalSales,
         totalPayments,
         chequeInHand,

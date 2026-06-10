@@ -5,7 +5,50 @@ import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 
 const BANK_OPTIONS = [
+  { value: '7852 - Alliance Finance Company PLC', label: '7852 - Alliance Finance Company PLC' },
   { value: '7463 - Amana Bank PLC', label: '7463 - Amana Bank PLC' },
+  { value: '7472 - Axis Bank', label: '7472 - Axis Bank' },
+  { value: '7010 - Bank of Ceylon', label: '7010 - Bank of Ceylon' },
+  { value: '7481 - Cargills Bank Limited', label: '7481 - Cargills Bank Limited' },
+  { value: '8004 - Central Bank of Sri Lanka', label: '8004 - Central Bank of Sri Lanka' },
+  { value: '7825 - Central Finance PLC', label: '7825 - Central Finance PLC' },
+  { value: '7047 - Citi Bank', label: '7047 - Citi Bank' },
+  { value: '7746 - Citizen Development Business Finance PLC', label: '7746 - Citizen Development Business Finance PLC' },
+  { value: '7056 - Commercial Bank PLC', label: '7056 - Commercial Bank PLC' },
+  { value: '7870 - Commercial Credit & Finance PLC', label: '7870 - Commercial Credit & Finance PLC' },
+  { value: '7807 - Commercial Leasing and Finance', label: '7807 - Commercial Leasing and Finance' },
+  { value: '7205 - Deutsche Bank', label: '7205 - Deutsche Bank' },
+  { value: '7454 - DFCC Bank PLC', label: '7454 - DFCC Bank PLC' },
+  { value: '7074 - Habib Bank Ltd', label: '7074 - Habib Bank Ltd' },
+  { value: '7083 - Hatton National Bank PLC', label: '7083 - Hatton National Bank PLC' },
+  { value: '7737 - HDFC Bank', label: '7737 - HDFC Bank' },
+  { value: '7092 - Hongkong Shanghai Bank', label: '7092 - Hongkong Shanghai Bank' },
+  { value: '7384 - ICICI Bank Ltd', label: '7384 - ICICI Bank Ltd' },
+  { value: '7108 - Indian Bank', label: '7108 - Indian Bank' },
+  { value: '7117 - Indian Overseas Bank', label: '7117 - Indian Overseas Bank' },
+  { value: '7834 - Kanrich Finance Limited', label: '7834 - Kanrich Finance Limited' },
+  { value: '7861 - Lanka Orix Finance PLC', label: '7861 - Lanka Orix Finance PLC' },
+  { value: '7773 - LB Finance PLC', label: '7773 - LB Finance PLC' },
+  { value: '7269 - MCB Bank Ltd', label: '7269 - MCB Bank Ltd' },
+  { value: '7913 - Mercantile Investment and Finance PLC', label: '7913 - Mercantile Investment and Finance PLC' },
+  { value: '7898 - Merchant Bank of Sri Lanka & Finance PLC', label: '7898 - Merchant Bank of Sri Lanka & Finance PLC' },
+  { value: '7214 - National Development Bank PLC', label: '7214 - National Development Bank PLC' },
+  { value: '7719 - National Savings Bank', label: '7719 - National Savings Bank' },
+  { value: '7162 - Nations Trust Bank PLC', label: '7162 - Nations Trust Bank PLC' },
+  { value: '7311 - Pan Asia Banking Corporation PLC', label: '7311 - Pan Asia Banking Corporation PLC' },
+  { value: '7135 - Peoples Bank', label: '7135 - Peoples Bank' },
+  { value: '7922 - People’s Leasing & Finance PLC', label: '7922 - People’s Leasing & Finance PLC' },
+  { value: '7296 - Public Bank', label: '7296 - Public Bank' },
+  { value: '7755 - Regional Development Bank', label: '7755 - Regional Development Bank' },
+  { value: '7278 - Sampath Bank PLC', label: '7278 - Sampath Bank PLC' },
+  { value: '7728 - Sanasa Development Bank', label: '7728 - Sanasa Development Bank' },
+  { value: '7782 - Senkadagala Finance PLC', label: '7782 - Senkadagala Finance PLC' },
+  { value: '7287 - Seylan Bank PLC', label: '7287 - Seylan Bank PLC' },
+  { value: '7038 - Standard Chartered Bank', label: '7038 - Standard Chartered Bank' },
+  { value: '7144 - State Bank of India', label: '7144 - State Bank of India' },
+  { value: '7764 - State Mortgage & Investment Bank', label: '7764 - State Mortgage & Investment Bank' },
+  { value: '7302 - Union Bank of Colombo PLC', label: '7302 - Union Bank of Colombo PLC' },
+  { value: '7816 - Vallibel Finance PLC', label: '7816 - Vallibel Finance PLC' },
 ]
 
 const BRANCH_OPTIONS = [
@@ -104,12 +147,12 @@ function JournalForm({ initialValue, onCancel, onSave }) {
         cheque_number: chequeNumber.trim() || null,
         cheque_s_balance: Number(chequeSBalance) || 0,
         cheque_advance: !!chequeAdvance,
-        bank_name: selectedCategoryName === 'BANK' ? bankName.trim() : null,
-        bank_branch: selectedCategoryName === 'BANK' ? bankBranch.trim() : null,
-        bank_account_no: selectedCategoryName === 'BANK' ? bankAccountNo.trim() : null,
-        bank_swift_no: selectedCategoryName === 'BANK' ? bankSwiftNo.trim() : null,
-        bank_currency: selectedCategoryName === 'BANK' ? bankCurrency.trim() : null,
-        bank_iban_no: selectedCategoryName === 'BANK' ? bankIbanNo.trim() : null,
+        bank_name: (selectedCategoryName === 'BANK' || selectedCategoryName === 'BANK [ CURRENT ASSETS ]') ? bankName.trim() : null,
+        bank_branch: (selectedCategoryName === 'BANK' || selectedCategoryName === 'BANK [ CURRENT ASSETS ]') ? bankBranch.trim() : null,
+        bank_account_no: (selectedCategoryName === 'BANK' || selectedCategoryName === 'BANK [ CURRENT ASSETS ]') ? bankAccountNo.trim() : null,
+        bank_swift_no: (selectedCategoryName === 'BANK' || selectedCategoryName === 'BANK [ CURRENT ASSETS ]') ? bankSwiftNo.trim() : null,
+        bank_currency: (selectedCategoryName === 'BANK' || selectedCategoryName === 'BANK [ CURRENT ASSETS ]') ? bankCurrency.trim() : null,
+        bank_iban_no: (selectedCategoryName === 'BANK' || selectedCategoryName === 'BANK [ CURRENT ASSETS ]') ? bankIbanNo.trim() : null,
       })
     } catch (err) {
       console.error(err)
@@ -361,7 +404,7 @@ function JournalForm({ initialValue, onCancel, onSave }) {
             </div>
 
             <div className="md:col-span-5 rounded-xl border border-slate-200/60 dark:border-slate-700 bg-white dark:bg-slate-900">
-              {selectedCategoryName === 'BANK' ? (
+              {selectedCategoryName === 'BANK' || selectedCategoryName === 'BANK [ CURRENT ASSETS ]' ? (
                 <div className="p-4 space-y-4">
                   <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Bank</div>
 
