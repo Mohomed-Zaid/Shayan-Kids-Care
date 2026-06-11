@@ -47,17 +47,27 @@ const formatDate = (dateStr) => {
 }
 
 // Generate SMS message
-const generateSMSTemplate = (repName, amount, paymentDate, paymentMethod) => {
+const generateSMSTemplate = (repName, amount, paymentDate, paymentMethod, commissionSettled, advanceBalance) => {
   const methodLabel = paymentMethod.charAt(0).toUpperCase() + paymentMethod.slice(1)
-  return `Dear ${repName},
+  let message = `Dear ${repName},
 
-Your commission payment of ${fmt(amount)} has been successfully processed on ${formatDate(paymentDate)}.
+A payment of ${fmt(amount)} has been recorded.
 
-Payment Method: ${methodLabel}
+Commission Settled: ${fmt(commissionSettled)}`
+
+  if (advanceBalance > 0) {
+    message += `
+
+Advance Balance: ${fmt(advanceBalance)}`
+  }
+
+  message += `
 
 Thank you for your valuable contribution to Shayan Kids & Toys Store.
 
 - Shayan Kids & Toys Store`
+
+  return message
 }
 
 export default function RepPaymentsPage() {
@@ -109,6 +119,11 @@ export default function RepPaymentsPage() {
     [reps, selectedRep]
   )
 
+  const repAdvanceBalance = useMemo(
+    () => Number(reps.find((r) => String(r.id) === String(selectedRep))?.advance_balance ?? 0),
+    [reps, selectedRep]
+  )
+
   // Auto-fetch phone number when rep is selected with hard-coded numbers for specific reps
   useEffect(() => {
     if (selectedRep) {
@@ -135,7 +150,15 @@ export default function RepPaymentsPage() {
     return getCommissionPaymentStatus(summary.commission, totalPaid)
   }, [summary, payments])
 
-  const remainingBalance = paymentStatus?.remaining ?? 0
+  const netCommissionDue = useMemo(() => {
+    if (!summary) return 0
+    return Math.max(0, summary.commission - repAdvanceBalance)
+  }, [summary, repAdvanceBalance])
+
+  const remainingBalance = useMemo(() => {
+    if (!paymentStatus) return netCommissionDue
+    return Math.max(0, paymentStatus.remaining - repAdvanceBalance)
+  }, [paymentStatus, netCommissionDue, repAdvanceBalance])
 
   const payAmountNum = useMemo(
     () => Number(String(payForm.amount || '').replace(/,/g, '')),
@@ -143,9 +166,8 @@ export default function RepPaymentsPage() {
   )
 
   const canSavePayment = useMemo(() => {
-    if (!selectedRep || !summary || remainingBalance <= 0.005) return false
+    if (!selectedRep || !summary) return false
     if (!payAmountNum || payAmountNum <= 0) return false
-    if (payAmountNum > remainingBalance + 0.005) return false
     if (!payForm.paid_at) return false
     if (payForm.method === 'cheque') {
       if (!isChequeFormatValid(payForm.cheque_number)) return false
@@ -153,33 +175,34 @@ export default function RepPaymentsPage() {
     }
     if (payForm.method === 'bank' && !payForm.bank_name.trim()) return false
     return true
-  }, [selectedRep, summary, remainingBalance, payAmountNum, payForm])
+  }, [selectedRep, summary, payAmountNum, payForm])
 
   // Load reps with phone numbers and system settings
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [repRes, bankRes, settingRes] = await Promise.all([
-          supabase.from('employees').select('id, name, phone').eq('is_rep', true).order('name'),
-          supabase.from('banks').select('id, code, name, branch').order('code'),
-          supabase.from('system_settings').select('*').eq('key', 'rep_payment_sms_enabled').single(),
-        ])
-        setReps(repRes.data ?? [])
-        setBanks(bankRes.data ?? [])
-        setSmsEnabledGlobally(settingRes.data ? settingRes.data.value === 'true' : true)
-      } catch (e) {
-        console.error('Load error:', e)
-        // Fallback to basic loading if system_settings table doesn't exist
-        const [repRes, bankRes] = await Promise.all([
-          supabase.from('employees').select('id, name, phone').eq('is_rep', true).order('name'),
-          supabase.from('banks').select('id, code, name, branch').order('code'),
-        ])
-        setReps(repRes.data ?? [])
-        setBanks(bankRes.data ?? [])
-      }
-      setLoadingReps(false)
+  const loadReps = async () => {
+    try {
+      const [repRes, bankRes, settingRes] = await Promise.all([
+        supabase.from('employees').select('id, name, phone, phone1, advance_balance').eq('is_rep', true).order('name'),
+        supabase.from('banks').select('id, code, name, branch').order('code'),
+        supabase.from('system_settings').select('*').eq('key', 'rep_payment_sms_enabled').single(),
+      ])
+      setReps(repRes.data ?? [])
+      setBanks(bankRes.data ?? [])
+      setSmsEnabledGlobally(settingRes.data ? settingRes.data.value === 'true' : true)
+    } catch (e) {
+      console.error('Load error:', e)
+      // Fallback to basic loading if system_settings table doesn't exist
+      const [repRes, bankRes] = await Promise.all([
+        supabase.from('employees').select('id, name, phone, phone1, advance_balance').eq('is_rep', true).order('name'),
+        supabase.from('banks').select('id, code, name, branch').order('code'),
+      ])
+      setReps(repRes.data ?? [])
+      setBanks(bankRes.data ?? [])
     }
-    load().catch(() => {
+    setLoadingReps(false)
+  }
+
+  useEffect(() => {
+    loadReps().catch(() => {
       toast.error('Failed to load reps')
       setLoadingReps(false)
     })
@@ -206,7 +229,7 @@ export default function RepPaymentsPage() {
 
       const { data: payRows, error: payErr } = await supabase
       .from('rep_commission_payments')
-      .select('id, amount, paid_at, method, reference, bank_name, note, created_at, sms_sent, sms_sent_at')
+      .select('id, amount, paid_at, method, reference, bank_name, note, created_at, sms_sent, sms_sent_at, advance_amount')
       .eq('rep_id', selectedRep)
       .eq('period_month', selectedMonth)
       .eq('period_year', selectedYear)
@@ -328,10 +351,6 @@ export default function RepPaymentsPage() {
 
   const savePayment = async () => {
     if (!selectedRep || !summary) return
-    if (payAmountNum > remainingBalance + 0.005) {
-      toast.error(`Payment cannot exceed remaining balance (${fmt(remainingBalance)})`)
-      return
-    }
     if (payForm.method === 'cheque' && !isChequeFormatValid(payForm.cheque_number)) {
       toast.error('Enter a valid cheque number (XXXXXX-XXXX-XXX)')
       return
@@ -339,6 +358,24 @@ export default function RepPaymentsPage() {
 
     const today = new Date().toISOString().split('T')[0]
     const effectivePaidAt = isSuperAdmin ? payForm.paid_at : today
+
+    // Calculate commission settled and advance for this payment
+    const currentRemaining = Math.max(0, (summary.commission - (paymentStatus?.paid ?? 0)) - repAdvanceBalance)
+    let commissionSettled = Math.min(payAmountNum, currentRemaining)
+    let advanceAmount = payAmountNum - commissionSettled
+    let newAdvanceBalance = repAdvanceBalance + advanceAmount
+    // If there was an advance balance, use it first to settle commission
+    if (repAdvanceBalance > 0 && currentRemaining > 0) {
+      const advanceUsed = Math.min(repAdvanceBalance, currentRemaining)
+      commissionSettled = payAmountNum
+      if (commissionSettled > currentRemaining - advanceUsed) {
+        advanceAmount = commissionSettled - (currentRemaining - advanceUsed)
+        newAdvanceBalance = advanceAmount
+      } else {
+        advanceAmount = 0
+        newAdvanceBalance = repAdvanceBalance - (currentRemaining - commissionSettled)
+      }
+    }
 
     setSaving(true)
 
@@ -354,6 +391,7 @@ export default function RepPaymentsPage() {
         period_month: selectedMonth,
         period_year: selectedYear,
         amount: payAmountNum,
+        advance_amount: advanceAmount,
         paid_at: effectivePaidAt,
         method: payForm.method,
         bank_name:
@@ -366,8 +404,14 @@ export default function RepPaymentsPage() {
         note: payForm.note.trim() || null,
         sms_sent: false,
       })
-      .select('id, amount, paid_at, method, reference, bank_name, note')
+      .select('id, amount, paid_at, method, reference, bank_name, note, advance_amount')
       .single()
+
+    // Update the rep's advance balance
+    await supabase
+      .from('employees')
+      .update({ advance_balance: newAdvanceBalance })
+      .eq('id', selectedRep)
 
     if (error) {
       if (error.code === '42P01' || error.message?.includes('does not exist')) {
@@ -397,7 +441,9 @@ export default function RepPaymentsPage() {
           repName,
           payAmountNum,
           effectivePaidAt,
-          payForm.method
+          payForm.method,
+          commissionSettled,
+          newAdvanceBalance
         )
         
         await sendSingleSMS(repPhone, message)
@@ -479,11 +525,13 @@ export default function RepPaymentsPage() {
     }))
 
     await loadPeriod()
+    await loadReps()
     setSaving(false)
   }
 
   const deletePayment = async (row) => {
     const amount = Number(row.amount ?? 0)
+    const advanceAmount = Number(row.advance_amount ?? 0)
     const label = `${fmt(amount)} on ${row.paid_at}`
     if (
       !confirm(
@@ -494,6 +542,26 @@ export default function RepPaymentsPage() {
     }
 
     setDeletingId(row.id)
+
+    // First, adjust the rep's advance balance if needed
+    if (advanceAmount > 0) {
+      // Get the current rep's advance balance
+      const { data: repData } = await supabase
+        .from('employees')
+        .select('advance_balance')
+        .eq('id', selectedRep)
+        .single()
+      
+      if (repData) {
+        const newAdvanceBalance = Number(repData.advance_balance ?? 0) - advanceAmount
+        await supabase
+          .from('employees')
+          .update({ advance_balance: newAdvanceBalance })
+          .eq('id', selectedRep)
+      }
+    }
+
+    // Then delete the payment
     const { error } = await supabase.from('rep_commission_payments').delete().eq('id', row.id)
 
     if (error) {
@@ -511,6 +579,7 @@ export default function RepPaymentsPage() {
     })
 
     await loadPeriod()
+    await loadReps()
     setDeletingId('')
   }
 
@@ -732,7 +801,7 @@ export default function RepPaymentsPage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 shadow-sm">
               <div className="text-xs font-semibold text-slate-500 uppercase">Total Sales</div>
               <div className="mt-2 text-xl font-extrabold text-slate-900 dark:text-white">{fmt(summary.totalSales)}</div>
@@ -745,6 +814,24 @@ export default function RepPaymentsPage() {
               </div>
               <div className="text-xs text-amber-700/80 mt-1">{(summary.rate * 100).toFixed(2)}% net rate</div>
             </div>
+            <div className={`rounded-2xl border p-5 ${
+              repAdvanceBalance > 0 
+                ? 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20' 
+                : 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/20'
+            }`}>
+              <div className={`text-xs font-semibold uppercase ${
+                repAdvanceBalance > 0 
+                  ? 'text-blue-800 dark:text-blue-300' 
+                  : 'text-green-800 dark:text-green-300'
+              }`}>Advance Balance</div>
+              <div className={`mt-2 text-xl font-extrabold ${
+                repAdvanceBalance > 0 
+                  ? 'text-blue-900 dark:text-blue-200' 
+                  : 'text-green-900 dark:text-green-200'
+              }`}>
+                {fmt(repAdvanceBalance)}
+              </div>
+            </div>
             <div className="rounded-2xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 p-5">
               <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 uppercase">Already Paid</div>
               <div className="mt-2 text-xl font-extrabold text-emerald-900 dark:text-emerald-200">
@@ -752,7 +839,7 @@ export default function RepPaymentsPage() {
               </div>
             </div>
             <div className="rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-5">
-              <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Remaining</div>
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase">Net Due</div>
               <div className="mt-2 text-xl font-extrabold text-slate-900 dark:text-white">{fmt(remainingBalance)}</div>
             </div>
           </div>
@@ -784,12 +871,12 @@ export default function RepPaymentsPage() {
                           parts.length > 1 ? `${intPart}.${parts[1].slice(0, 2)}` : intPart
                         setPayForm((p) => ({ ...p, amount: formatted }))
                       }}
-                      placeholder={`Max ${fmt(remainingBalance)}`}
+                      placeholder="Enter payment amount"
                       className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm"
                     />
                     {payAmountNum > remainingBalance + 0.005 ? (
-                      <p className="mt-1 text-xs text-red-600 font-semibold">
-                        Cannot exceed remaining balance ({fmt(remainingBalance)})
+                      <p className="mt-1 text-xs text-blue-600 font-semibold">
+                        Advance created: {fmt(payAmountNum - remainingBalance)}
                       </p>
                     ) : null}
                     <div className="mt-2 flex gap-2">
@@ -1055,6 +1142,7 @@ export default function RepPaymentsPage() {
                       <th className="text-left px-4 py-2 font-semibold text-slate-500">Date</th>
                       <th className="text-left px-4 py-2 font-semibold text-slate-500">Method</th>
                       <th className="text-right px-4 py-2 font-semibold text-slate-500">Amount</th>
+                      <th className="text-right px-4 py-2 font-semibold text-slate-500">Advance</th>
                       <th className="text-left px-4 py-2 font-semibold text-slate-500">SMS</th>
                       <th className="text-right px-4 py-2 font-semibold text-slate-500">Action</th>
                     </tr>
@@ -1065,6 +1153,13 @@ export default function RepPaymentsPage() {
                         <td className="px-4 py-2">{p.paid_at}</td>
                         <td className="px-4 py-2 capitalize">{p.method}</td>
                         <td className="px-4 py-2 text-right font-semibold">{fmt(p.amount)}</td>
+                        <td className="px-4 py-2 text-right">
+                          {p.advance_amount > 0 ? (
+                            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">{fmt(p.advance_amount)}</span>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-2">
                           {p.sms_sent ? (
                             <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
