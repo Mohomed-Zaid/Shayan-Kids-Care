@@ -531,12 +531,13 @@ export default function JournalsPage() {
   }, [rows, search])
 
   const getNextJournalCode = () => {
-    if (rows.length === 0) return '1'
     let maxNum = 0
     rows.forEach(row => {
-      const num = parseInt(row.code, 10)
-      if (!isNaN(num) && num > maxNum) {
-        maxNum = num
+      if (row.code) {
+        const num = parseInt(row.code, 10)
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num
+        }
       }
     })
     return String(maxNum + 1)
