@@ -532,10 +532,14 @@ export default function JournalsPage() {
 
   const getNextJournalCode = () => {
     if (rows.length === 0) return '1'
-    const lastCode = rows[rows.length - 1]?.code
-    if (!lastCode) return '1'
-    const num = parseInt(lastCode, 10)
-    return isNaN(num) ? '1' : String(num + 1)
+    let maxNum = 0
+    rows.forEach(row => {
+      const num = parseInt(row.code, 10)
+      if (!isNaN(num) && num > maxNum) {
+        maxNum = num
+      }
+    })
+    return String(maxNum + 1)
   }
 
   const onCreate = () => {
