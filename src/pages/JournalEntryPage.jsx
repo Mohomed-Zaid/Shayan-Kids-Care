@@ -25,7 +25,7 @@ const emptyLine = () => ({
   description: '',
   debit: '',
   credit: '',
-  status: 'ACTIVE',
+  status: 'INCREASE',
 })
 
 export default function JournalEntryPage() {
@@ -39,7 +39,10 @@ export default function JournalEntryPage() {
 
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [search, setSearch] = useState('')
-  const [lines, setLines] = useState([emptyLine(), emptyLine()])
+  const [lines, setLines] = useState([
+    { ...emptyLine(), status: 'DECREASE' },
+    { ...emptyLine(), status: 'INCREASE' }
+  ])
 
   const [pastEntries, setPastEntries] = useState([])
   const [expandedEntry, setExpandedEntry] = useState(null)
@@ -110,15 +113,37 @@ export default function JournalEntryPage() {
   const removeLine = (id) => setLines((p) => p.filter((x) => x.id !== id))
 
   const updateLine = (id, patch) => {
-    setLines((prev) => prev.map((l) => {
-      if (l.id !== id) return l
-      const updated = { ...l, ...patch }
-      if (patch.journal_id && !l.description) {
-        const j = journals.find((j) => j.id === patch.journal_id)
-        if (j) updated.description = j.description
+    setLines((prev) => {
+      // If we're updating the description, copy it to all other rows too
+      if (patch.description !== undefined) {
+        return prev.map(l => ({ ...l, description: patch.description }))
       }
-      return updated
-    }))
+      // If we're updating debit or credit, sync first and second rows
+      if (patch.debit !== undefined || patch.credit !== undefined) {
+        const firstId = prev[0]?.id
+        const secondId = prev[1]?.id
+        if (id === firstId && patch.credit !== undefined) {
+          // First row credit changed → update second row debit and statuses
+          return prev.map((l, index) => {
+            if (index === 0) return { ...l, ...patch, status: 'DECREASE' }
+            if (index === 1) return { ...l, debit: patch.credit, status: 'INCREASE' }
+            return l
+          })
+        } else if (id === secondId && patch.debit !== undefined) {
+          // Second row debit changed → update first row credit and statuses
+          return prev.map((l, index) => {
+            if (index === 1) return { ...l, ...patch, status: 'INCREASE' }
+            if (index === 0) return { ...l, credit: patch.debit, status: 'DECREASE' }
+            return l
+          })
+        }
+      }
+      // Otherwise, just update the specific line
+      return prev.map((l) => {
+        if (l.id !== id) return l
+        return { ...l, ...patch }
+      })
+    })
   }
 
   const onSave = async () => {
@@ -238,14 +263,6 @@ export default function JournalEntryPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={addLine}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-          >
-            <Plus size={16} />
-            Add Row
-          </button>
-          <button
-            type="button"
             onClick={onSave}
             disabled={saving}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 transition-colors shadow-sm"
@@ -256,8 +273,7 @@ export default function JournalEntryPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div className="lg:col-span-9 bg-white dark:bg-emerald-950/35 border border-slate-200/60 dark:border-emerald-900/40 rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-white dark:bg-emerald-950/35 border border-slate-200/60 dark:border-emerald-900/40 rounded-xl shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-200/60 dark:border-emerald-900/40 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
             <div className="md:col-span-3">
               <ControlledDateField
@@ -293,7 +309,6 @@ export default function JournalEntryPage() {
                   <th className="text-right font-medium px-3 py-2 text-xs uppercase tracking-wide">Debit</th>
                   <th className="text-right font-medium px-3 py-2 text-xs uppercase tracking-wide">Credit</th>
                   <th className="text-left font-medium px-3 py-2 text-xs uppercase tracking-wide">Status</th>
-                  <th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
@@ -347,19 +362,9 @@ export default function JournalEntryPage() {
                         onChange={(e) => updateLine(l.id, { status: e.target.value })}
                         className="w-full rounded-lg border border-slate-300 dark:border-emerald-900/60 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-emerald-50"
                       >
-                        <option value="ACTIVE">ACTIVE</option>
-                        <option value="HOLD">HOLD</option>
+                        <option value="INCREASE">INCREASE</option>
+                        <option value="DECREASE">DECREASE</option>
                       </select>
-                    </td>
-                    <td className="px-3 py-2.5 text-right">
-                      <button
-                        type="button"
-                        onClick={() => removeLine(l.id)}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-                        title="Remove"
-                      >
-                        <Trash2 size={15} />
-                      </button>
                     </td>
                   </tr>
                 ))}
@@ -370,27 +375,6 @@ export default function JournalEntryPage() {
           {error ? (
             <div className="px-4 pb-4 text-sm text-red-600">{error}</div>
           ) : null}
-        </div>
-
-        <div className="lg:col-span-3 bg-white dark:bg-emerald-950/35 border border-slate-200/60 dark:border-emerald-900/40 rounded-xl shadow-sm p-4">
-          <div className="text-sm font-semibold text-slate-900 dark:text-emerald-50">Details</div>
-          <div className="mt-4 space-y-2 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 dark:text-emerald-100/60">Total Debit</span>
-              <span className="font-bold text-slate-900 dark:text-white">{fmt(totals.debit)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 dark:text-emerald-100/60">Total Credit</span>
-              <span className="font-bold text-slate-900 dark:text-white">{fmt(totals.credit)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500 dark:text-emerald-100/60">Status</span>
-              <span className={`font-bold ${balanced ? 'text-emerald-600 dark:text-emerald-300' : 'text-red-600 dark:text-red-300'}`}>
-                {balanced ? 'Balanced' : 'Not Balanced'}
-              </span>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Past Entries */}
@@ -459,7 +443,7 @@ export default function JournalEntryPage() {
                                 <td className="px-3 py-2 text-right text-slate-700 dark:text-emerald-100/80">{l.debit > 0 ? fmt(l.debit) : '-'}</td>
                                 <td className="px-3 py-2 text-right text-slate-700 dark:text-emerald-100/80">{l.credit > 0 ? fmt(l.credit) : '-'}</td>
                                 <td className="px-3 py-2">
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${l.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}>
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${l.status === 'INCREASE' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'}`}>
                                     {l.status}
                                   </span>
                                 </td>

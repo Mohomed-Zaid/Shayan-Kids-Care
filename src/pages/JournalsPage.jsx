@@ -238,6 +238,7 @@ function JournalForm({ initialValue, onCancel, onSave, defaultCode }) {
                     <div>
                     <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                       Journal Code <span className="text-red-500">*</span>
+                      <span className="ml-2 text-xs font-normal text-slate-400">(Starts from 1000)</span>
                     </label>
                     <input
                       value={code}
@@ -531,7 +532,7 @@ export default function JournalsPage() {
   }, [rows, search])
 
   const getNextJournalCode = () => {
-    let maxNum = 0
+    let maxNum = 999
     rows.forEach(row => {
       if (row.code) {
         const num = parseInt(row.code, 10)

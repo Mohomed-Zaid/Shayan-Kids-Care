@@ -132,7 +132,7 @@ export default function DashboardPage() {
         .order('paid_at', { ascending: false })
         .limit(10)
 
-      const [productsRes, customersRes, todaySalesRes, todayPaymentsRes, totalExpensesRes, totalSalesRes, totalPaymentsRes, recentInvRes, allPayRes, recentPayRes, invForChartsRes, payForChartsRes, invItemsForProfitRes, purchaseItemsRes, chequeInHandRes, returnChequeRes, payableRes, purchasePaymentsRes] = await Promise.all([
+      const [productsRes, customersRes, todaySalesRes, todayPaymentsRes, totalExpensesRes, totalSalesRes, totalPaymentsRes, recentInvRes, allPayRes, recentPayRes, invForChartsRes, payForChartsRes, invItemsForProfitRes, purchaseItemsRes, chequeInHandRes, returnChequeRes, payableRes, purchasePaymentsRes, journalEntryLinesRes] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }),
         supabase.from('customers').select('id', { count: 'exact', head: true }),
         supabase
@@ -201,6 +201,7 @@ export default function DashboardPage() {
         supabase
           .from('purchase_payments')
           .select('amount'),
+        supabase.from('journal_entry_lines').select('debit, credit'),
       ])
 
       if (!mounted) return
@@ -209,7 +210,9 @@ export default function DashboardPage() {
 
       const todaySales = (todaySalesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
       const todayPayments = (todayPaymentsRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
-      const totalExpenses = (totalExpensesRes.data ?? []).reduce((sum, row) => sum + (Number(row.budget ?? 0) + Number(row.s_balance ?? 0) + Number(row.h_balance ?? 0)), 0)
+      const journalsExpenses = (totalExpensesRes.data ?? []).reduce((sum, row) => sum + (Number(row.budget ?? 0) + Number(row.s_balance ?? 0) + Number(row.h_balance ?? 0)), 0)
+      const journalEntriesExpenses = (journalEntryLinesRes.data ?? []).reduce((sum, row) => sum + (Number(row.debit ?? 0)), 0)
+      const totalExpenses = journalsExpenses + journalEntriesExpenses
       const totalSales = (totalSalesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
       const totalPayments = (totalPaymentsRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
       const chequeInHand = (chequeInHandRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
