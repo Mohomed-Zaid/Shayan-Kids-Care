@@ -75,10 +75,10 @@ const BRANCH_OPTIONS = [
   { value: 'Mannar', label: 'Mannar' },
 ]
 
-function JournalForm({ initialValue, onCancel, onSave }) {
+function JournalForm({ initialValue, onCancel, onSave, defaultCode }) {
   const toast = useToast()
 
-  const [code, setCode] = useState(initialValue?.code ?? '')
+  const [code, setCode] = useState(initialValue?.code ?? defaultCode ?? '')
   const [accountType, setAccountType] = useState(initialValue?.account_type ?? 'EXPENSES')
   const [categoryId, setCategoryId] = useState(initialValue?.category_id ?? '')
   const [description, setDescription] = useState(initialValue?.description ?? '')
@@ -236,16 +236,17 @@ function JournalForm({ initialValue, onCancel, onSave }) {
                 {activeTab === 'account' ? (
                   <>
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                        Journal Code <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        value={code}
-                        onChange={(e) => setCode(e.target.value)}
-                        className="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-white"
-                        required
-                      />
-                    </div>
+                    <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      Journal Code <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      readOnly={!initialValue}
+                      className={`mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2.5 text-sm text-slate-900 dark:text-white ${!initialValue ? 'opacity-70 cursor-not-allowed' : ''}`}
+                      required
+                    />
+                  </div>
 
                     <div>
                       <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -529,6 +530,19 @@ export default function JournalsPage() {
     )
   }, [rows, search])
 
+  const getNextJournalCode = () => {
+    let maxNum = 0
+    rows.forEach(row => {
+      if (row.code) {
+        const num = parseInt(row.code, 10)
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num
+        }
+      }
+    })
+    return String(maxNum + 1)
+  }
+
   const onCreate = () => {
     setEditing(null)
     setOpenForm(true)
@@ -658,6 +672,7 @@ export default function JournalsPage() {
       {openForm ? (
         <JournalForm
           initialValue={editing}
+          defaultCode={editing ? undefined : getNextJournalCode()}
           onCancel={() => {
             setOpenForm(false)
             setEditing(null)
