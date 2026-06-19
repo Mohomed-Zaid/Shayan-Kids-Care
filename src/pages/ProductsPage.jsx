@@ -4,13 +4,16 @@ import { Plus, Pencil, Trash2, X, Package, AlertTriangle, Search, ArrowUpDown, F
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import PermissionGate from '../components/PermissionGate'
+import { usePermissions } from '../contexts/PermissionsContext'
+
+const FIXED_CATEGORIES = ['Baby Items', 'Toys']
 
 function ProductForm({ initialValue, onCancel, onSave }) {
   const [name, setName] = useState(initialValue?.name ?? '')
   const [code, setCode] = useState(initialValue?.code ?? '')
   const [price, setPrice] = useState(initialValue?.price ?? '')
   const [stock, setStock] = useState(initialValue?.stock ?? '')
-  const [category, setCategory] = useState(initialValue?.category ?? 'General')
+  const [category, setCategory] = useState(initialValue?.category ?? FIXED_CATEGORIES[0])
   const [status, setStatus] = useState(initialValue?.status ?? 'active')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -87,12 +90,15 @@ function ProductForm({ initialValue, onCancel, onSave }) {
 
             <div>
               <label className="block text-sm font-medium text-slate-700">Category</label>
-              <input
+              <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
-                placeholder="e.g. Toys, Clothes, Accessories"
-              />
+              >
+                {FIXED_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -134,6 +140,7 @@ function ProductForm({ initialValue, onCancel, onSave }) {
 }
 
 export default function ProductsPage() {
+  const { isSuperAdmin } = usePermissions()
   const [rows, setRows] = useState([])
 
   useEffect(() => {
@@ -151,10 +158,7 @@ export default function ProductsPage() {
   const [sortKey, setSortKey] = useState('created_at')
   const [sortDir, setSortDir] = useState('desc')
 
-  const categories = useMemo(() => {
-    const cats = [...new Set(rows.map((r) => r.category).filter(Boolean))]
-    return cats.sort()
-  }, [rows])
+  const categories = FIXED_CATEGORIES
 
   const toggleSort = (key) => {
     if (sortKey === key) {
@@ -382,20 +386,26 @@ export default function ProductsPage() {
                   <td className="px-5 py-3.5">
                     {(() => {
                       const stock = Number(row.stock ?? 0)
-                      if (stock < 0) {
-                        return (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
-                            <AlertTriangle size={10} />
-                            Backorder: {Math.abs(stock)} units needed
-                          </span>
-                        )
-                      } else if (stock === 0) {
-                        return (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
-                            <AlertTriangle size={10} />
-                            Out of Stock
-                          </span>
-                        )
+                      if (stock <= 0) {
+                        if (isSuperAdmin) {
+                          if (stock < 0) {
+                            return (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
+                                <AlertTriangle size={10} />
+                                Backorder: {Math.abs(stock)} units needed
+                              </span>
+                            )
+                          } else {
+                            return (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
+                                <AlertTriangle size={10} />
+                                Out of Stock
+                              </span>
+                            )
+                          }
+                        } else {
+                          return null
+                        }
                       } else if (stock <= 5) {
                         return (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">

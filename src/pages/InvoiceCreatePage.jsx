@@ -79,7 +79,7 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
     <table style="width:100%;font-size:14px;border-collapse:collapse">
       <thead>
         <tr style="background:#ffffff;color:#000000;border-bottom:2px solid #000">
-          <th style="text-align:left;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Item #</th>
+          <th style="text-align:left;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Item Code</th>
           <th style="text-align:left;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Description</th>
           <th style="text-align:right;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Qty</th>
           <th style="text-align:right;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Unit Price</th>

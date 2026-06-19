@@ -269,7 +269,7 @@ export default function InvoiceViewPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-white text-black border-b-2 border-black">
-                  <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Item #</th>
+                  <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Item Code</th>
                   <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Description</th>
                   <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Qty</th>
                   <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Unit Price</th>
