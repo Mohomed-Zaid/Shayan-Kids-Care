@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
       .ilike('email', callerData.user.email)
       .maybeSingle()
 
-    const bootstrapSuper = ['shayankidscare@gmail.com', 'zaidn2848@gmail.com'].includes(
+    const bootstrapSuper = ['shayankidscare@gmail.com', 'info@shayankids.lk', 'zaidn2848@gmail.com'].includes(
       callerData.user.email.toLowerCase(),
     )
     if (!bootstrapSuper && !privilege?.is_super_admin) {

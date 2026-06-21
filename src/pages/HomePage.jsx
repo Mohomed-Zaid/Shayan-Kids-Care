@@ -4,6 +4,7 @@ import { Baby, HeartHandshake, Sparkles, PhoneCall, MapPin, Mail, Moon, Sun } fr
 import logo from '../pictures/logo.jpeg'
 import { useTheme } from '../contexts/ThemeContext'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
+import { COMPANY_EMAIL } from '../lib/companyInfo'
 
 function SectionTitle({ eyebrow, title, subtitle }) {
   return (
@@ -45,7 +46,7 @@ export default function HomePage() {
       '',
       message || '',
     ].join('\n')
-    const mailto = `mailto:shayankidscare@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+    const mailto = `mailto:${COMPANY_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
     window.location.href = mailto
   }
 
@@ -265,7 +266,7 @@ export default function HomePage() {
                 </div>
               </div>
               <div className="mt-5 flex items-center justify-between gap-3 flex-wrap">
-                <div className="text-xs text-slate-500 dark:text-slate-400">Clicking send will open your email app and draft a message to shayankidscare@gmail.com.</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400">Clicking send will open your email app and draft a message to {COMPANY_EMAIL}.</div>
                 <button type="button" onClick={onSendEmail} className="inline-flex items-center justify-center rounded-xl bg-rose-600 px-5 py-3 text-sm font-semibold text-white hover:bg-rose-700 transition-colors shadow-sm">
                   Request Wholesale Info
                 </button>
@@ -288,7 +289,7 @@ export default function HomePage() {
                   <div className="mt-0.5 text-rose-600"><Mail size={16} /></div>
                   <div>
                     <div className="font-semibold text-slate-900 dark:text-white">Email</div>
-                    <div className="text-slate-600 dark:text-slate-300">shayankidscare@gmail.com</div>
+                    <div className="text-slate-600 dark:text-slate-300">{COMPANY_EMAIL}</div>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">

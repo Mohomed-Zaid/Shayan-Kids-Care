@@ -6,7 +6,7 @@ import { usePermissions } from '../contexts/PermissionsContext'
 import { logAction } from '../lib/auditLog'
 import { Plus, Search, Trash2, Save, AlertTriangle, X } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
-import { companyPhonesHtml } from '../lib/companyInfo'
+import { companyPhonesHtml, COMPANY_EMAIL } from '../lib/companyInfo'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
 import ControlledDateField from '../components/ControlledDateField'
 
@@ -75,7 +75,7 @@ const buildGrnHtml = ({ purchase, vendor, items, totals, createdAt }) => {
         <div>10/3 B, Attidiya Road</div>
         <div>Kawdana, Dehiwala</div>
         ${companyPhonesHtml()}
-        <div style="color:#64748b">shayankidscare@gmail.com</div>
+        <div style="color:#64748b">${COMPANY_EMAIL}</div>
       </div>
     </div>
     <div style="text-align:left">
@@ -125,7 +125,7 @@ const buildGrnHtml = ({ purchase, vendor, items, totals, createdAt }) => {
     </div>
     <div style="padding:4px 32px;border-top:3px solid #1e293b;text-align:center;font-size:12px;color:#64748b">
       <div style="font-weight:600;color:#334155">Shayan's Kids &amp; Toys Store</div>
-      <div>shayankidscare@gmail.com</div>
+      <div>${COMPANY_EMAIL}</div>
     </div>
   </div>
 </div>`
@@ -522,7 +522,7 @@ export default function PurchasePage() {
                     <div>10/3 B, Attidiya Road</div>
                     <div>Kawdana, Dehiwala</div>
                     <CompanyPhoneLines />
-                    <div className="text-slate-500">shayankidscare@gmail.com</div>
+                    <div className="text-slate-500">{COMPANY_EMAIL}</div>
                   </div>
                 </div>
 
@@ -603,7 +603,7 @@ export default function PurchasePage() {
 
                 <div className="px-8 py-1 border-t-2 border-slate-800 text-center text-xs text-slate-500">
                   <div className="font-semibold text-slate-700">Shayan's Kids &amp; Toys Store</div>
-                  <div>shayankidscare@gmail.com</div>
+                  <div>{COMPANY_EMAIL}</div>
                 </div>
               </div>
             </div>

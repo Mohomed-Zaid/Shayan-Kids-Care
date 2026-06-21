@@ -5,7 +5,7 @@ import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import { Plus, Trash2, ArrowLeft, AlertTriangle, X } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
-import { companyPhonesHtml } from '../lib/companyInfo'
+import { companyPhonesHtml, COMPANY_EMAIL } from '../lib/companyInfo'
 
 const fmt = (val) => `Rs. ${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
@@ -58,7 +58,7 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
         <div>10/3 B, Attidiya Road</div>
         <div>Kawdana, Dehiwala</div>
         ${companyPhonesHtml()}
-        <div style="color:#64748b">shayankidscare@gmail.com</div>
+        <div style="color:#64748b">${COMPANY_EMAIL}</div>
       </div>
     </div>
     <div style="text-align:left">
@@ -123,7 +123,7 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
     </div>
     <div style="padding:4px 32px;border-top:3px solid #1e293b;text-align:center;font-size:12px;color:#64748b">
       <div style="font-weight:600;color:#334155">Shayan's Kids &amp; Toys Store</div>
-      <div>shayankidscare@gmail.com</div>
+      <div>${COMPANY_EMAIL}</div>
     </div>
   </div>
 </div>`

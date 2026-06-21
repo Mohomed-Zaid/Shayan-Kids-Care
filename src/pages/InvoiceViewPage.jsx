@@ -8,6 +8,7 @@ import { ArrowLeft, Printer, Download, Trash2, Pencil } from 'lucide-react'
 import PermissionGate from '../components/PermissionGate'
 import logo from '../pictures/logo.jpeg'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
+import { COMPANY_EMAIL } from '../lib/companyInfo'
 
 export default function InvoiceViewPage() {
   const { id } = useParams()
@@ -246,7 +247,7 @@ export default function InvoiceViewPage() {
                 <div>10/3 B, Attidiya Road</div>
                 <div>Kawdana, Dehiwala</div>
                 <CompanyPhoneLines />
-                <div className="text-slate-500 dark:text-slate-400">shayankidscare@gmail.com</div>
+                <div className="text-slate-500 dark:text-slate-400">{COMPANY_EMAIL}</div>
               </div>
             </div>
 
@@ -359,7 +360,7 @@ export default function InvoiceViewPage() {
               <div className="flex items-center justify-center gap-2">
                 <span className="font-bold text-slate-900 dark:text-slate-100">Shayan's Kids &amp; Toys Store</span>
                 <span className="text-slate-600 dark:text-slate-400">|</span>
-                <span className="text-slate-700 dark:text-slate-300">shayankidscare@gmail.com</span>
+                <span className="text-slate-700 dark:text-slate-300">{COMPANY_EMAIL}</span>
               </div>
             </div>
           </div>

@@ -7,6 +7,7 @@ import { logAction } from '../lib/auditLog'
 import { ArrowLeft, Printer, Download, Trash2, RotateCcw } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
+import { COMPANY_EMAIL } from '../lib/companyInfo'
 
 export default function ReturnViewPage() {
   const { id } = useParams()
@@ -239,7 +240,7 @@ export default function ReturnViewPage() {
                 <div>10/3 B, Attidiya Road</div>
                 <div>Kawdana, Dehiwala</div>
                 <CompanyPhoneLines />
-                <div className="text-slate-500 dark:text-slate-400">shayankidscare@gmail.com</div>
+                <div className="text-slate-500 dark:text-slate-400">{COMPANY_EMAIL}</div>
               </div>
             </div>
 
@@ -343,7 +344,7 @@ export default function ReturnViewPage() {
 
             <div className="px-8 py-1 border-t-2 border-red-700 dark:border-red-500 text-center text-xs text-slate-500 dark:text-slate-400">
               <div className="font-semibold text-slate-700 dark:text-slate-300">Shayan's Kids &amp; Toys Store</div>
-              <div>shayankidscare@gmail.com</div>
+              <div>{COMPANY_EMAIL}</div>
             </div>
           </div>
         </div>

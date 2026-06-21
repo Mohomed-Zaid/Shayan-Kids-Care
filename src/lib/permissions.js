@@ -1,6 +1,7 @@
 /** Super-admin emails always have full access (bootstrap). */
 export const SUPER_ADMIN_EMAILS = new Set([
   'shayankidscare@gmail.com',
+  'info@shayankids.lk',
   'zaidn2848@gmail.com',
 ])
 
