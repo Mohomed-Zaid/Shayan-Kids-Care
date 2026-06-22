@@ -76,7 +76,6 @@ export default function DashboardPage() {
     const USER_MAP = {
       'zaidn2848@gmail.com': 'Zaid',
       'shayankidscare@gmail.com': 'Niflan',
-      'info@shayankids.lk': 'Niflan',
     }
     return USER_MAP[email] ?? email.split('@')[0]
   })()

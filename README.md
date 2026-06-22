@@ -130,7 +130,6 @@ User display names and roles are configured in `src/layouts/AppLayout.jsx`:
 const USER_MAP = {
   'zaidn2848@gmail.com':       { name: 'Zaid',   role: 'IT Developer' },
   'shayankidscare@gmail.com':  { name: 'Niflan', role: 'Owner' },
-  'info@shayankids.lk':        { name: 'Niflan', role: 'Owner' },
   // Add more users here
 }
 ```

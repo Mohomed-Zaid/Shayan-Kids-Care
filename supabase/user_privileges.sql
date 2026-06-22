@@ -73,7 +73,6 @@ CREATE POLICY user_privileges_delete ON public.user_privileges
 INSERT INTO public.user_privileges (email, display_name, is_super_admin, is_active, permissions)
 VALUES
   ('shayankidscare@gmail.com', 'Niflan', true, true, '{}'::jsonb),
-  ('info@shayankids.lk', 'Niflan', true, true, '{}'::jsonb),
   ('zaidn2848@gmail.com', 'Zaid', true, true, '{}'::jsonb)
 ON CONFLICT (email) DO UPDATE SET
   is_super_admin = EXCLUDED.is_super_admin,

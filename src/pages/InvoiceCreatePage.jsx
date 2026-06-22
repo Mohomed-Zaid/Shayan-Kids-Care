@@ -12,6 +12,7 @@ const fmt = (val) => `Rs. ${Number(val || 0).toLocaleString(undefined, { minimum
 const safeFilename = (name) => String(name || '').replace(/[\\/:*?"<>|]+/g, '-').trim()
 
 const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, grandTotal, vatAmount, totalWithVat, vatEnabled, vatRate, paymentType }) => {
+  const companyEmail = COMPANY_EMAIL
   const c = customer ?? {}
   const r = rep ?? {}
   const dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
@@ -58,7 +59,7 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
         <div>10/3 B, Attidiya Road</div>
         <div>Kawdana, Dehiwala</div>
         ${companyPhonesHtml()}
-        <div style="color:#64748b">${COMPANY_EMAIL}</div>
+        <div style="color:#64748b">${companyEmail}</div>
       </div>
     </div>
     <div style="text-align:left">
@@ -123,7 +124,7 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
     </div>
     <div style="padding:4px 32px;border-top:3px solid #1e293b;text-align:center;font-size:12px;color:#64748b">
       <div style="font-weight:600;color:#334155">Shayan's Kids &amp; Toys Store</div>
-      <div>${COMPANY_EMAIL}</div>
+      <div>${companyEmail}</div>
     </div>
   </div>
 </div>`

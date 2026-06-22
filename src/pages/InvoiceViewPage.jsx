@@ -8,7 +8,7 @@ import { ArrowLeft, Printer, Download, Trash2, Pencil } from 'lucide-react'
 import PermissionGate from '../components/PermissionGate'
 import logo from '../pictures/logo.jpeg'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
-import { COMPANY_EMAIL } from '../lib/companyInfo'
+import { COMPANY_EMAIL } from '../lib/companyContact'
 
 export default function InvoiceViewPage() {
   const { id } = useParams()

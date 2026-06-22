@@ -7,7 +7,7 @@ import { logAction } from '../lib/auditLog'
 import { ArrowLeft, Printer, Download, Trash2, RotateCcw } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
-import { COMPANY_EMAIL } from '../lib/companyInfo'
+import { COMPANY_EMAIL } from '../lib/companyContact'
 
 export default function ReturnViewPage() {
   const { id } = useParams()

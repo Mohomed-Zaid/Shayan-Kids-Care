@@ -26,6 +26,7 @@ const withCommas = (val) => {
 const stripCommas = (val) => String(val).replace(/,/g, '')
 
 const buildBeginningStockHtml = ({ items, totals, date, refNo }) => {
+  const companyEmail = COMPANY_EMAIL
   const dateStr = new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
   const refLabel = refNo || `BS-${new Date().getTime()}`
 
@@ -72,7 +73,7 @@ const buildBeginningStockHtml = ({ items, totals, date, refNo }) => {
         <div>10/3 B, Attidiya Road</div>
         <div>Kawdana, Dehiwala</div>
         ${companyPhonesHtml()}
-        <div style="color:#64748b">${COMPANY_EMAIL}</div>
+        <div style="color:#64748b">${companyEmail}</div>
       </div>
     </div>
     <div style="text-align:left">
@@ -120,7 +121,7 @@ const buildBeginningStockHtml = ({ items, totals, date, refNo }) => {
     </div>
     <div style="padding:4px 32px;border-top:3px solid #1e293b;text-align:center;font-size:12px;color:#64748b">
       <div style="font-weight:600;color:#334155">Shayan's Kids &amp; Toys Store</div>
-      <div>${COMPANY_EMAIL}</div>
+      <div>${companyEmail}</div>
     </div>
   </div>
 </div>`

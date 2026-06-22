@@ -8,7 +8,7 @@ import { pressDateISO, formatLocalDate } from '../lib/localDate'
 import { ArrowLeft, CheckCircle, XCircle, ArrowRightLeft, ShoppingCart, Printer, Download, Trash2, FileText, Pencil, Truck } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
-import { COMPANY_EMAIL } from '../lib/companyInfo'
+import { COMPANY_EMAIL } from '../lib/companyContact'
 import PermissionGate from '../components/PermissionGate'
 
 const statusConfig = {

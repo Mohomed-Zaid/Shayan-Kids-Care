@@ -4,7 +4,7 @@ import { Baby, HeartHandshake, Sparkles, PhoneCall, MapPin, Mail, Moon, Sun } fr
 import logo from '../pictures/logo.jpeg'
 import { useTheme } from '../contexts/ThemeContext'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
-import { COMPANY_EMAIL } from '../lib/companyInfo'
+import { COMPANY_EMAIL } from '../lib/companyContact'
 
 function SectionTitle({ eyebrow, title, subtitle }) {
   return (

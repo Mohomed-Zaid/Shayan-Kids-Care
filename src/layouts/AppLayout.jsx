@@ -12,7 +12,6 @@ import { useTheme } from '../contexts/ThemeContext'
 const USER_MAP = {
   'zaidn2848@gmail.com':       { name: 'Zaid',   role: 'IT Developer' },
   'shayankidscare@gmail.com':  { name: 'Niflan', role: 'Owner' },
-  'info@shayankids.lk':        { name: 'Niflan', role: 'Owner' },
   // Add more users below:
   // 'someone@example.com':     { name: 'Name',   role: 'Admin' },
   // 'rep@example.com':         { name: 'RepName', role: 'Rep' },

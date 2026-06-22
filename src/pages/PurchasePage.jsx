@@ -25,6 +25,7 @@ const waitFor = async (predicate, { timeoutMs = 2000, intervalMs = 50 } = {}) =>
 }
 
 const buildGrnHtml = ({ purchase, vendor, items, totals, createdAt }) => {
+  const companyEmail = COMPANY_EMAIL
   const v = vendor ?? {}
   const p = purchase ?? {}
   const dateStr = new Date(p.date || p.created_at || createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
@@ -75,7 +76,7 @@ const buildGrnHtml = ({ purchase, vendor, items, totals, createdAt }) => {
         <div>10/3 B, Attidiya Road</div>
         <div>Kawdana, Dehiwala</div>
         ${companyPhonesHtml()}
-        <div style="color:#64748b">${COMPANY_EMAIL}</div>
+        <div style="color:#64748b">${companyEmail}</div>
       </div>
     </div>
     <div style="text-align:left">
@@ -125,7 +126,7 @@ const buildGrnHtml = ({ purchase, vendor, items, totals, createdAt }) => {
     </div>
     <div style="padding:4px 32px;border-top:3px solid #1e293b;text-align:center;font-size:12px;color:#64748b">
       <div style="font-weight:600;color:#334155">Shayan's Kids &amp; Toys Store</div>
-      <div>${COMPANY_EMAIL}</div>
+      <div>${companyEmail}</div>
     </div>
   </div>
 </div>`
