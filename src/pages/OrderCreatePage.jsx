@@ -27,6 +27,10 @@ export default function OrderCreatePage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
 
+  // Customer summary state
+  const [customerSummary, setCustomerSummary] = useState(null)
+  const [loadingCustomerSummary, setLoadingCustomerSummary] = useState(false)
+
   useEffect(() => {
     let mounted = true
 
@@ -57,6 +61,75 @@ export default function OrderCreatePage() {
 
     return () => { mounted = false }
   }, [])
+
+  useEffect(() => {
+    if (!customerId) {
+      setCustomerSummary(null)
+      return
+    }
+
+    const loadCustomerSummary = async () => {
+      setLoadingCustomerSummary(true)
+      try {
+        const customer = customers.find(c => c.id === customerId)
+        
+        const [invoicesRes, paymentsRes, returnsRes, chequesRes] = await Promise.all([
+          supabase.from('invoices').select('id, invoice_number, total_amount, created_at').eq('customer_id', customerId).order('created_at', { ascending: false }),
+          supabase.from('invoice_payments').select('invoice_id, amount'),
+          supabase.from('returns').select('invoice_id, total_amount').eq('customer_id', customerId),
+          supabase.from('customer_cheques').select('amount, status').eq('customer_id', customerId),
+        ])
+
+        // Calculate outstanding due
+        const invoices = invoicesRes.data ?? []
+        const payments = paymentsRes.data ?? []
+        const returns = returnsRes.data ?? []
+        const cheques = chequesRes.data ?? []
+
+        let totalOutstanding = 0
+
+        const paymentSumByInvoice = new Map()
+        for (const p of payments) {
+          paymentSumByInvoice.set(p.invoice_id, (paymentSumByInvoice.get(p.invoice_id) ?? 0) + Number(p.amount ?? 0))
+        }
+
+        const returnsSumByInvoice = new Map()
+        for (const r of returns) {
+          returnsSumByInvoice.set(r.invoice_id, (returnsSumByInvoice.get(r.invoice_id) ?? 0) + Number(r.total_amount ?? 0))
+        }
+
+        for (const inv of invoices) {
+          const paid = paymentSumByInvoice.get(inv.id) ?? 0
+          const returned = returnsSumByInvoice.get(inv.id) ?? 0
+          const balance = Number(inv.total_amount ?? 0) - paid - returned
+          if (balance > 0) {
+            totalOutstanding += balance
+          }
+        }
+
+        // Calculate cheques
+        const chequeInHand = cheques.filter(c => c.status === 'in_hand').reduce((sum, c) => sum + Number(c.amount ?? 0), 0)
+        const returnCheque = cheques.filter(c => c.status === 'returned').reduce((sum, c) => sum + Number(c.amount ?? 0), 0)
+
+        // Last invoice
+        const lastInvoice = invoices[0] || null
+
+        setCustomerSummary({
+          customer,
+          outstandingDue: totalOutstanding,
+          chequeInHand,
+          returnCheque,
+          lastInvoice
+        })
+      } catch (e) {
+        console.error('Failed to load customer summary:', e)
+      } finally {
+        setLoadingCustomerSummary(false)
+      }
+    }
+
+    loadCustomerSummary()
+  }, [customerId, customers])
 
   const linesWithTotals = useMemo(() => {
     return lines.map((l) => {
@@ -223,6 +296,80 @@ export default function OrderCreatePage() {
           </div>
         ) : null}
       </div>
+
+      {/* Customer Account Summary */}
+      {customerId && (
+        <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700 rounded-xl p-5 shadow-sm">
+          {loadingCustomerSummary ? (
+            <div className="flex items-center justify-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-900 dark:border-white"></div>
+            </div>
+          ) : customerSummary ? (
+            <div className="space-y-4">
+              {/* Customer Details */}
+              <div>
+                <div className="text-lg font-bold text-slate-900 dark:text-white">
+                  {customerSummary.customer?.code && `${customerSummary.customer.code} — `}
+                  {customerSummary.customer?.name}
+                </div>
+                {customerSummary.customer?.address && (
+                  <div className="text-sm text-slate-600 dark:text-slate-300 mt-1">
+                    Address: {customerSummary.customer.address}
+                  </div>
+                )}
+                {customerSummary.customer?.phone && (
+                  <div className="text-sm text-slate-600 dark:text-slate-300">
+                    Phone: {customerSummary.customer.phone}
+                  </div>
+                )}
+              </div>
+
+              {/* Divider */}
+              <div className="border-t border-slate-200 dark:border-slate-700"></div>
+
+              {/* Account Summary */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Due</span>
+                    <span className="text-lg font-bold text-red-600 dark:text-red-400">
+                      Rs. {customerSummary.outstandingDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Cheque In Hand</span>
+                    <span className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                      Rs. {customerSummary.chequeInHand.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Return Cheque</span>
+                    <span className="text-lg font-bold text-red-600 dark:text-red-400">
+                      Rs. {customerSummary.returnCheque.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  {customerSummary.lastInvoice && (
+                    <div>
+                      <span className="text-sm font-medium text-slate-700 dark:text-slate-200 block mb-1">Last Bill</span>
+                      <div className="text-sm text-slate-600 dark:text-slate-300">
+                        INV-{String(customerSummary.lastInvoice.invoice_number || '').padStart(4, '0')}
+                        <span className="ml-2 text-slate-500">
+                          ({new Date(customerSummary.lastInvoice.created_at).toLocaleDateString()})
+                        </span>
+                      </div>
+                      <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                        Rs. {Number(customerSummary.lastInvoice.total_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
         <div className="p-5 flex items-center justify-between border-b border-slate-100 dark:border-slate-700">
