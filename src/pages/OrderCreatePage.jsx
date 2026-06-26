@@ -199,7 +199,30 @@ export default function OrderCreatePage() {
       return
     }
 
+    // Credit limit validation
+    const creditLimit = customerSummary?.customer?.credit_limit ?? 20000
+    const isOverLimit = customerSummary && customerSummary.outstandingDue > creditLimit
 
+    if (isOverLimit) {
+      // Log blocked order
+      logAction({
+        action: 'block_order_credit_limit',
+        targetType: 'customer',
+        targetId: customerId,
+        targetLabel: customerSummary?.customer?.name,
+        metadata: {
+          customer_name: customerSummary?.customer?.name,
+          current_due: customerSummary.outstandingDue,
+          credit_limit: creditLimit,
+          date: new Date().toISOString()
+        }
+      })
+
+      setError('Order cannot be created. Customer outstanding balance is Rs. ' + 
+        customerSummary.outstandingDue.toLocaleString(undefined, { minimumFractionDigits: 2 }) + 
+        '. Please collect payment before creating a new order.')
+      return
+    }
 
     setSaving(true)
     try {
@@ -331,9 +354,15 @@ export default function OrderCreatePage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Due</span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Outstanding</span>
                     <span className="text-lg font-bold text-red-600 dark:text-red-400">
                       Rs. {customerSummary.outstandingDue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-200">Credit Limit</span>
+                    <span className="text-lg font-bold text-slate-900 dark:text-white">
+                      Rs. {Number(customerSummary.customer?.credit_limit ?? 20000).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -364,6 +393,30 @@ export default function OrderCreatePage() {
                       </div>
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* Credit Status */}
+              <div className={`p-3 rounded-lg border ${
+                customerSummary.outstandingDue <= (customerSummary.customer?.credit_limit ?? 20000)
+                  ? 'bg-emerald-50 dark:bg-emerald-900/30 border-emerald-200 dark:border-emerald-700'
+                  : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-700'
+              }`}>
+                <div className="flex items-center gap-2">
+                  <span className={`w-3 h-3 rounded-full ${
+                    customerSummary.outstandingDue <= (customerSummary.customer?.credit_limit ?? 20000)
+                      ? 'bg-emerald-500'
+                      : 'bg-red-500'
+                  }`}></span>
+                  <span className={`text-sm font-semibold ${
+                    customerSummary.outstandingDue <= (customerSummary.customer?.credit_limit ?? 20000)
+                      ? 'text-emerald-800 dark:text-emerald-200'
+                      : 'text-red-800 dark:text-red-200'
+                  }`}>
+                    {customerSummary.outstandingDue <= (customerSummary.customer?.credit_limit ?? 20000)
+                      ? 'Customer credit available. Order can be created.'
+                      : 'Credit limit exceeded!'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -493,7 +546,7 @@ export default function OrderCreatePage() {
         </button>
         <button
           onClick={onSave}
-          disabled={saving}
+          disabled={saving || (customerSummary && customerSummary.outstandingDue > (customerSummary.customer?.credit_limit ?? 20000))}
           className="px-5 py-2.5 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 transition-colors shadow-sm"
         >
           {saving ? 'Saving...' : 'Create Order'}

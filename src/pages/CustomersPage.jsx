@@ -10,6 +10,7 @@ function CustomerForm({ initialValue, onCancel, onSave }) {
   const [address, setAddress] = useState(initialValue?.address ?? '')
   const [phone, setPhone] = useState(initialValue?.phone ?? '')
   const [phone2, setPhone2] = useState(initialValue?.phone2 ?? '')
+  const [creditLimit, setCreditLimit] = useState(initialValue?.credit_limit ?? 20000)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
@@ -18,7 +19,13 @@ function CustomerForm({ initialValue, onCancel, onSave }) {
     setError(null)
     setLoading(true)
     try {
-      await onSave({ name: name.trim(), address: address.trim(), phone: phone.trim(), phone2: phone2.trim() })
+      await onSave({ 
+        name: name.trim(), 
+        address: address.trim(), 
+        phone: phone.trim(), 
+        phone2: phone2.trim(),
+        credit_limit: Number(creditLimit) || 20000
+      })
     } catch (err) {
       setError(err?.message ?? 'Failed to save')
     } finally {
@@ -75,6 +82,18 @@ function CustomerForm({ initialValue, onCancel, onSave }) {
               value={phone2}
               onChange={(e) => setPhone2(e.target.value)}
               className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700">Credit Limit (Rs.)</label>
+            <input
+              type="number"
+              value={creditLimit}
+              onChange={(e) => setCreditLimit(e.target.value)}
+              className="mt-1.5 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+              min="0"
+              step="0.01"
             />
           </div>
 
@@ -172,7 +191,13 @@ export default function CustomersPage() {
     if (editing) {
       const { error: err } = await supabase
         .from('customers')
-        .update({ name: values.name, address: values.address, phone: values.phone, phone2: values.phone2 })
+        .update({ 
+          name: values.name, 
+          address: values.address, 
+          phone: values.phone, 
+          phone2: values.phone2,
+          credit_limit: values.credit_limit
+        })
         .eq('id', editing.id)
       if (err) throw err
       logAction({ action: 'edit_customer', targetType: 'customer', targetId: editing.id, targetLabel: values.name })
@@ -188,7 +213,14 @@ export default function CustomersPage() {
 
       const { error: err } = await supabase
         .from('customers')
-        .insert({ name: values.name, address: values.address, phone: values.phone, phone2: values.phone2, customer_number: nextNum })
+        .insert({ 
+          name: values.name, 
+          address: values.address, 
+          phone: values.phone, 
+          phone2: values.phone2, 
+          customer_number: nextNum,
+          credit_limit: values.credit_limit
+        })
       if (err) throw err
       logAction({ action: 'create_customer', targetType: 'customer', targetLabel: values.name })
     }

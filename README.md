@@ -5,14 +5,14 @@ A modern admin dashboard for managing products, customers, orders, invoices, pur
 ## Features
 
 - **Dashboard** — Personalized welcome, key stats (Today/Total Sales & Purchases, Products, Customers), Sales vs Profit chart with historical cost-at-time-of-sale, donut receivable chart, recent invoices & purchases, date/time display
-- **Orders & Invoices** — Create orders, confirm, convert to invoice with stock tracking (allows negative stock for backorders); professional print/PDF layout with totals, signatures, and footer
+- **Orders & Invoices** — Create orders, confirm, convert to invoice with stock tracking (allows negative stock for backorders); customer account summary panel shows customer details, outstanding due, cheques in hand/returned, and last bill on order create page; credit limit validation blocks order creation if customer's outstanding due exceeds their limit (with audit logging of blocked orders); professional print/PDF layout with totals, signatures, and footer
 - **Backorders & Negative Stock** — Orders can be created even if stock is insufficient; stock can go negative (tracked as "backorder needed"); backorder badge with warning icon shows on products; purchasing stock automatically reduces negative stock first
 - **Backorder Report** — Shows all products with negative stock, total backordered units, and status; CSV export available
 - **SMS Service** — Send single or bulk SMS to customers; use templates (Order Confirmation, Payment Reminder, Thank You, Promotion); personalize messages with `{customer_name}`; all bulk SMS logged to `bsms_bulk_log`
 - **Delivery Tracking** — Mark invoiced orders as delivered with one click; delivery date recorded automatically; delivered orders separated into their own tab with "Delivered On" column
 - **Backup & Safety** — Full JSON backup export of all tables; restore from backup file with double confirmation; per-table CSV export; database overview with record counts and row preview; activity log showing recent orders, invoices, purchases, payments, returns & journal entries
 - **Products** — Add/edit/delete products with stock tracking, low-stock badges, and comma-formatted prices; edit/delete restricted to admin user (Zaid)
-- **Customers** — Full CRUD with foreign-key protection on delete
+- **Customers** — Full CRUD with foreign-key protection on delete; configurable credit limit per customer (default: Rs. 20,000)
 - **Vendors** — Manage vendor list with auto-generated codes (V-001, V-002…) for purchases
 - **Purchases** — Create purchases with vendor selection, payment type (cash/credit/bank), multiple items, comma-formatted Qty/Cost/MRP; purchase history with inline editing and detail view; auto stock update on existing products (reduces negative stock first)
 - **Employees / Reps** — Manage staff with role field and "Is Rep" toggle for invoice assignment; commission tracking
@@ -94,7 +94,7 @@ supabase functions deploy send-sms
 | Table | Description |
 |---|---|
 | `products` | Product catalog with name, code, price, stock |
-| `customers` | Customer list with name, address, phone |
+| `customers` | Customer list with name, address, phone, and credit limit (default: Rs. 20,000) |
 | `employees` | Staff with name, address, phones, email, role, is_rep |
 | `vendors` | Vendor list with code, name, address, phone, status |
 | `orders` | Sales order header with customer_id, rep_id, total, status (pending/confirmed/invoiced/converted/cancelled/delivered), delivered_at |
