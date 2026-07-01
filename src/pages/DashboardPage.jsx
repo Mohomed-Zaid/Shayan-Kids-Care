@@ -142,14 +142,14 @@ export default function DashboardPage() {
           .lte('created_at', todayEnd.toISOString()),
         supabase
           .from('invoice_payments')
-          .select('amount, paid_at')
+          .select('amount, paid_at, method')
           .gte('paid_at', todayStart.toISOString())
           .lte('paid_at', todayEnd.toISOString()),
         supabase
           .from('journals')
           .select('budget, s_balance, h_balance'),
         supabase.from('invoices').select('total_amount'),
-        supabase.from('invoice_payments').select('amount'),
+        supabase.from('invoice_payments').select('amount, method'),
         supabase
           .from('customer_cheques')
           .select('id, cheque_date, cheque_number, amount, bank_name, status, customers(name)')
@@ -209,12 +209,12 @@ export default function DashboardPage() {
       const payChequeData = await payChequeRes
 
       const todaySales = (todaySalesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
-      const todayPayments = (todayPaymentsRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
+      const todayPayments = (todayPaymentsRes.data ?? []).filter(row => row.method !== 'cheque').reduce((sum, row) => sum + (row.amount ?? 0), 0)
       const journalsExpenses = (totalExpensesRes.data ?? []).reduce((sum, row) => sum + (Number(row.budget ?? 0) + Number(row.s_balance ?? 0) + Number(row.h_balance ?? 0)), 0)
       const journalEntriesExpenses = (journalEntryLinesRes.data ?? []).reduce((sum, row) => sum + (Number(row.debit ?? 0)), 0)
       const totalExpenses = journalsExpenses + journalEntriesExpenses
       const totalSales = (totalSalesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
-      const totalPayments = (totalPaymentsRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
+      const totalPayments = (totalPaymentsRes.data ?? []).filter(row => row.method !== 'cheque').reduce((sum, row) => sum + (row.amount ?? 0), 0)
       const chequeInHand = (chequeInHandRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
       const returnCheque = (returnChequeRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
       const totalPurchases = (payableRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
