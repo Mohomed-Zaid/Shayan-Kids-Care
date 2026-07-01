@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Package, Users, DollarSign, Plus, Eye, TrendingUp, ArrowUpRight, ShoppingCart, Wallet, Calendar, Landmark, RotateCcw, CreditCard } from 'lucide-react'
+import { Package, Users, DollarSign, Plus, Eye, TrendingUp, ArrowUpRight, ShoppingCart, Wallet, Calendar, Landmark, RotateCcw, CreditCard, CheckCircle2 } from 'lucide-react'
 import { usePermissions } from '../contexts/PermissionsContext'
 import PermissionGate from '../components/PermissionGate'
 import Chart from 'react-apexcharts'
@@ -11,9 +11,11 @@ const statConfig = [
   { key: 'todaySales', label: 'Today Sales', icon: DollarSign, gradient: 'from-amber-500 to-orange-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-amber-100', isCurrency: true },
   { key: 'totalSales', label: 'Total Sales', icon: TrendingUp, gradient: 'from-rose-500 to-pink-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-rose-100', isCurrency: true },
   { key: 'totalExpenses', label: 'Total Expenses', icon: ShoppingCart, gradient: 'from-indigo-500 to-indigo-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-indigo-100', isCurrency: true },
-  { key: 'totalPayments', label: 'Total Payments', icon: Wallet, gradient: 'from-teal-500 to-cyan-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-teal-100', isCurrency: true },
+  { key: 'totalPayments', label: 'Total Cash & Bank Payments', icon: Wallet, gradient: 'from-teal-500 to-cyan-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-teal-100', isCurrency: true },
   { key: 'chequeInHand', label: 'Cheque In Hand', icon: Landmark, gradient: 'from-violet-500 to-purple-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-violet-100', isCurrency: true },
   { key: 'returnCheque', label: 'Return Cheque', icon: RotateCcw, gradient: 'from-orange-500 to-red-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-orange-100', isCurrency: true },
+  { key: 'depositedCheques', label: 'Deposited Cheques', icon: CheckCircle2, gradient: 'from-sky-500 to-blue-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-sky-100', isCurrency: true },
+  { key: 'returnAmount', label: 'Return Amount', icon: RotateCcw, gradient: 'from-red-500 to-rose-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-red-100', isCurrency: true },
   { key: 'payable', label: 'Payable', icon: CreditCard, gradient: 'from-pink-500 to-rose-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-pink-100', isCurrency: true },
   { key: 'products', label: 'Products', icon: Package, gradient: 'from-blue-500 to-blue-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-blue-100' },
   { key: 'customers', label: 'Customers', icon: Users, gradient: 'from-emerald-500 to-emerald-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-emerald-100' },
@@ -89,6 +91,8 @@ export default function DashboardPage() {
     totalPayments: 0,
     chequeInHand: 0,
     returnCheque: 0,
+    depositedCheques: 0,
+    returnAmount: 0,
     payable: 0,
   })
   const [receivableCheques, setReceivableCheques] = useState([])
@@ -132,7 +136,7 @@ export default function DashboardPage() {
         .order('paid_at', { ascending: false })
         .limit(10)
 
-      const [productsRes, customersRes, todaySalesRes, todayPaymentsRes, totalExpensesRes, totalSalesRes, totalPaymentsRes, recentInvRes, allPayRes, recentPayRes, invForChartsRes, payForChartsRes, invItemsForProfitRes, purchaseItemsRes, chequeInHandRes, returnChequeRes, payableRes, purchasePaymentsRes, journalEntryLinesRes] = await Promise.all([
+      const [productsRes, customersRes, todaySalesRes, todayPaymentsRes, totalExpensesRes, totalSalesRes, totalPaymentsRes, recentInvRes, allPayRes, recentPayRes, invForChartsRes, payForChartsRes, invItemsForProfitRes, purchaseItemsRes, chequeInHandRes, returnChequeRes, depositedChequeRes, returnsRes, payableRes, purchasePaymentsRes, journalEntryLinesRes] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }),
         supabase.from('customers').select('id', { count: 'exact', head: true }),
         supabase
@@ -196,6 +200,13 @@ export default function DashboardPage() {
           .select('amount')
           .eq('status', 'returned'),
         supabase
+          .from('customer_cheques')
+          .select('amount')
+          .eq('status', 'deposited'),
+        supabase
+          .from('returns')
+          .select('total_amount'),
+        supabase
           .from('purchases')
           .select('total_amount'),
         supabase
@@ -217,6 +228,8 @@ export default function DashboardPage() {
       const totalPayments = (totalPaymentsRes.data ?? []).filter(row => row.method !== 'cheque').reduce((sum, row) => sum + (row.amount ?? 0), 0)
       const chequeInHand = (chequeInHandRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
       const returnCheque = (returnChequeRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
+      const depositedCheques = (depositedChequeRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
+      const returnAmount = (returnsRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
       const totalPurchases = (payableRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
       const totalPurchasePayments = (purchasePaymentsRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
       const payable = Math.max(0, totalPurchases - totalPurchasePayments)
@@ -230,6 +243,8 @@ export default function DashboardPage() {
         totalPayments,
         chequeInHand,
         returnCheque,
+        depositedCheques,
+        returnAmount,
         payable,
       })
 

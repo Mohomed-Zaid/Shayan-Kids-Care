@@ -128,8 +128,8 @@ export default function ChequeAdministrationPage() {
   const depositedFiltered = useMemo(() => {
     const q = search.trim().toLowerCase()
 
-    // Merge customer deposited + payable cheques
-    const allDeposited = [...chequesDeposited, ...payableCheques]
+    // Only show customer deposited cheques (receivable), no payable cheques
+    const allDeposited = [...chequesDeposited]
 
     return allDeposited.filter((r) => {
       if (depositFrom || depositTo) {
@@ -143,14 +143,14 @@ export default function ChequeAdministrationPage() {
       }
 
       if (!q) return true
-      const name = r.cheque_type === 'payable' ? r.vendors?.name : r.customers?.name
+      const name = r.customers?.name
       return (
         String(r.cheque_number ?? '').toLowerCase().includes(q) ||
         String(r.bank_name ?? '').toLowerCase().includes(q) ||
         String(name ?? '').toLowerCase().includes(q)
       )
     })
-  }, [chequesDeposited, payableCheques, depositFrom, depositTo, search])
+  }, [chequesDeposited, depositFrom, depositTo, search])
 
   const inHandTotals = useMemo(() => {
     const ids = selectedIds
@@ -554,10 +554,7 @@ export default function ChequeAdministrationPage() {
         )}
 
         {tab === 'deposited' && (() => {
-          const receivableRows = depositedFiltered.filter((r) => r.cheque_type !== 'payable')
-          const payableRows = depositedFiltered.filter((r) => r.cheque_type === 'payable')
-          const receivableTotal = receivableRows.reduce((s, r) => s + Number(r.amount ?? 0), 0)
-          const payableTotal = payableRows.reduce((s, r) => s + Number(r.amount ?? 0), 0)
+          const receivableTotal = depositedFiltered.reduce((s, r) => s + Number(r.amount ?? 0), 0)
           return (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3 border-t border-slate-100 dark:border-emerald-900/30 bg-slate-50/50 dark:bg-emerald-950/20">
             <div className="flex items-center gap-3 flex-wrap">
@@ -565,10 +562,7 @@ export default function ChequeAdministrationPage() {
                 Selected: <span className="font-bold text-slate-900 dark:text-white">{selectedTotals.count}</span>
               </div>
               <div className="text-sm text-slate-600 dark:text-emerald-100/70">
-                Receivable: <span className="font-extrabold text-sky-700 dark:text-sky-200">{fmtMoney(receivableTotal)}</span>
-              </div>
-              <div className="text-sm text-slate-600 dark:text-emerald-100/70">
-                Payable: <span className="font-extrabold text-amber-700 dark:text-amber-200">{fmtMoney(payableTotal)}</span>
+                Total: <span className="font-extrabold text-sky-700 dark:text-sky-200">{fmtMoney(receivableTotal)}</span>
               </div>
             </div>
 
