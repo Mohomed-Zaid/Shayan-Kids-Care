@@ -17,6 +17,7 @@ import CompanyPhoneLines from '../components/CompanyPhoneLines'
 import ControlledDateField from '../components/ControlledDateField'
 import { Search, Eye, FileText, Filter, Plus } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
+import { sendSingleSMS } from '../lib/sms'
 
 const fmt = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
@@ -35,6 +36,7 @@ export default function ReceivablesPage() {
   const [payments, setPayments] = useState([])
   const [returns, setReturns] = useState([])
   const [banks, setBanks] = useState([])
+  const [customers, setCustomers] = useState([])
 
   const [payOpen, setPayOpen] = useState(false)
   const [paySaving, setPaySaving] = useState(false)
@@ -47,7 +49,9 @@ export default function ReceivablesPage() {
     sub_method: 'other',
     reference: '',
     note: '',
+    send_sms: true,
   })
+  const [selectedCustomerPhone, setSelectedCustomerPhone] = useState('')
 
   const [cheques, setCheques] = useState([
     {
@@ -65,7 +69,7 @@ export default function ReceivablesPage() {
     setLoading(true)
     setError(null)
 
-    const [invRes, payRes, retRes, bankRes] = await Promise.all([
+    const [invRes, payRes, retRes, bankRes, custRes] = await Promise.all([
       supabase
         .from('invoices')
         .select('id, invoice_number, customer_id, total_amount, created_at, payment_type, customers(name, phone)')
@@ -80,6 +84,7 @@ export default function ReceivablesPage() {
         .select('id, customer_id, total_amount')
         .order('created_at', { ascending: false }),
       supabase.from('banks').select('id, code, name, bank_code, branch').order('code'),
+      supabase.from('customers').select('id, name, phone').order('name'),
     ])
 
     if (invRes.error) {
@@ -106,6 +111,12 @@ export default function ReceivablesPage() {
       setBanks([])
     } else {
       setBanks(bankRes.data ?? [])
+    }
+
+    if (custRes.error) {
+      setCustomers([])
+    } else {
+      setCustomers(custRes.data ?? [])
     }
 
     setLoading(false)
@@ -262,6 +273,7 @@ export default function ReceivablesPage() {
       const paid = paymentSumByInvoice.get(inv.id) ?? 0
       return s + Math.max(0, Number(inv.total_amount ?? 0) - paid)
     }, 0)
+    const customer = customers.find((c) => c.id === customerId)
     setPayForm({
       customer_id: customerId,
       paid_at: new Date().toISOString().slice(0, 10),
@@ -271,7 +283,9 @@ export default function ReceivablesPage() {
       sub_method: 'other',
       reference: '',
       note: '',
+      send_sms: true,
     })
+    setSelectedCustomerPhone(customer?.phone || '')
     setCheques([
       {
         cheque_date: new Date().toISOString().slice(0, 10),
@@ -400,10 +414,13 @@ export default function ReceivablesPage() {
       }
     }
 
+    const customer = customers.find((c) => c.id === payForm.customer_id)
     const customerName =
+      customer?.name ??
       invoices.find((inv) => inv.customer_id === payForm.customer_id)?.customers?.name ??
       customersRows.find((r) => r.customer_id === payForm.customer_id)?.name ??
       ''
+    const customerPhone = selectedCustomerPhone
 
     setPaySaving(true)
     
@@ -439,6 +456,7 @@ export default function ReceivablesPage() {
       .filter(Boolean)
 
     try {
+      let insertedPayments = []
       if (resolvedMethod === 'cheque') {
         // Each cheque becomes a separate payment, distributed across invoices
         const payload = []
@@ -472,10 +490,11 @@ export default function ReceivablesPage() {
           .insert(payload)
           .select('id, invoice_id, amount, paid_at, method, bank_name, reference, note, created_at')
         if (err) throw err
+        insertedPayments = inserted ?? []
 
-        const totalPaid = (inserted ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0)
+        const totalPaid = insertedPayments.reduce((s, r) => s + Number(r.amount ?? 0), 0)
         const balanceAfter = Number(totalOutstanding ?? 0) - totalPaid
-        const firstId = (inserted ?? [])[0]?.id
+        const firstId = insertedPayments[0]?.id
         setReceiptData({
           customerName,
           settlement: settlementInvoices,
@@ -503,10 +522,11 @@ export default function ReceivablesPage() {
           .insert(payload)
           .select('id, invoice_id, amount, paid_at, method, bank_name, reference, note, created_at')
         if (err) throw err
+        insertedPayments = inserted ?? []
 
-        const totalPaid = (inserted ?? []).reduce((s, r) => s + Number(r.amount ?? 0), 0)
+        const totalPaid = insertedPayments.reduce((s, r) => s + Number(r.amount ?? 0), 0)
         const balanceAfter = Number(totalOutstanding ?? 0) - totalPaid
-        const firstId = (inserted ?? [])[0]?.id
+        const firstId = insertedPayments[0]?.id
         setReceiptData({
           customerName,
           settlement: settlementInvoices,
@@ -522,7 +542,55 @@ export default function ReceivablesPage() {
         await downloadReceiptPdf(`Receipt-${customerName || 'Customer'}-${new Date().toISOString().slice(0, 10)}.pdf`)
       }
 
-      toast.success('Payment saved')
+      // Handle SMS
+      let smsSentSuccessfully = false
+      if (payForm.send_sms && customerPhone) {
+        try {
+          const totalPaid = insertedPayments.reduce((s, r) => s + Number(r.amount ?? 0), 0)
+          const balanceAfter = Number(totalOutstanding ?? 0) - totalPaid
+          const invoiceNos = settlementInvoices.join(', ')
+
+          const smsMessage = `Dear ${customerName},\n\nWe have received your payment of Rs. ${totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} for Invoice ${invoiceNos}.\n\nYour remaining balance is Rs. ${balanceAfter.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.\n\nThank you for your payment.\n\n- Shayan Kids & Toys Store`
+
+          // Send SMS
+          await sendSingleSMS(customerPhone, smsMessage)
+          smsSentSuccessfully = true
+
+          // Log SMS to database
+          await supabase.from('sms_logs').insert({
+            customer_id: payForm.customer_id,
+            phone: customerPhone,
+            message: smsMessage,
+            status: 'success',
+            payment_id: insertedPayments[0]?.id,
+          })
+
+          logAction({
+            action: 'sms_sent',
+            targetType: 'customer',
+            targetId: payForm.customer_id,
+            targetLabel: customerName,
+            details: `Payment SMS sent to ${customerName}`,
+          })
+        } catch (smsError) {
+          console.error('SMS sending failed:', smsError)
+          // Log failed SMS
+          try {
+            await supabase.from('sms_logs').insert({
+              customer_id: payForm.customer_id,
+              phone: customerPhone,
+              message: '',
+              status: 'failed',
+              error_message: smsError?.message || 'Unknown error',
+              payment_id: insertedPayments[0]?.id,
+            })
+          } catch (logErr) {
+            console.error('Failed to log SMS error:', logErr)
+          }
+        }
+      }
+
+      toast.success(smsSentSuccessfully ? 'Payment saved and SMS sent successfully' : 'Payment saved')
       logAction({ action: 'save_payment', targetType: 'payment' })
     } catch (e) {
       toast.error(e?.message ?? 'Failed to save payment')
@@ -752,6 +820,18 @@ export default function ReceivablesPage() {
                   value={payForm.paid_at}
                   onChange={(newDate) => setPayForm((p) => ({ ...p, paid_at: newDate }))}
                 />
+
+                <div>
+                  <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Customer Phone</div>
+                  <input
+                    type="text"
+                    readOnly
+                    value={selectedCustomerPhone}
+                    placeholder="No phone number"
+                    className={`w-full px-3 py-2.5 rounded-lg border text-sm ${selectedCustomerPhone ? 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/60 text-slate-700 dark:text-slate-300' : 'border-red-300 dark:border-red-900/40 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'}`}
+                  />
+                  {!selectedCustomerPhone && <div className="text-[10px] text-red-600 dark:text-red-400 mt-1">No phone number found for this customer</div>}
+                </div>
 
                 <div className="sm:col-span-2">
                   <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Method</div>
@@ -998,6 +1078,21 @@ export default function ReceivablesPage() {
                     placeholder="Optional"
                     className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
                   />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={payForm.send_sms}
+                      onChange={(e) => setPayForm((p) => ({ ...p, send_sms: e.target.checked }))}
+                      disabled={!selectedCustomerPhone}
+                      className="w-4 h-4 rounded border-slate-300 dark:border-slate-600 text-emerald-600 focus:ring-emerald-500 disabled:opacity-50"
+                    />
+                    <span className={`text-xs font-semibold ${!selectedCustomerPhone ? 'text-slate-400 dark:text-slate-500' : 'text-slate-600 dark:text-slate-300'}`}>
+                      Send SMS Notification
+                    </span>
+                  </label>
                 </div>
               </div>
 
