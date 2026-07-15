@@ -198,14 +198,79 @@ export default function OrdersPage() {
 
   const onDeleteInvoice = async (inv) => {
     if (!confirm('Delete this invoice and all its items?')) return
-    // Clear invoice_id on any orders that reference this invoice
-    await supabase.from('orders').update({ invoice_id: null }).eq('invoice_id', inv.id)
-    await supabase.from('invoice_items').delete().eq('invoice_id', inv.id)
-    const { error: err } = await supabase.from('invoices').delete().eq('id', inv.id)
-    if (err) { toast.error(err.message); return }
-    toast.success('Invoice deleted')
-    logAction({ action: 'delete_invoice', targetType: 'invoice', targetId: inv.id, targetLabel: `INV-${String(inv.id ?? '').padStart(4, '0')}` })
-    await load()
+    
+    try {
+      console.log('Deleting invoice from Orders page:', inv.id)
+      
+      // First get the invoice items to restore stock
+      const { data: items, error: itemsErr } = await supabase
+        .from('invoice_items')
+        .select('product_id, quantity')
+        .eq('invoice_id', inv.id)
+      
+      if (itemsErr) {
+        console.error('Error getting invoice items:', itemsErr)
+        toast.error(itemsErr.message)
+        return
+      }
+      
+      console.log('Invoice items to restore:', items)
+      
+      // Restore stock for each product
+      if (items && items.length > 0) {
+        const stockUpdates = items.map(async (item) => {
+          console.log('Restoring stock for product:', item.product_id, 'quantity:', item.quantity)
+          // Get current product stock
+          const { data: product, error: prodErr } = await supabase
+            .from('products')
+            .select('stock')
+            .eq('id', item.product_id)
+            .single()
+          
+          if (prodErr) {
+            console.error('Error getting product:', prodErr)
+            return
+          }
+          
+          if (product) {
+            const newStock = (product.stock || 0) + item.quantity
+            console.log('Current stock:', product.stock, 'new stock:', newStock)
+            const { error: updateErr } = await supabase
+              .from('products')
+              .update({ stock: newStock })
+              .eq('id', item.product_id)
+            
+            if (updateErr) {
+              console.error('Error updating product stock:', updateErr)
+            }
+          }
+        })
+        await Promise.all(stockUpdates)
+      }
+      
+      // Clear invoice_id on any orders that reference this invoice
+      console.log('Unlinking orders...')
+      await supabase.from('orders').update({ invoice_id: null }).eq('invoice_id', inv.id)
+      
+      console.log('Deleting invoice items...')
+      await supabase.from('invoice_items').delete().eq('invoice_id', inv.id)
+      
+      console.log('Deleting invoice...')
+      const { error: err } = await supabase.from('invoices').delete().eq('id', inv.id)
+      
+      if (err) {
+        console.error('Error deleting invoice:', err)
+        toast.error(err.message)
+        return
+      }
+      
+      toast.success('Invoice deleted and stock restored')
+      logAction({ action: 'delete_invoice', targetType: 'invoice', targetId: inv.id, targetLabel: `INV-${String(inv.id ?? '').padStart(4, '0')}` })
+      await load()
+    } catch (e) {
+      console.error('Unexpected error deleting invoice:', e)
+      toast.error(e?.message || 'Failed to delete invoice')
+    }
   }
 
   const fmt = (val) => `Rs. ${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
