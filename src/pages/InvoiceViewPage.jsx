@@ -23,6 +23,9 @@ export default function InvoiceViewPage() {
 
   const [invoice, setInvoice] = useState(null)
   const [items, setItems] = useState([])
+  const [customerInvoices, setCustomerInvoices] = useState([])
+  const [customerPayments, setCustomerPayments] = useState([])
+  const [customerReturns, setCustomerReturns] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -35,7 +38,7 @@ export default function InvoiceViewPage() {
 
       const invRes = await supabase
         .from('invoices')
-        .select('id, invoice_number, total_amount, vat_rate, vat_amount, created_at, payment_type, customers(name, address, phone), employees(id, name, is_rep)')
+        .select('id, invoice_number, total_amount, vat_rate, vat_amount, created_at, payment_type, customer_id, customers(name, address, phone), employees(id, name, is_rep)')
         .eq('id', id)
         .single()
 
@@ -54,6 +57,30 @@ export default function InvoiceViewPage() {
       } else {
         setInvoice(invRes.data)
         setItems(itemsRes.data ?? [])
+
+        // Now fetch customer's other invoices, payments, returns to calculate balance
+        const customerId = invRes.data.customer_id
+        if (customerId) {
+          const [custInvRes, custPayRes, custRetRes] = await Promise.all([
+            supabase
+              .from('invoices')
+              .select('id, total_amount, created_at, payment_type')
+              .eq('customer_id', customerId)
+              .in('payment_type', ['credit', 'cash'])
+              .order('created_at', { ascending: false }),
+            supabase
+              .from('invoice_payments')
+              .select('id, invoice_id, amount, paid_at'),
+            supabase
+              .from('returns')
+              .select('id, invoice_id, total_amount')
+              .eq('customer_id', customerId)
+          ])
+
+          if (custInvRes.data) setCustomerInvoices(custInvRes.data)
+          if (custPayRes.data) setCustomerPayments(custPayRes.data)
+          if (custRetRes.data) setCustomerReturns(custRetRes.data)
+        }
       }
 
       if (itemsRes.error) {
@@ -73,6 +100,52 @@ export default function InvoiceViewPage() {
       mounted = false
     }
   }, [id])
+
+  // Calculate outstanding balance
+  const { previousOutstanding, totalAmountDue } = React.useMemo(() => {
+    if (!invoice?.id) {
+      return { previousOutstanding: 0, totalAmountDue: 0 }
+    }
+
+    // Filter to only this customer's invoices
+    const thisCustomerInvoices = customerInvoices
+    const thisCustomerPayments = customerPayments.filter(p => {
+      const invoice = thisCustomerInvoices.find(i => i.id === p.invoice_id)
+      return !!invoice
+    })
+    const thisCustomerReturns = customerReturns
+
+    // Calculate payment sum per invoice
+    const paymentSumByInvoice = new Map()
+    for (const p of thisCustomerPayments) {
+      const prev = paymentSumByInvoice.get(p.invoice_id) ?? 0
+      paymentSumByInvoice.set(p.invoice_id, prev + Number(p.amount ?? 0))
+    }
+
+    // Calculate returns sum per invoice
+    const returnsByInvoice = new Map()
+    for (const r of thisCustomerReturns) {
+      const iid = r.invoice_id
+      if (!iid) continue
+      const prev = returnsByInvoice.get(iid) ?? 0
+      returnsByInvoice.set(iid, prev + Number(r.total_amount ?? 0))
+    }
+
+    // Calculate previous outstanding (excluding current invoice)
+    let previousOutstanding = 0
+    for (const inv of thisCustomerInvoices) {
+      if (inv.id === invoice.id) continue
+      const paid = paymentSumByInvoice.get(inv.id) ?? 0
+      const returned = returnsByInvoice.get(inv.id) ?? 0
+      const balance = Number(inv.total_amount ?? 0) - paid - returned
+      previousOutstanding += balance
+    }
+
+    const currentInvoiceTotal = Number(invoice.total_amount ?? 0)
+    const totalAmountDue = previousOutstanding + currentInvoiceTotal
+
+    return { previousOutstanding, totalAmountDue }
+  }, [invoice, customerInvoices, customerPayments, customerReturns])
 
   const customer = invoice?.customers
   const rep = invoice?.employees
@@ -94,15 +167,76 @@ export default function InvoiceViewPage() {
 
   const onDelete = async () => {
     if (!confirm('Delete this invoice and all its items?')) return
-    await supabase.from('orders').update({ invoice_id: null }).eq('invoice_id', id)
-    await supabase.from('invoice_items').delete().eq('invoice_id', id)
-    const { error: err } = await supabase.from('invoices').delete().eq('id', id)
-    if (err) {
-      toast.error(err.message)
-      return
+    try {
+      console.log('Deleting invoice:', id)
+
+      // First get the invoice items to restore stock
+      const { data: itemsToRestore, error: itemsErr } = await supabase
+        .from('invoice_items')
+        .select('product_id, quantity')
+        .eq('invoice_id', id)
+
+      if (itemsErr) {
+        toast.error(itemsErr.message)
+        return
+      }
+
+      console.log('Invoice items to restore:', itemsToRestore)
+
+      // Restore stock for each product
+      if (itemsToRestore && itemsToRestore.length > 0) {
+        const stockUpdates = itemsToRestore.map(async (item) => {
+          console.log('Restoring stock for product:', item.product_id, 'quantity:', item.quantity)
+          // Get current product stock
+          const { data: product, error: prodErr } = await supabase
+            .from('products')
+            .select('stock')
+            .eq('id', item.product_id)
+            .single()
+
+          if (prodErr) {
+            console.error('Error getting product:', prodErr)
+            return
+          }
+
+          if (product) {
+            const newStock = (product.stock ?? 0) + item.quantity
+            console.log('Current stock:', product.stock, 'new stock:', newStock)
+            const { error: updateErr } = await supabase
+              .from('products')
+              .update({ stock: newStock })
+              .eq('id', item.product_id)
+
+            if (updateErr) {
+              console.error('Error updating product stock:', updateErr)
+            }
+          }
+        })
+        await Promise.all(stockUpdates)
+      }
+
+      // Now delete the invoice items and invoice
+      console.log('Unlinking orders...')
+      await supabase.from('orders').update({ invoice_id: null }).eq('invoice_id', id)
+
+      console.log('Deleting invoice items...')
+      await supabase.from('invoice_items').delete().eq('invoice_id', id)
+
+      console.log('Deleting invoice...')
+      const { error: err } = await supabase.from('invoices').delete().eq('id', id)
+
+      if (err) {
+        toast.error(err.message)
+        return
+      }
+
+      toast.success('Invoice deleted and stock restored')
+      logAction({ action: 'delete_invoice', targetType: 'invoice', targetId: id })
+      navigate(location.state?.from || '/orders')
+    } catch (e) {
+      console.error('Unexpected error deleting invoice:', e)
+      toast.error(e?.message || 'Failed to delete invoice')
     }
-    toast.success('Invoice deleted')
-    logAction({ action: 'delete_invoice', targetType: 'invoice', targetId: id })
   }
 
   const downloadPdf = async () => {
@@ -117,19 +251,22 @@ export default function InvoiceViewPage() {
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
 
     // Force white background + black text AFTER it's in the DOM (so computed styles are correct)
-    cloned.style.backgroundColor = '#ffffff'
-    cloned.style.color = '#000000'
-    cloned.querySelectorAll('*').forEach((el) => {
-      const cs = window.getComputedStyle(el)
-      const bg = cs.backgroundColor
-      const isTransparentBg = bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent'
-      const isWhiteBg = bg === 'rgb(255, 255, 255)'
+      cloned.style.backgroundColor = '#ffffff'
+      cloned.style.color = '#000000'
+      cloned.querySelectorAll('*').forEach((el) => {
+        const cs = window.getComputedStyle(el)
+        const bg = cs.backgroundColor
+        const isTransparentBg = bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent'
+        const isWhiteBg = bg === 'rgb(255, 255, 255)'
+        
+        // Preserve amber background for total amount due
+        const isAmberBg = bg.includes('255, 243, 224') || bg.includes('252, 211, 77') // Tailwind amber-50 / amber-200
 
-      if (!isTransparentBg && !isWhiteBg) {
-        el.style.backgroundColor = '#ffffff'
-      }
-      el.style.color = '#000000'
-    })
+        if (!isTransparentBg && !isWhiteBg && !isAmberBg) {
+          el.style.backgroundColor = '#ffffff'
+        }
+        el.style.color = '#000000'
+      })
 
     const opt = {
       margin: 0,
@@ -260,7 +397,32 @@ export default function InvoiceViewPage() {
                 <div className="text-sm"><span className="font-medium text-slate-600 dark:text-slate-300">Type:</span> <span className="font-semibold text-slate-900 dark:text-white">{invoice?.payment_type === 'cash' ? 'Cash Customer' : 'Credit Customer'}</span></div>
               </div>
               <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400 space-y-0.5">
-                <div><span className="font-medium text-slate-600 dark:text-slate-300">Job:</span> Baby Items &amp; Toys</div>
+                <div><span className="font-medium text-slate-600 dark:text-slate-300">Job:</span> Baby Items & Toys</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Customer Account Summary */}
+          <div className="px-8 py-4 border-b border-slate-200 dark:border-slate-700">
+            <div className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-3">Customer Account Summary</div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-700 dark:text-slate-300">Previous Outstanding</span>
+                <span className="text-slate-900 dark:text-white font-semibold">
+                  Rs. {Number(previousOutstanding ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-700 dark:text-slate-300">Current Invoice Total</span>
+                <span className="text-slate-900 dark:text-white font-semibold">
+                  Rs. {Number(totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm pt-2 border-t border-slate-200 dark:border-slate-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 rounded-md">
+                <span className="text-amber-800 dark:text-amber-200 font-bold">Total Amount Due</span>
+                <span className="text-amber-800 dark:text-amber-200 font-extrabold text-lg">
+                  Rs. {Number(totalAmountDue ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
               </div>
             </div>
           </div>
