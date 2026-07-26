@@ -18,6 +18,7 @@ import ControlledDateField from '../components/ControlledDateField'
 import { Search, Eye, FileText, Filter, Plus } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 import { sendSingleSMS } from '../lib/sms'
+import { calculateAgingDays, getAgingBucket, getAgingColorClasses, calculateAgingSummary } from '../lib/agingCalculations'
 
 const fmt = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
@@ -164,8 +165,8 @@ export default function ReceivablesPage() {
       const balance = total - paid - retAmount
 
       const payStatus = paid === 0 && retAmount === 0 ? 'unpaid' : balance > 0 ? 'partial' : 'paid'
-      const daysOutstanding = Math.floor((Date.now() - new Date(inv.created_at).getTime()) / 86400000)
-      const agingBucket = daysOutstanding <= 30 ? '0-30' : daysOutstanding <= 60 ? '31-60' : '60+'
+      const daysOutstanding = calculateAgingDays(inv.created_at)
+      const agingBucket = getAgingBucket(daysOutstanding)
 
       const existing = byCustomer.get(cid)
       if (!existing) {
@@ -179,7 +180,7 @@ export default function ReceivablesPage() {
           balance,
           invoicesCount: 1,
           status: payStatus,
-          maxDaysOutstanding: daysOutstanding,
+          minDaysOutstanding: daysOutstanding, // Track latest (fewest days)
           agingBucket,
         })
       } else {
@@ -192,9 +193,9 @@ export default function ReceivablesPage() {
         if (payStatus === 'unpaid') existing.status = 'unpaid'
         else if (payStatus === 'partial' && existing.status !== 'unpaid') existing.status = 'partial'
         else if (existing.status !== 'unpaid' && existing.status !== 'partial') existing.status = 'paid'
-        // track oldest outstanding invoice
-        if (daysOutstanding > existing.maxDaysOutstanding) {
-          existing.maxDaysOutstanding = daysOutstanding
+        // track latest outstanding invoice
+        if (daysOutstanding < existing.minDaysOutstanding) {
+          existing.minDaysOutstanding = daysOutstanding
           existing.agingBucket = agingBucket
         }
       }
@@ -222,6 +223,11 @@ export default function ReceivablesPage() {
     rows.sort((a, b) => (b.balance ?? 0) - (a.balance ?? 0))
     return rows
   }, [invoices, paymentSumByInvoice, returnsByCustomer, search, statusFilter])
+
+  // Calculate aging summary for all outstanding invoices
+  const agingSummary = useMemo(() => {
+    return calculateAgingSummary(invoices, paymentSumByInvoice)
+  }, [invoices, paymentSumByInvoice])
 
   const totals = useMemo(() => {
     const invoiced = customersRows.reduce((s, r) => s + Number(r.invoiced ?? 0), 0)
@@ -679,6 +685,34 @@ export default function ReceivablesPage() {
         </div>
       </div>
 
+      {/* Aging Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-slate-500 dark:text-slate-400">Total</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(agingSummary.total)}</div>
+        </div>
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-emerald-600 dark:text-emerald-400">Current (0-30)</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(agingSummary.current)}</div>
+        </div>
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-amber-600 dark:text-amber-400">31-60</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(agingSummary['31-60'])}</div>
+        </div>
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-orange-600 dark:text-orange-400">61-90</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(agingSummary['61-90'])}</div>
+        </div>
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-red-600 dark:text-red-400">91-120</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(agingSummary['91-120'])}</div>
+        </div>
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-red-800 dark:text-red-600">Over 120</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(agingSummary['over-120'])}</div>
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[240px]">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -768,12 +802,8 @@ export default function ReceivablesPage() {
                     </span>
                   </td>
                   <td className="px-5 py-3.5 text-center">
-                    <div className="text-xs font-bold text-slate-700 dark:text-slate-200">{r.maxDaysOutstanding}d</div>
-                    <div className={`text-[10px] font-semibold ${
-                      r.agingBucket === '0-30' ? 'text-emerald-600 dark:text-emerald-400' :
-                      r.agingBucket === '31-60' ? 'text-amber-600 dark:text-amber-400' :
-                      'text-red-600 dark:text-red-400'
-                    }`}>{r.agingBucket} days</div>
+                    <div className="text-xs font-bold text-slate-700 dark:text-slate-200">{r.minDaysOutstanding}d</div>
+                    <div className={`text-[10px] font-semibold ${getAgingColorClasses(r.agingBucket)}`}>{r.agingBucket}</div>
                   </td>
                   <td className="px-5 py-3.5 text-right">
                     <div className="flex items-center justify-end gap-2">

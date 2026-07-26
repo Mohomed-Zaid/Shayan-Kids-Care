@@ -17,6 +17,7 @@ import CompanyPhoneLines from '../components/CompanyPhoneLines'
 import { ArrowLeft, Plus, FileText } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 import ControlledDateField from '../components/ControlledDateField'
+import { calculateAgingDays, getAgingBucket, getAgingColorClasses, calculateAgingSummary } from '../lib/agingCalculations'
 
 const fmt = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
@@ -216,11 +217,25 @@ export default function ReceivableCustomerPage() {
       const retAmount = returnsByInvoice.get(inv.id)?.total ?? 0
       const balance = total - paid - retAmount
       const status = (paid === 0 && retAmount === 0) ? 'unpaid' : balance > 0 ? 'partial' : 'paid'
-      const daysOutstanding = Math.floor((Date.now() - new Date(inv.created_at).getTime()) / 86400000)
-      const agingBucket = daysOutstanding <= 30 ? '0-30' : daysOutstanding <= 60 ? '31-60' : '60+'
+      const daysOutstanding = calculateAgingDays(inv.created_at)
+      const agingBucket = getAgingBucket(daysOutstanding)
       return { ...inv, paid, returned: retAmount, balance, status, daysOutstanding, agingBucket }
     })
   }, [invoices, paymentSumByInvoice, returnsByInvoice])
+
+  // Aging summary for this customer
+  const customerAgingSummary = useMemo(() => {
+    return calculateAgingSummary(invoices, paymentSumByInvoice)
+  }, [invoices, paymentSumByInvoice])
+
+  // Latest (newest) outstanding invoice
+  const latestInvoice = useMemo(() => {
+    const outstandingInvoices = invRows.filter(inv => inv.balance > 0)
+    if (outstandingInvoices.length === 0) return null
+    return outstandingInvoices.reduce((latest, inv) => 
+      inv.daysOutstanding < latest.daysOutstanding ? inv : latest
+    )
+  }, [invRows])
 
   const paymentDetailsByInvoice = useMemo(() => {
     const byInv = new Map()
@@ -607,6 +622,66 @@ export default function ReceivableCustomerPage() {
         </button>
       </div>
 
+      {/* Customer Info Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-4 shadow-sm">
+          <div className="text-xs text-slate-500 dark:text-slate-400">Customer Name</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">{customer?.name ?? '-'}</div>
+        </div>
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-4 shadow-sm">
+          <div className="text-xs text-slate-500 dark:text-slate-400">Outstanding Balance</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(totals.balance)}</div>
+        </div>
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-4 shadow-sm">
+          <div className="text-xs text-slate-500 dark:text-slate-400">Credit Limit</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">{customer?.credit_limit ? fmt(customer.credit_limit) : '—'}</div>
+        </div>
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-4 shadow-sm">
+          <div className="text-xs text-slate-500 dark:text-slate-400">Available Credit</div>
+          <div className={`text-lg font-extrabold ${(customer?.credit_limit && (customer.credit_limit - totals.balance) < 0) ? 'text-red-600 dark:text-red-400' : 'text-slate-900 dark:text-white'}`}>
+            {customer?.credit_limit ? fmt(customer.credit_limit - totals.balance) : '—'}
+          </div>
+        </div>
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-4 shadow-sm">
+          <div className="text-xs text-slate-500 dark:text-slate-400">Total Outstanding Invoices</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">{invRows.filter(inv => inv.balance > 0).length}</div>
+        </div>
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-4 shadow-sm">
+          <div className="text-xs text-slate-500 dark:text-slate-400">Latest Invoice (Days)</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">
+            {latestInvoice ? `${latestInvoice.daysOutstanding}d` : '—'}
+          </div>
+        </div>
+      </div>
+
+      {/* Aging Summary Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3 mb-4">
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-slate-500 dark:text-slate-400">Total</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(customerAgingSummary.total)}</div>
+        </div>
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-emerald-600 dark:text-emerald-400">Current (0-30)</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(customerAgingSummary.current)}</div>
+        </div>
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-amber-600 dark:text-amber-400">31-60</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(customerAgingSummary['31-60'])}</div>
+        </div>
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-orange-600 dark:text-orange-400">61-90</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(customerAgingSummary['61-90'])}</div>
+        </div>
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-red-600 dark:text-red-400">91-120</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(customerAgingSummary['91-120'])}</div>
+        </div>
+        <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-3 shadow-sm">
+          <div className="text-xs text-red-800 dark:text-red-600">Over 120</div>
+          <div className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(customerAgingSummary['over-120'])}</div>
+        </div>
+      </div>
+
       <div className="bg-white border border-slate-200/60 rounded-xl overflow-hidden shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">
         <div className="p-5 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -641,14 +716,13 @@ export default function ReceivableCustomerPage() {
         <table className="w-full text-sm">
           <thead className="bg-slate-50/50 border-b border-slate-200 text-slate-500 dark:bg-emerald-950/35 dark:border-emerald-900/40 dark:text-emerald-100/80">
             <tr>
-              <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Invoice</th>
-              <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Date</th>
-              <th className="text-right font-medium px-5 py-3 text-xs uppercase tracking-wide">Total</th>
-              <th className="text-right font-medium px-5 py-3 text-xs uppercase tracking-wide">Returns</th>
-              <th className="text-right font-medium px-5 py-3 text-xs uppercase tracking-wide">Paid</th>
-              <th className="text-right font-medium px-5 py-3 text-xs uppercase tracking-wide">Balance</th>
+              <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Invoice No</th>
+              <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Invoice Date</th>
+              <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Due Date</th>
+              <th className="text-right font-medium px-5 py-3 text-xs uppercase tracking-wide">Outstanding Amount</th>
+              <th className="text-center font-medium px-5 py-3 text-xs uppercase tracking-wide">Days Outstanding</th>
+              <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Aging Bucket</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Status</th>
-              <th className="text-center font-medium px-5 py-3 text-xs uppercase tracking-wide">Aging</th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Payment Details</th>
               <th className="px-5 py-3"></th>
             </tr>
@@ -673,17 +747,16 @@ export default function ReceivableCustomerPage() {
                     <div className="text-xs text-slate-400 dark:text-emerald-100/60">{inv.payment_type ?? 'credit'}</div>
                   </td>
                   <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-100/70">{new Date(inv.created_at).toLocaleDateString()}</td>
-                  <td className="px-5 py-3.5 text-right font-medium text-slate-900 dark:text-emerald-50">{fmt(inv.total_amount)}</td>
-                  <td className={`px-5 py-3.5 text-right font-medium ${inv.returned > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-400 dark:text-emerald-100/40'}`}>
-                    {inv.returned > 0 ? (
-                      <div>
-                        <div>−{fmt(inv.returned)}</div>
-                        <div className="text-[10px] text-slate-400 dark:text-emerald-100/50">{(returnsByInvoice.get(inv.id)?.items ?? []).map((r) => `RET-${String(r.return_number ?? '').padStart(4, '0')}`).join(', ')}</div>
-                      </div>
-                    ) : '—'}
-                  </td>
-                  <td className="px-5 py-3.5 text-right font-medium text-slate-900 dark:text-emerald-50">{fmt(inv.paid)}</td>
+                  <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-100/70">—</td>
                   <td className={`px-5 py-3.5 text-right font-extrabold ${inv.balance < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-emerald-50'}`}>{fmt(inv.balance)}</td>
+                  <td className="px-5 py-3.5 text-center">
+                    <div className="text-xs font-bold text-slate-700 dark:text-slate-200">{inv.daysOutstanding}d</div>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${getAgingColorClasses(inv.agingBucket)}`}>
+                      {inv.agingBucket}
+                    </span>
+                  </td>
                   <td className="px-5 py-3.5">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
                       inv.status === 'unpaid' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
@@ -692,14 +765,6 @@ export default function ReceivableCustomerPage() {
                     }`}>
                       {inv.status === 'unpaid' ? 'Unpaid' : inv.status === 'partial' ? 'Partial' : 'Paid'}
                     </span>
-                  </td>
-                  <td className="px-5 py-3.5 text-center">
-                    <div className="text-xs font-bold text-slate-700 dark:text-slate-200">{inv.daysOutstanding}d</div>
-                    <div className={`text-[10px] font-semibold ${
-                      inv.agingBucket === '0-30' ? 'text-emerald-600 dark:text-emerald-400' :
-                      inv.agingBucket === '31-60' ? 'text-amber-600 dark:text-amber-400' :
-                      'text-red-600 dark:text-red-400'
-                    }`}>{inv.agingBucket} days</div>
                   </td>
                   <td className="px-5 py-3.5">
                     {(() => {

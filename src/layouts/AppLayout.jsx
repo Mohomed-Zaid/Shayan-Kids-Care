@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw, Shield, ScrollText, HandCoins, Landmark, Trash2, UserCog, AlertTriangle, MessageSquare } from 'lucide-react'
+import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw, Shield, ScrollText, HandCoins, Landmark, Trash2, UserCog, AlertTriangle, MessageSquare, BarChart3, Database } from 'lucide-react'
 import { usePermissions } from '../contexts/PermissionsContext'
 import { NAV_PERMISSION_MAP } from '../lib/permissions'
 import logo from '../pictures/logo.jpeg'
@@ -64,6 +64,31 @@ const navItems = [
   { to: '/returns', label: 'Returns', icon: RotateCcw },
   { to: '/commission', label: 'Commission', icon: Calculator },
   {
+    to: '/reports',
+    key: 'reports',
+    label: 'Reports',
+    icon: BarChart3,
+    children: [
+      { key: 'sales-reports', label: 'Sales Reports', icon: BarChart3, nested: true, children: [
+        { to: '/reports/sales/daily', label: 'Daily Sales Report' },
+        { to: '/reports/sales/monthly', label: 'Monthly Sales Report' },
+        { to: '/reports/sales/by-customer', label: 'Sales by Customer' },
+        { to: '/reports/sales/by-product', label: 'Sales by Product' },
+        { to: '/reports/sales/by-sales-rep', label: 'Sales by Sales Rep' },
+      ]},
+      { key: 'inventory-reports', label: 'Inventory Reports', icon: Database, nested: true, children: [
+        { to: '/reports/inventory/current-stock', label: 'Current Stock Report' },
+        { to: '/reports/inventory/low-stock', label: 'Low Stock Report' },
+        { to: '/reports/inventory/backorder', label: 'Backorder Report' },
+      ]},
+      { key: 'customer-reports', label: 'Customer Reports', icon: Users, nested: true, children: [
+        { to: '/reports/customer/outstanding-receivables', label: 'Outstanding Receivables' },
+        { to: '/reports/customer/statement', label: 'Customer Statement' },
+        { to: '/reports/customer/ledger', label: 'Customer Ledger' },
+      ]},
+    ],
+  },
+  {
     key: 'admin',
     label: 'Admin',
     icon: Shield,
@@ -104,6 +129,18 @@ function usePageTitle() {
     if (path.startsWith('/finance/delete-receivable')) return 'Delete Receivable'
     if (path.startsWith('/finance/delete-payable')) return 'Delete Payable'
     if (path.startsWith('/finance')) return 'Finance'
+    if (path.startsWith('/reports/sales/daily')) return 'Daily Sales Report'
+    if (path.startsWith('/reports/sales/monthly')) return 'Monthly Sales Report'
+    if (path.startsWith('/reports/sales/by-customer')) return 'Sales by Customer'
+    if (path.startsWith('/reports/sales/by-product')) return 'Sales by Product'
+    if (path.startsWith('/reports/sales/by-sales-rep')) return 'Sales by Sales Rep'
+    if (path.startsWith('/reports/inventory/current-stock')) return 'Current Stock Report'
+    if (path.startsWith('/reports/inventory/low-stock')) return 'Low Stock Report'
+    if (path.startsWith('/reports/inventory/backorder')) return 'Backorder Report'
+    if (path.startsWith('/reports/customer/outstanding-receivables')) return 'Outstanding Receivables Report'
+    if (path.startsWith('/reports/customer/statement')) return 'Customer Statement'
+    if (path.startsWith('/reports/customer/ledger')) return 'Customer Ledger'
+    if (path.startsWith('/reports')) return 'Reports'
     if (path === '/orders/new') return 'Create Order'
     if (path.startsWith('/orders/') && path.endsWith('/edit')) return 'Edit Order'
     if (path.startsWith('/orders/')) return 'Order'
@@ -201,47 +238,109 @@ export default function AppLayout() {
             if (item.children) {
               const Icon = item.icon
               const isOpen = !!openGroups[item.key]
-              return (
-                <div key={item.key}>
-                  <button
-                    type="button"
-                    onClick={() => setOpenGroups((p) => ({ ...p, [item.key]: !p[item.key] }))}
-                    className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-emerald-100/80 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-50 transition-colors"
-                  >
-                    <span className="flex items-center gap-3">
-                      <Icon size={18} />
-                      {item.label}
-                    </span>
-                    <ChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-                  </button>
-                  {isOpen ? (
-                    <div className="mt-1 ml-3 pl-3 border-l border-slate-200 dark:border-emerald-900/40 space-y-1">
-                      {item.children.map((child) => {
-                        const ChildIcon = child.icon
-                        return (
+              
+              // Render nested groups recursively
+              const renderNavItem = (navItem, depth = 0) => {
+                if (navItem.children) {
+                  if (navItem.nested) {
+                    const NestedIcon = navItem.icon
+                    const isNestedOpen = !!openGroups[navItem.key]
+                    return (
+                      <div key={navItem.key} style={{ marginLeft: depth > 0 ? 12 : 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => setOpenGroups((p) => ({ ...p, [navItem.key]: !p[navItem.key] }))}
+                          className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-emerald-100/80 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-50 transition-colors"
+                        >
+                          <span className="flex items-center gap-3">
+                            {NestedIcon && <NestedIcon size={16} />}
+                            {navItem.label}
+                          </span>
+                          <ChevronDown size={14} className={`transition-transform ${isNestedOpen ? 'rotate-180' : ''} text-slate-700 dark:text-white`} />
+                        </button>
+                        {isNestedOpen ? (
+                          <div className="mt-1 pl-3 border-l border-slate-200 dark:border-emerald-900/40 space-y-1">
+                            {navItem.children.map((child) => renderNavItem(child, depth + 1))}
+                          </div>
+                        ) : null}
+                      </div>
+                    )
+                  }
+                  
+                  // If item has both to and children
+                  const isOpen = !!openGroups[navItem.key]
+                  return (
+                    <div key={navItem.key}>
+                      <div className="flex items-center justify-between gap-2">
+                        {navItem.to ? (
                           <NavLink
-                            key={child.to}
-                            to={child.to}
+                            to={navItem.to}
                             onClick={closeMobile}
                             className={({ isActive }) =>
-                              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                              `flex-1 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                                 isActive
                                   ? 'bg-slate-900 text-white shadow-sm dark:bg-emerald-500/15 dark:border dark:border-emerald-400/20 dark:text-emerald-50'
                                   : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-emerald-100/80 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-50'
                               }`
                             }
                           >
-                            <ChildIcon size={18} />
-                            {child.label}
+                            {navItem.icon && <navItem.icon size={18} />}
+                            {navItem.label}
                           </NavLink>
-                        )
-                      })}
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setOpenGroups((p) => ({ ...p, [navItem.key]: !p[navItem.key] }))}
+                            className="flex-1 flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-emerald-100/80 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-50 transition-colors"
+                          >
+                            <span className="flex items-center gap-3">
+                              {navItem.icon && <navItem.icon size={18} />}
+                              {navItem.label}
+                            </span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setOpenGroups((p) => ({ ...p, [navItem.key]: !p[navItem.key] }))}
+                          className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-emerald-500/10 text-slate-700 dark:text-white"
+                        >
+                          <ChevronDown size={16} className={`transition-transform ${isOpen ? 'rotate-180' : ''} text-slate-700 dark:text-white`} />
+                        </button>
+                      </div>
+                      {isOpen ? (
+                        <div className="mt-1 ml-3 pl-3 border-l border-slate-200 dark:border-emerald-900/40 space-y-1">
+                          {navItem.children.map((child) => renderNavItem(child, depth + 1))}
+                        </div>
+                      ) : null}
                     </div>
-                  ) : null}
-                </div>
-              )
+                  )
+                }
+                
+                if (navItem.to) {
+                  return (
+                    <NavLink
+                      key={navItem.to}
+                      to={navItem.to}
+                      onClick={closeMobile}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          isActive
+                            ? 'bg-slate-900 text-white shadow-sm dark:bg-emerald-500/15 dark:border dark:border-emerald-400/20 dark:text-emerald-50'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-emerald-100/80 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-50'
+                        }`
+                      }
+                    >
+                      {navItem.icon && <navItem.icon size={16} />}
+                      {navItem.label}
+                    </NavLink>
+                  )
+                }
+                return null
+              }
+              
+              return renderNavItem(item)
             }
-
+            
             const Icon = item.icon
             return (
               <NavLink
