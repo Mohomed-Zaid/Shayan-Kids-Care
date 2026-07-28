@@ -4,7 +4,7 @@ import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import { Search, Landmark, ArrowRightCircle, HandHelping } from 'lucide-react'
 
-/** Receivable: add payment (cheque) → customer_cheques in_hand; Deposit here + bank → deposited + bank_reconciliation_items. See `src/lib/receivableChequeWorkflow.js`. */
+/** Receivable: add payment (cheque) → customer_cheques in_hand; Deposit here + bank → deposited + bank_reconciliation_items. See `src/lib/receivableChequeWorkflow.js`. Payable cheque payments are also shown here under Deposited Cheques. */
 const fmtMoney = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
 const STATUS_IN_HAND = 'in_hand'
@@ -54,7 +54,7 @@ export default function ChequeAdministrationPage() {
           .order('deposited_at', { ascending: false }),
         supabase
           .from('purchase_payments')
-          .select('id, amount, paid_at, reference, method, created_at, purchases(vendor_id, vendors(name))')
+          .select('id, amount, paid_at, reference, method, bank_name, created_at, purchases(vendor_id, vendors(name))')
           .eq('method', 'cheque')
           .order('paid_at', { ascending: false }),
         supabase.from('banks').select('id, code, name, branch').order('code'),
@@ -76,7 +76,7 @@ export default function ChequeAdministrationPage() {
         cheque_date: p.paid_at,
         cheque_number: p.reference,
         amount: p.amount,
-        bank_name: null,
+        bank_name: p.bank_name ?? null,
         customer_id: null,
         status: STATUS_DEPOSITED,
         deposited_at: p.paid_at,
@@ -128,8 +128,7 @@ export default function ChequeAdministrationPage() {
   const depositedFiltered = useMemo(() => {
     const q = search.trim().toLowerCase()
 
-    // Only show customer deposited cheques (receivable), no payable cheques
-    const allDeposited = [...chequesDeposited]
+    const allDeposited = [...chequesDeposited, ...payableCheques]
 
     return allDeposited.filter((r) => {
       if (depositFrom || depositTo) {
@@ -143,14 +142,14 @@ export default function ChequeAdministrationPage() {
       }
 
       if (!q) return true
-      const name = r.customers?.name
+      const name = r.cheque_type === 'payable' ? r.vendors?.name : r.customers?.name
       return (
         String(r.cheque_number ?? '').toLowerCase().includes(q) ||
         String(r.bank_name ?? '').toLowerCase().includes(q) ||
         String(name ?? '').toLowerCase().includes(q)
       )
     })
-  }, [chequesDeposited, depositFrom, depositTo, search])
+  }, [chequesDeposited, payableCheques, depositFrom, depositTo, search])
 
   const inHandTotals = useMemo(() => {
     const ids = selectedIds
@@ -371,6 +370,7 @@ export default function ChequeAdministrationPage() {
           <div className="text-sm text-slate-500 dark:text-emerald-100/70 max-w-3xl">
             Receivable cheque payments create rows under <span className="font-semibold text-slate-700 dark:text-emerald-50">Cheques In Hand</span>.
             Select them and click <span className="font-semibold text-slate-700 dark:text-emerald-50">Deposit</span> — choose the <span className="font-semibold text-slate-700 dark:text-emerald-50">receiving bank</span> — they move to <span className="font-semibold text-slate-700 dark:text-emerald-50">Deposited Cheques</span> and a line is added for Bank Reconciliation.
+            {' '}Payable cheque payments are also listed under <span className="font-semibold text-slate-700 dark:text-emerald-50">Deposited Cheques</span> for tracking.
           </div>
         </div>
       </div>
@@ -554,7 +554,13 @@ export default function ChequeAdministrationPage() {
         )}
 
         {tab === 'deposited' && (() => {
-          const receivableTotal = depositedFiltered.reduce((s, r) => s + Number(r.amount ?? 0), 0)
+          const receivableTotal = depositedFiltered
+            .filter((r) => r.cheque_type !== 'payable')
+            .reduce((s, r) => s + Number(r.amount ?? 0), 0)
+          const payableTotal = depositedFiltered
+            .filter((r) => r.cheque_type === 'payable')
+            .reduce((s, r) => s + Number(r.amount ?? 0), 0)
+          const grandTotal = receivableTotal + payableTotal
           return (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3 border-t border-slate-100 dark:border-emerald-900/30 bg-slate-50/50 dark:bg-emerald-950/20">
             <div className="flex items-center gap-3 flex-wrap">
@@ -562,7 +568,13 @@ export default function ChequeAdministrationPage() {
                 Selected: <span className="font-bold text-slate-900 dark:text-white">{selectedTotals.count}</span>
               </div>
               <div className="text-sm text-slate-600 dark:text-emerald-100/70">
-                Total: <span className="font-extrabold text-sky-700 dark:text-sky-200">{fmtMoney(receivableTotal)}</span>
+                Receivable: <span className="font-extrabold text-sky-700 dark:text-sky-200">{fmtMoney(receivableTotal)}</span>
+              </div>
+              <div className="text-sm text-slate-600 dark:text-emerald-100/70">
+                Payable: <span className="font-extrabold text-amber-700 dark:text-amber-200">{fmtMoney(payableTotal)}</span>
+              </div>
+              <div className="text-sm text-slate-600 dark:text-emerald-100/70">
+                Total: <span className="font-extrabold text-slate-900 dark:text-white">{fmtMoney(grandTotal)}</span>
               </div>
             </div>
 
