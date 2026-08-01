@@ -199,16 +199,32 @@ export default function ReceivableCustomerPage() {
 
   const returnsByInvoice = useMemo(() => {
     const map = new Map()
+    let unassignedTotal = 0
+    const unassignedItems = []
     for (const r of returns) {
       const iid = r.invoice_id
-      if (!iid) continue
+      if (!iid) {
+        unassignedTotal += Number(r.total_amount ?? 0)
+        unassignedItems.push(r)
+        continue
+      }
       const prev = map.get(iid) ?? { total: 0, items: [] }
       prev.total += Number(r.total_amount ?? 0)
       prev.items.push(r)
       map.set(iid, prev)
     }
+
+    // Older returns were saved without invoice_id. They are unambiguous when
+    // the customer has only one invoice, so apply them to that invoice.
+    if (invoices.length === 1 && unassignedTotal > 0) {
+      const iid = invoices[0].id
+      const prev = map.get(iid) ?? { total: 0, items: [] }
+      prev.total += unassignedTotal
+      prev.items.push(...unassignedItems)
+      map.set(iid, prev)
+    }
     return map
-  }, [returns])
+  }, [returns, invoices])
 
   const invRows = useMemo(() => {
     return invoices.map((inv) => {
@@ -315,17 +331,72 @@ export default function ReceivableCustomerPage() {
     const today = new Date().toISOString().split('T')[0]
     const effectivePaidAt = isSuperAdmin ? editPayForm.paid_at : today
 
+    const originalPayment = payments.find((p) => String(p.id) === String(editingPaymentId))
+    let originalCheque = null
+
+    if (originalPayment?.method === 'cheque' && originalPayment.reference) {
+      const { data: cheque, error: chequeLoadError } = await supabase
+        .from('customer_cheques')
+        .select('id, amount, status')
+        .eq('customer_id', customerId)
+        .eq('cheque_number', originalPayment.reference)
+        .maybeSingle()
+
+      if (chequeLoadError) {
+        toast.error(chequeLoadError.message)
+        return
+      }
+
+      originalCheque = cheque
+      if (originalCheque) {
+        // Payment Details is authoritative for the cheque displayed on the dashboard.
+        const linkedAmount = amount
+
+        const { error: chequeUpdateError } = await supabase
+          .from('customer_cheques')
+          .update({ amount: linkedAmount })
+          .eq('id', originalCheque.id)
+
+        if (chequeUpdateError) {
+          toast.error(chequeUpdateError.message)
+          return
+        }
+
+        if (originalCheque.status === 'deposited') {
+          const { error: reconciliationError } = await supabase
+            .from('bank_reconciliation_items')
+            .update({ amount: linkedAmount })
+            .eq('ref_no', `RCV-CHQ-${originalCheque.id}`)
+
+          if (reconciliationError) {
+            await supabase.from('customer_cheques').update({ amount: originalCheque.amount }).eq('id', originalCheque.id)
+            toast.error(reconciliationError.message)
+            return
+          }
+        }
+      }
+    }
+
     const { error: err } = await supabase
       .from('invoice_payments')
       .update({ amount, paid_at: effectivePaidAt })
       .eq('id', editingPaymentId)
 
     if (err) {
+      if (originalCheque) {
+        await supabase.from('customer_cheques').update({ amount: originalCheque.amount }).eq('id', originalCheque.id)
+        if (originalCheque.status === 'deposited') {
+          await supabase
+            .from('bank_reconciliation_items')
+            .update({ amount: originalCheque.amount })
+            .eq('ref_no', `RCV-CHQ-${originalCheque.id}`)
+        }
+      }
       toast.error(err.message)
       return
     }
     toast.success('Payment updated')
-    logAction({ action: 'edit_payment', targetType: 'payment', targetId: pay.id })
+    logAction({ action: 'edit_payment', targetType: 'payment', targetId: editingPaymentId })
     cancelEditPayment()
     await load()
   }

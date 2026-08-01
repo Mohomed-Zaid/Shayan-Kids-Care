@@ -167,6 +167,7 @@ export default function ReturnCreatePage() {
         .from('returns')
         .insert({
           customer_id: customerId,
+          invoice_id: invoiceId || null,
           total_amount: totalWithVat,
           vat_rate: vatEnabled ? VAT_RATE : 0,
           vat_amount: vatAmount,

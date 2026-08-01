@@ -156,13 +156,13 @@ export default function DashboardPage() {
         supabase.from('invoice_payments').select('amount, method'),
         supabase
           .from('customer_cheques')
-          .select('id, cheque_date, cheque_number, amount, bank_name, status, customers(name)')
+          .select('id, customer_id, cheque_date, cheque_number, amount, bank_name, status, customers(name)')
           .eq('status', 'in_hand')
           .order('cheque_date', { ascending: false })
           .limit(15),
         supabase
           .from('invoice_payments')
-          .select('invoice_id, amount'),
+          .select('invoice_id, amount, method, reference, invoices(customer_id)'),
         (() => {
           const tenDaysAgo = new Date()
           tenDaysAgo.setDate(tenDaysAgo.getDate() - 10)
@@ -193,15 +193,15 @@ export default function DashboardPage() {
           .limit(5000),
         supabase
           .from('customer_cheques')
-          .select('amount')
+          .select('id, customer_id, cheque_number, amount')
           .eq('status', 'in_hand'),
         supabase
           .from('customer_cheques')
-          .select('amount')
+          .select('id, customer_id, cheque_number, amount')
           .eq('status', 'returned'),
         supabase
           .from('customer_cheques')
-          .select('amount')
+          .select('id, customer_id, cheque_number, amount')
           .eq('status', 'deposited'),
         supabase
           .from('returns')
@@ -226,9 +226,27 @@ export default function DashboardPage() {
       const totalExpenses = journalsExpenses + journalEntriesExpenses
       const totalSales = (totalSalesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
       const totalPayments = (totalPaymentsRes.data ?? []).filter(row => row.method !== 'cheque').reduce((sum, row) => sum + (row.amount ?? 0), 0)
-      const chequeInHand = (chequeInHandRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
-      const returnCheque = (returnChequeRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
-      const depositedCheques = (depositedChequeRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
+      const allReceivablePayments = (totalPaymentsRes.data ?? []).reduce((sum, row) => sum + Number(row.amount ?? 0), 0)
+
+      const chequePaymentAmounts = new Map()
+      for (const payment of allPayRes.data ?? []) {
+        if (payment.method !== 'cheque' || !payment.reference) continue
+        const customerId = payment.invoices?.customer_id
+        if (!customerId) continue
+        const key = `${customerId}|${payment.reference}`
+        chequePaymentAmounts.set(key, (chequePaymentAmounts.get(key) ?? 0) + Number(payment.amount ?? 0))
+      }
+
+      const resolvedChequeAmount = (cheque) => {
+        const key = `${cheque.customer_id}|${cheque.cheque_number}`
+        return chequePaymentAmounts.has(key)
+          ? chequePaymentAmounts.get(key)
+          : Number(cheque.amount ?? 0)
+      }
+      const chequeInHand = (chequeInHandRes.data ?? []).reduce((sum, row) => sum + resolvedChequeAmount(row), 0)
+      const returnCheque = (returnChequeRes.data ?? []).reduce((sum, row) => sum + resolvedChequeAmount(row), 0)
+      const depositedCheques = (depositedChequeRes.data ?? []).reduce((sum, row) => sum + resolvedChequeAmount(row), 0)
+      const receivedPayments = Math.max(0, allReceivablePayments - returnCheque)
       const returnAmount = (returnsRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
       const totalPurchases = (payableRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
       const totalPurchasePayments = (purchasePaymentsRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
@@ -248,7 +266,10 @@ export default function DashboardPage() {
         payable,
       })
 
-      setReceivableCheques(recentInvRes.data ?? [])
+      setReceivableCheques((recentInvRes.data ?? []).map((cheque) => ({
+        ...cheque,
+        amount: resolvedChequeAmount(cheque),
+      })))
       setRecentPayments(recentPayRes.data ?? [])
       if (payChequeData.error) console.error('Payable cheques load error:', payChequeData.error)
       setPayableCheques(payChequeData.data ?? [])
@@ -311,14 +332,14 @@ export default function DashboardPage() {
       setMonthSeries({ labels, sales, purchase, profit })
 
       // Receivable summary
-      const due = Math.max(0, totalSales - totalPayments)
+      const due = Math.max(0, totalSales - returnAmount - receivedPayments)
       const currentMonthSales = (invForChartsRes.data ?? [])
         .filter((inv) => new Date(inv.created_at) >= monthStart)
         .reduce((s, inv) => s + Number(inv.total_amount ?? 0), 0)
       setReceivable({
         due,
         currentMonth: currentMonthSales,
-        received: totalPayments,
+        received: receivedPayments,
       })
       setLoading(false)
     }
