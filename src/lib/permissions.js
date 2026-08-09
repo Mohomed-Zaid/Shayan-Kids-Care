@@ -262,6 +262,48 @@ export const PERMISSION_CATALOG = [
     ],
   },
   {
+    id: 'reports_customers',
+    label: 'Customer Reports',
+    group: 'Reports',
+    route: '/reports/customers',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'create', label: 'Create' },
+      { id: 'edit', label: 'Edit' },
+      { id: 'delete', label: 'Delete' },
+      { id: 'export', label: 'Export' },
+      { id: 'print', label: 'Print' },
+      { id: 'view_financial_data', label: 'View Financial Data' },
+      { id: 'view_cheques', label: 'View Cheques' },
+      { id: 'view_credit_limits', label: 'View Credit Limits' },
+    ],
+  },
+  {
+    id: 'reports_inventory',
+    label: 'Inventory Reports',
+    group: 'Reports',
+    route: '/reports/inventory/detailed',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'export_cost', label: 'Export Cost & Profit' },
+      { id: 'adjust', label: 'Create Stock Adjustment' },
+      { id: 'correct', label: 'Correct Stock Mismatch' },
+    ],
+  },
+  {
+    id: 'reports_purchase',
+    label: 'Purchase Reports',
+    group: 'Reports',
+    route: '/reports/purchases',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'create', label: 'Create' },
+      { id: 'edit', label: 'Edit' },
+      { id: 'delete', label: 'Delete' },
+      { id: 'export', label: 'Export / Print' },
+    ],
+  },
+  {
     id: 'admin_backup',
     label: 'Backup & Safety',
     group: 'Admin',
@@ -364,10 +406,14 @@ export const NAV_PERMISSION_MAP = {
   '/backup': 'admin_backup',
   '/audit-log': 'admin_audit_log',
   '/sms-service': 'sms',
+  '/reports/purchases': 'reports_purchase',
+  '/reports/inventory/detailed': 'reports_inventory',
 }
 
 export function moduleForPath(pathname) {
   const path = pathname.split('?')[0]
+  if (path.startsWith('/reports/purchases')) return 'reports_purchase'
+  if (path.startsWith('/reports/inventory/detailed')) return 'reports_inventory'
   if (path.startsWith('/sms-service')) return 'sms'
   if (path.startsWith('/finance/receivables')) return 'finance_receivables'
   if (path.startsWith('/finance/payables')) return 'finance_payables'

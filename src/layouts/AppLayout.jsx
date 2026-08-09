@@ -77,6 +77,7 @@ const navItems = [
         { to: '/reports/sales/by-sales-rep', label: 'Sales by Sales Rep' },
       ]},
       { key: 'inventory-reports', label: 'Inventory Reports', icon: Database, nested: true, children: [
+        { to: '/reports/inventory/detailed', label: 'Detailed Inventory Report' },
         { to: '/reports/inventory/current-stock', label: 'Current Stock Report' },
         { to: '/reports/inventory/low-stock', label: 'Low Stock Report' },
         { to: '/reports/inventory/backorder', label: 'Backorder Report' },
@@ -85,6 +86,9 @@ const navItems = [
         { to: '/reports/customer/outstanding-receivables', label: 'Outstanding Receivables' },
         { to: '/reports/customer/statement', label: 'Customer Statement' },
         { to: '/reports/customer/ledger', label: 'Customer Ledger' },
+      ]},
+      { key: 'purchase-reports', label: 'Purchase Reports', icon: HandCoins, nested: true, children: [
+        { to: '/reports/purchases', label: 'Purchase Reports Suite' },
       ]},
     ],
   },
@@ -135,11 +139,13 @@ function usePageTitle() {
     if (path.startsWith('/reports/sales/by-product')) return 'Sales by Product'
     if (path.startsWith('/reports/sales/by-sales-rep')) return 'Sales by Sales Rep'
     if (path.startsWith('/reports/inventory/current-stock')) return 'Current Stock Report'
+    if (path.startsWith('/reports/inventory/detailed')) return 'Detailed Inventory Report'
     if (path.startsWith('/reports/inventory/low-stock')) return 'Low Stock Report'
     if (path.startsWith('/reports/inventory/backorder')) return 'Backorder Report'
     if (path.startsWith('/reports/customer/outstanding-receivables')) return 'Outstanding Receivables Report'
     if (path.startsWith('/reports/customer/statement')) return 'Customer Statement'
     if (path.startsWith('/reports/customer/ledger')) return 'Customer Ledger'
+    if (path.startsWith('/reports/purchases')) return 'Purchase Reports'
     if (path.startsWith('/reports')) return 'Reports'
     if (path === '/orders/new') return 'Create Order'
     if (path.startsWith('/orders/') && path.endsWith('/edit')) return 'Edit Order'

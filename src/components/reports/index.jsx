@@ -167,14 +167,37 @@ export function exportToExcel(data, filename = 'report.xlsx', sheetName = 'Repor
   XLSX.writeFile(wb, filename);
 }
 
-export function exportToPDF(elementId, filename = 'report.pdf') {
+export function exportToPDF(elementId, filename = 'report.pdf', options = {}) {
   const element = document.getElementById(elementId);
+  if (!element) return;
+
+  const cloned = element.cloneNode(true);
+  cloned.classList.add('pdf-export-document');
+  if (options.className) cloned.classList.add(options.className);
+
+  const wrapper = document.createElement('div');
+  wrapper.className = 'pdf-export-stage';
+  wrapper.appendChild(cloned);
+  document.body.appendChild(wrapper);
+
+  const orientation = options.orientation ?? (element.scrollWidth > 900 ? 'landscape' : 'portrait');
+  const format = options.format ?? 'a4';
   const opt = {
-    margin: 0.5,
+    margin: options.margin ?? 0.25,
     filename: filename,
     image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true },
-    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' }
+    html2canvas: {
+      scale: options.scale ?? 2,
+      useCORS: true,
+      backgroundColor: '#ffffff',
+      scrollX: 0,
+      scrollY: 0,
+      windowWidth: cloned.scrollWidth,
+    },
+    jsPDF: { unit: 'in', format, orientation },
+    pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.pdf-avoid-break'] },
   };
-  html2pdf().set(opt).from(element).save();
+  html2pdf().set(opt).from(cloned).save().finally(() => {
+    document.body.removeChild(wrapper);
+  });
 }

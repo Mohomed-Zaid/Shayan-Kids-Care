@@ -21,10 +21,24 @@ function CurrentStockReportPage() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const { data: products, error } = await supabase.from('products').select('*').order('name');
+      const [{ data: products, error }, { data: purchases }] = await Promise.all([
+        supabase.from('products').select('*').order('name'),
+        supabase.from('purchase_items').select('product_id, cost, purchases(date, created_at)'),
+      ]);
       if (error) throw error;
-      
-      setData(products);
+
+      const latestCostByProduct = new Map();
+      for (const purchase of purchases ?? []) {
+        const productId = purchase.product_id;
+        if (!productId) continue;
+        const dateValue = purchase.purchases?.date || purchase.purchases?.created_at || '';
+        const existing = latestCostByProduct.get(productId);
+        if (!existing || new Date(dateValue || 0) >= existing.date) {
+          latestCostByProduct.set(productId, { date: new Date(dateValue || 0), cost: Number(purchase.cost || 0) });
+        }
+      }
+
+      setData((products ?? []).map((product) => ({ ...product, cost: latestCostByProduct.get(product.id)?.cost ?? 0 })));
     } catch (e) {
       console.error('Error loading data:', e);
     } finally {

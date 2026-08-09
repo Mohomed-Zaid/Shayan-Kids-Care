@@ -20,9 +20,18 @@ const reportCategories = [
     title: 'Inventory Reports',
     icon: Package,
     reports: [
+      { name: 'Detailed Inventory Report', path: '/reports/inventory/detailed' },
       { name: 'Current Stock Report', path: '/reports/inventory/current-stock' },
       { name: 'Low Stock Report', path: '/reports/inventory/low-stock' },
       { name: 'Backorder Report', path: '/reports/inventory/backorder' },
+    ],
+  },
+  {
+    key: 'purchase',
+    title: 'Purchase Reports',
+    icon: Database,
+    reports: [
+      { name: 'Purchase Reports Suite', path: '/reports/purchases' },
     ],
   },
   {
@@ -30,6 +39,7 @@ const reportCategories = [
     title: 'Customer Reports',
     icon: Users,
     reports: [
+      { name: 'Detailed Customer Reports', path: '/reports/customers' },
       { name: 'Outstanding Receivables', path: '/reports/customer/outstanding-receivables' },
       { name: 'Customer Statement', path: '/reports/customer/statement' },
       { name: 'Customer Ledger', path: '/reports/customer/ledger' },

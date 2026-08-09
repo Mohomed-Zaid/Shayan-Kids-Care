@@ -187,7 +187,7 @@ export default function ProductsPage() {
     }
     list.sort((a, b) => {
       let va = a[sortKey], vb = b[sortKey]
-      if (sortKey === 'price' || sortKey === 'stock') {
+      if (sortKey === 'cost' || sortKey === 'price' || sortKey === 'stock') {
         va = Number(va) || 0
         vb = Number(vb) || 0
       } else if (sortKey === 'created_at') {
@@ -207,12 +207,26 @@ export default function ProductsPage() {
   const load = async () => {
     setLoading(true)
     setError(null)
-    const { data, error: err } = await supabase.from('products').select('*').order('created_at', { ascending: false })
+    const [{ data, error: err }, { data: purchases, error: purchaseErr }] = await Promise.all([
+      supabase.from('products').select('*').order('created_at', { ascending: false }),
+      supabase.from('purchase_items').select('product_id, cost, purchases(date, created_at)'),
+    ])
     if (err) {
       setError(err.message)
       setRows([])
     } else {
-      setRows(data ?? [])
+      const latestCostByProduct = new Map()
+      for (const purchase of purchases ?? []) {
+        const productId = purchase.product_id
+        if (!productId) continue
+        const dateValue = purchase.purchases?.date || purchase.purchases?.created_at || ''
+        const existing = latestCostByProduct.get(productId)
+        if (!existing || new Date(dateValue || 0) >= existing.date) {
+          latestCostByProduct.set(productId, { date: new Date(dateValue || 0), cost: Number(purchase.cost || 0) })
+        }
+      }
+      setRows((data ?? []).map((product) => ({ ...product, cost: latestCostByProduct.get(product.id)?.cost ?? 0 })))
+      if (purchaseErr) toast.error('Product costs could not be loaded from purchases.')
     }
     setLoading(false)
   }
@@ -348,6 +362,7 @@ export default function ProductsPage() {
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={() => toggleSort('name')}>Name <SortIcon field="name" /></th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={() => toggleSort('code')}>Code <SortIcon field="code" /></th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={() => toggleSort('category')}>Category <SortIcon field="category" /></th>
+              <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={() => toggleSort('cost')}>Cost <SortIcon field="cost" /></th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={() => toggleSort('price')}>Price <SortIcon field="price" /></th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide cursor-pointer select-none" onClick={() => toggleSort('stock')}>Stock <SortIcon field="stock" /></th>
               <th className="text-left font-medium px-5 py-3 text-xs uppercase tracking-wide">Status</th>
@@ -357,7 +372,7 @@ export default function ProductsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="px-5 py-8">
+                <td colSpan={8} className="px-5 py-8">
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-900"></div>
                   </div>
@@ -365,11 +380,11 @@ export default function ProductsPage() {
               </tr>
             ) : error ? (
               <tr>
-                <td colSpan={7} className="px-5 py-4 text-red-600 text-center">{error}</td>
+                <td colSpan={8} className="px-5 py-4 text-red-600 text-center">{error}</td>
               </tr>
             ) : filteredRows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-5 py-8 text-slate-400 dark:text-slate-500 text-center">
+                <td colSpan={8} className="px-5 py-8 text-slate-400 dark:text-slate-500 text-center">
                   <Package size={24} className="mx-auto mb-2 opacity-40" />
                   No products found.
                 </td>
@@ -382,6 +397,7 @@ export default function ProductsPage() {
                   <td className="px-5 py-3.5">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300">{row.category ?? 'General'}</span>
                   </td>
+                  <td className="px-5 py-3.5 font-medium text-slate-900 dark:text-white">{Number(row.cost ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                   <td className="px-5 py-3.5 font-medium text-slate-900 dark:text-white">{Number(row.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                   <td className="px-5 py-3.5">
                     {(() => {

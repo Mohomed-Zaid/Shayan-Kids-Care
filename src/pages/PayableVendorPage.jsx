@@ -78,7 +78,7 @@ export default function PayableVendorPage() {
     setViewItems([])
     const { data, error } = await supabase
       .from('purchase_items')
-      .select('id, product_id, quantity, cost, mrp, description, total, exp_date, remarks, products(name, code)')
+      .select('id, product_id, quantity, cost, mrp, description, total, exp_date, remarks, products(name, code, stock)')
       .eq('purchase_id', pur.id)
     if (!error) setViewItems(data ?? [])
     setViewLoading(false)
@@ -109,50 +109,71 @@ export default function PayableVendorPage() {
     if (editItems.length === 0) return
     setViewSaving(true)
     try {
-      const updates = []
       for (const editIt of editItems) {
         const origIt = viewItems.find((v) => v.id === editIt.id)
-        const qtyDiff = Number(editIt.quantity || 0) - Number(origIt?.quantity || 0)
+        if (!origIt) throw new Error('Original purchase item could not be found')
+        const nextQuantity = Number(editIt.quantity || 0)
+        if (!Number.isFinite(nextQuantity) || nextQuantity < 0) throw new Error(`Invalid quantity for ${editIt.products?.name || 'purchase item'}`)
+        const originalQuantity = Number(origIt.quantity || 0)
+        const qtyDiff = nextQuantity - originalQuantity
+        const itemPayload = {
+          quantity: nextQuantity,
+          cost: Number(editIt.cost || 0),
+          mrp: editIt.mrp ? Number(editIt.mrp) : null,
+          description: editIt.description?.trim() || null,
+          exp_date: editIt.exp_date || null,
+          remarks: editIt.remarks?.trim() || null,
+          total: Number(editIt.total || 0),
+        }
 
-        updates.push(
-          supabase
-            .from('purchase_items')
-            .update({
-              quantity: Number(editIt.quantity || 0),
-              cost: Number(editIt.cost || 0),
-              mrp: editIt.mrp ? Number(editIt.mrp) : null,
-              description: editIt.description?.trim() || null,
-              exp_date: editIt.exp_date || null,
-              remarks: editIt.remarks?.trim() || null,
-              total: Number(editIt.total || 0),
-            })
-            .eq('id', editIt.id)
-        )
+        const { error: itemError } = await supabase.from('purchase_items').update(itemPayload).eq('id', editIt.id)
+        if (itemError) throw itemError
 
         if (qtyDiff !== 0 && editIt.product_id) {
-          const { data: prod } = await supabase
+          const { data: prod, error: productReadError } = await supabase
             .from('products')
             .select('stock')
             .eq('id', editIt.product_id)
             .single()
-          if (prod) {
-            const newStock = Math.max(0, Number(prod.stock ?? 0) + qtyDiff)
-            await supabase.from('products').update({ stock: newStock }).eq('id', editIt.product_id)
+          if (productReadError || !prod) {
+            await supabase.from('purchase_items').update({ quantity: originalQuantity, total: Number(origIt.total || 0) }).eq('id', editIt.id)
+            throw productReadError || new Error('Product stock record could not be found')
+          }
+          const newStock = Number(prod.stock ?? 0) + qtyDiff
+          const { error: stockError } = await supabase.from('products').update({ stock: newStock }).eq('id', editIt.product_id)
+          if (stockError) {
+            await supabase.from('purchase_items').update({ quantity: originalQuantity, total: Number(origIt.total || 0) }).eq('id', editIt.id)
+            throw stockError
           }
         }
       }
 
-      await Promise.all(updates)
-
       const newTotal = editItems.reduce((s, it) => s + Number(it.total || 0), 0)
-      await supabase.from('purchases').update({ total_amount: newTotal }).eq('id', viewPurchase.id)
+      const { error: purchaseError } = await supabase.from('purchases').update({ total_amount: newTotal }).eq('id', viewPurchase.id)
+      if (purchaseError) throw purchaseError
 
       toast.success('Purchase updated')
-      logAction({ action: 'edit_purchase', targetType: 'purchase', targetId: viewPurchase.id })
+      logAction({
+        action: 'edit_purchase',
+        targetType: 'purchase',
+        targetId: viewPurchase.id,
+        details: {
+          stock_changes: editItems.map((item) => {
+            const original = viewItems.find((row) => row.id === item.id)
+            return {
+              product_id: item.product_id,
+              product: item.products?.name,
+              original_quantity: Number(original?.quantity || 0),
+              updated_quantity: Number(item.quantity || 0),
+              stock_change: Number(item.quantity || 0) - Number(original?.quantity || 0),
+            }
+          }),
+        },
+      })
 
       const { data } = await supabase
         .from('purchase_items')
-        .select('id, product_id, quantity, cost, mrp, description, total, exp_date, remarks, products(name, code)')
+        .select('id, product_id, quantity, cost, mrp, description, total, exp_date, remarks, products(name, code, stock)')
         .eq('purchase_id', viewPurchase.id)
       setViewItems(data ?? [])
       setViewPurchase((prev) => (prev ? { ...prev, total_amount: newTotal } : prev))
@@ -1239,6 +1260,8 @@ export default function PayableVendorPage() {
                         <th className="text-left font-medium px-4 py-2.5 text-xs uppercase tracking-wide">#</th>
                         <th className="text-left font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Product</th>
                         <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Qty</th>
+                        <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Stock Change</th>
+                        <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Final Product Stock</th>
                         <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Cost</th>
                         <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">MRP</th>
                         <th className="text-right font-medium px-4 py-2.5 text-xs uppercase tracking-wide">Total</th>
@@ -1249,21 +1272,28 @@ export default function PayableVendorPage() {
                     <tbody>
                       {editItems.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className="px-4 py-6 text-center text-slate-400 dark:text-slate-500">No items</td>
+                          <td colSpan={10} className="px-4 py-6 text-center text-slate-400 dark:text-slate-500">No items</td>
                         </tr>
                       ) : (
                         editItems.map((it, idx) => (
+                          (() => {
+                            const original = viewItems.find((row) => row.id === it.id)
+                            const stockChange = Number(it.quantity || 0) - Number(original?.quantity || 0)
+                            const finalStock = Number(original?.products?.stock ?? 0) + stockChange
+                            return (
                           <tr key={it.id} className="border-b border-slate-100 dark:border-slate-800">
                             <td className="px-4 py-2.5 text-slate-500 dark:text-slate-400">{idx + 1}</td>
                             <td className="px-4 py-2.5 font-medium text-slate-900 dark:text-white">
                               {it.products?.code ? `${it.products.code} - ` : ''}{it.products?.name ?? '-'}
                             </td>
                             <td className="px-4 py-2">
-                              <input type="number" min="1" value={it.quantity ?? ''}
+                              <input type="number" min="0" value={it.quantity ?? ''}
                                 onChange={(e) => updateEditItem(idx, 'quantity', e.target.value)}
                                 className="w-16 px-2 py-1 text-right rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
                               />
                             </td>
+                            <td className={`px-4 py-2.5 text-right font-bold ${stockChange>0?'text-emerald-600 dark:text-emerald-300':stockChange<0?'text-amber-600 dark:text-amber-300':'text-slate-400'}`}>{stockChange>0?`+${stockChange}`:stockChange}</td>
+                            <td className="px-4 py-2.5 text-right"><span className="rounded-lg bg-blue-50 px-2 py-1 font-extrabold text-blue-700 dark:bg-blue-500/10 dark:text-blue-300">{finalStock}</span></td>
                             <td className="px-4 py-2">
                               <input type="number" min="0" step="0.01" value={it.cost ?? ''}
                                 onChange={(e) => updateEditItem(idx, 'cost', e.target.value)}
@@ -1291,6 +1321,8 @@ export default function PayableVendorPage() {
                               />
                             </td>
                           </tr>
+                            )
+                          })()
                         ))
                       )}
                     </tbody>

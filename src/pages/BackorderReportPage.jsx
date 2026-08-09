@@ -5,6 +5,7 @@ import { ReportHeader, SummaryCards, ReportActions, ReportPagination, LoadingSke
 import { Search } from 'lucide-react';
 
 const fmt = (val) => `${Number(val ?? 0).toLocaleString()}`;
+const money = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
 export default function BackorderReportPage() {
   const { user } = useAuth();
@@ -29,7 +30,20 @@ export default function BackorderReportPage() {
         .order('stock', { ascending: true });
 
       if (error) throw error;
-      const backorderProducts = products.filter(p => Number(p.stock ?? 0) < 0) ?? [];
+      const { data: purchases } = await supabase
+        .from('purchase_items')
+        .select('product_id, cost, purchases(date, created_at)');
+      const latestCostByProduct = new Map();
+      for (const purchase of purchases ?? []) {
+        const productId = purchase.product_id;
+        if (!productId) continue;
+        const dateValue = purchase.purchases?.date || purchase.purchases?.created_at || '';
+        const existing = latestCostByProduct.get(productId);
+        if (!existing || new Date(dateValue || 0) >= existing.date) {
+          latestCostByProduct.set(productId, { date: new Date(dateValue || 0), cost: Number(purchase.cost || 0) });
+        }
+      }
+      const backorderProducts = products.filter(p => Number(p.stock ?? 0) < 0).map((product) => ({ ...product, cost: latestCostByProduct.get(product.id)?.cost ?? 0 })) ?? [];
       setData(backorderProducts);
     } catch (e) {
       console.error(e);
@@ -46,7 +60,9 @@ export default function BackorderReportPage() {
       'Product Code': p.code,
       'Category': p.category,
       'Current Stock': p.stock,
+      'Cost Price': p.cost || 0,
       'Required Quantity': Math.abs(p.stock),
+      'Required Cost Value': Math.abs(p.stock) * (p.cost || 0),
     }));
     exportToExcel(excelData, 'backorder-report.xlsx', 'Backorder Report');
   };
@@ -70,6 +86,12 @@ export default function BackorderReportPage() {
       } else if (sortBy === 'stock') {
         aVal = a.stock;
         bVal = b.stock;
+      } else if (sortBy === 'cost') {
+        aVal = a.cost || 0;
+        bVal = b.cost || 0;
+      } else if (sortBy === 'value') {
+        aVal = Math.abs(a.stock || 0) * (a.cost || 0);
+        bVal = Math.abs(b.stock || 0) * (b.cost || 0);
       } else if (sortBy === 'code') {
         aVal = (a.code || '').toLowerCase();
         bVal = (b.code || '').toLowerCase();
@@ -87,10 +109,12 @@ export default function BackorderReportPage() {
   const summaryCards = useMemo(() => {
     const totalProducts = filteredAndSortedData.length;
     const totalUnitsNeeded = filteredAndSortedData.reduce((sum, p) => sum + Math.abs(p.stock), 0);
+    const totalRequiredCost = filteredAndSortedData.reduce((sum, p) => sum + Math.abs(p.stock) * (p.cost || 0), 0);
 
     return [
       { label: 'Products on Backorder', value: totalProducts },
       { label: 'Total Units Needed', value: fmt(totalUnitsNeeded) },
+      { label: 'Required Cost Value', value: money(totalRequiredCost) },
     ];
   }, [filteredAndSortedData]);
 
@@ -152,6 +176,8 @@ export default function BackorderReportPage() {
               <option value="name">Product Name</option>
               <option value="code">Product Code</option>
               <option value="stock">Current Stock</option>
+              <option value="cost">Cost Price</option>
+              <option value="value">Required Cost Value</option>
             </select>
             <button
               onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
@@ -172,7 +198,9 @@ export default function BackorderReportPage() {
                 <th className="text-left px-5 py-3 font-semibold text-xs uppercase tracking-wider">Code</th>
                 <th className="text-left px-5 py-3 font-semibold text-xs uppercase tracking-wider">Category</th>
                 <th className="text-left px-5 py-3 font-semibold text-xs uppercase tracking-wider">Current Stock</th>
+                <th className="text-left px-5 py-3 font-semibold text-xs uppercase tracking-wider">Cost Price</th>
                 <th className="text-left px-5 py-3 font-semibold text-xs uppercase tracking-wider">Required Quantity</th>
+                <th className="text-left px-5 py-3 font-semibold text-xs uppercase tracking-wider">Required Cost Value</th>
               </tr>
             </thead>
             <tbody>
@@ -186,15 +214,18 @@ export default function BackorderReportPage() {
                     </span>
                   </td>
                   <td className="px-5 py-3.5 font-bold text-red-600 dark:text-red-400">{product.stock}</td>
+                  <td className="px-5 py-3.5 text-slate-600 dark:text-emerald-100/70">{money(product.cost)}</td>
                   <td className="px-5 py-3.5 font-bold text-red-700 dark:text-red-300">{Math.abs(product.stock)} units</td>
+                  <td className="px-5 py-3.5 font-bold text-red-700 dark:text-red-300">{money(Math.abs(product.stock) * (product.cost || 0))}</td>
                 </tr>
               ))}
             </tbody>
             <tfoot>
               <tr className="bg-red-700 text-white">
-                <td colSpan={3} className="px-5 py-3 font-bold text-sm uppercase tracking-wider">Total Needed</td>
+                <td colSpan={4} className="px-5 py-3 font-bold text-sm uppercase tracking-wider">Total Needed</td>
                 <td></td>
                 <td className="px-5 py-3 font-extrabold">{fmt(filteredAndSortedData.reduce((sum, p) => sum + Math.abs(p.stock), 0))} units</td>
+                <td className="px-5 py-3 font-extrabold">{money(filteredAndSortedData.reduce((sum, p) => sum + Math.abs(p.stock) * (p.cost || 0), 0))}</td>
               </tr>
             </tfoot>
           </table>
