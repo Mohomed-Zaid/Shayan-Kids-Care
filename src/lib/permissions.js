@@ -242,6 +242,18 @@ export const PERMISSION_CATALOG = [
     ],
   },
   {
+    id: 'finance_bank_letters',
+    label: 'Bank Letters',
+    group: 'Finance',
+    route: '/finance/bank-letters/salary-transfer',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'create', label: 'Create' },
+      { id: 'print', label: 'Print' },
+      { id: 'export', label: 'Export PDF' },
+    ],
+  },
+  {
     id: 'finance_delete_receivable',
     label: 'Delete Receivable',
     group: 'Finance',
@@ -259,6 +271,25 @@ export const PERMISSION_CATALOG = [
     actions: [
       { id: 'view', label: 'View' },
       { id: 'delete', label: 'Delete' },
+    ],
+  },
+  {
+    id: 'reports_finance',
+    label: 'Finance Reports',
+    group: 'Reports',
+    route: '/reports/finance',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'create', label: 'Create' },
+      { id: 'edit', label: 'Edit' },
+      { id: 'delete', label: 'Delete' },
+      { id: 'export', label: 'Export' },
+      { id: 'print', label: 'Print' },
+      { id: 'view_receivables', label: 'View Receivables' },
+      { id: 'view_payables', label: 'View Payables' },
+      { id: 'view_bank_data', label: 'View Bank Data' },
+      { id: 'view_commission', label: 'View Commission' },
+      { id: 'view_profit_loss', label: 'View Profit & Loss' },
     ],
   },
   {
@@ -341,7 +372,7 @@ export function defaultPermissions() {
   for (const mod of PERMISSION_CATALOG) {
     perms[mod.id] = {}
     for (const action of mod.actions) {
-      perms[mod.id][action.id] = action.id === 'view'
+      perms[mod.id][action.id] = action.id === 'view' && !['reports_finance', 'finance_bank_letters'].includes(mod.id)
     }
   }
   return perms
@@ -401,6 +432,7 @@ export const NAV_PERMISSION_MAP = {
   '/finance/banks': 'finance_banks',
   '/finance/cheques': 'finance_cheques',
   '/finance/bank-reconciliation': 'finance_bank_reconciliation',
+  '/finance/bank-letters/salary-transfer': 'finance_bank_letters',
   '/finance/delete-receivable': 'finance_delete_receivable',
   '/finance/delete-payable': 'finance_delete_payable',
   '/backup': 'admin_backup',
@@ -408,12 +440,14 @@ export const NAV_PERMISSION_MAP = {
   '/sms-service': 'sms',
   '/reports/purchases': 'reports_purchase',
   '/reports/inventory/detailed': 'reports_inventory',
+  '/reports/finance': 'reports_finance',
 }
 
 export function moduleForPath(pathname) {
   const path = pathname.split('?')[0]
   if (path.startsWith('/reports/purchases')) return 'reports_purchase'
   if (path.startsWith('/reports/inventory/detailed')) return 'reports_inventory'
+  if (path.startsWith('/reports/finance')) return 'reports_finance'
   if (path.startsWith('/sms-service')) return 'sms'
   if (path.startsWith('/finance/receivables')) return 'finance_receivables'
   if (path.startsWith('/finance/payables')) return 'finance_payables'

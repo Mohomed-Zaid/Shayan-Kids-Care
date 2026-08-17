@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw, Shield, ScrollText, HandCoins, Landmark, Trash2, UserCog, AlertTriangle, MessageSquare, BarChart3, Database } from 'lucide-react'
+import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw, Shield, ScrollText, HandCoins, Landmark, Trash2, UserCog, AlertTriangle, MessageSquare, BarChart3, Database, Mail } from 'lucide-react'
 import { usePermissions } from '../contexts/PermissionsContext'
 import { NAV_PERMISSION_MAP } from '../lib/permissions'
 import logo from '../pictures/logo.jpeg'
@@ -55,6 +55,9 @@ const navItems = [
       { to: '/finance/banks', label: 'Banks', icon: Building2 },
       { to: '/finance/cheques', label: 'Cheque Administration', icon: Landmark },
       { to: '/finance/bank-reconciliation', label: 'Bank Reconciliation', icon: Landmark },
+      { key: 'bank-letters', label: 'Bank Letters', icon: Mail, nested: true, children: [
+        { to: '/finance/bank-letters/salary-transfer', label: 'Salary Transfer Request' },
+      ]},
       { to: '/finance/delete-receivable', label: 'Delete Receivable', icon: Trash2 },
       { to: '/finance/delete-payable', label: 'Delete Payable', icon: Trash2 },
     ],
@@ -90,6 +93,7 @@ const navItems = [
       { key: 'purchase-reports', label: 'Purchase Reports', icon: HandCoins, nested: true, children: [
         { to: '/reports/purchases', label: 'Purchase Reports Suite' },
       ]},
+      { to: '/reports/finance', label: 'Finance Reports', icon: Wallet },
     ],
   },
   {
@@ -130,6 +134,7 @@ function usePageTitle() {
     if (path.startsWith('/finance/banks')) return 'Banks'
     if (path.startsWith('/finance/cheques')) return 'Cheque Administration'
     if (path.startsWith('/finance/bank-reconciliation')) return 'Bank Reconciliation'
+    if (path.startsWith('/finance/bank-letters/salary-transfer')) return 'Salary Transfer Request'
     if (path.startsWith('/finance/delete-receivable')) return 'Delete Receivable'
     if (path.startsWith('/finance/delete-payable')) return 'Delete Payable'
     if (path.startsWith('/finance')) return 'Finance'
@@ -146,6 +151,7 @@ function usePageTitle() {
     if (path.startsWith('/reports/customer/statement')) return 'Customer Statement'
     if (path.startsWith('/reports/customer/ledger')) return 'Customer Ledger'
     if (path.startsWith('/reports/purchases')) return 'Purchase Reports'
+    if (path.startsWith('/reports/finance')) return 'Finance Reports'
     if (path.startsWith('/reports')) return 'Reports'
     if (path === '/orders/new') return 'Create Order'
     if (path.startsWith('/orders/') && path.endsWith('/edit')) return 'Edit Order'
@@ -198,17 +204,16 @@ export default function AppLayout() {
   }
 
   const visibleNavItems = useMemo(() => {
-    return navItems
-      .map((item) => {
-        if (item.children) {
-          const children = item.children.filter((c) => canViewNav(c.to))
-          if (children.length === 0) return null
-          return { ...item, children }
-        }
-        if (!item.to || !canViewNav(item.to)) return null
-        return item
-      })
-      .filter(Boolean)
+    const filterItem = (item) => {
+      if (item.children) {
+        const children = item.children.map(filterItem).filter(Boolean)
+        if (children.length === 0 && (!item.to || !canViewNav(item.to))) return null
+        return { ...item, children }
+      }
+      if (!item.to || !canViewNav(item.to)) return null
+      return item
+    }
+    return navItems.map(filterItem).filter(Boolean)
   }, [can, permLoading])
 
   const onLogout = async () => {

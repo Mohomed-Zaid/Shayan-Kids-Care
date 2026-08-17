@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { BarChart3, Database, Users, FileText, TrendingUp, Package, AlertTriangle } from 'lucide-react';
+import { BarChart3, Database, Users, FileText, TrendingUp, Package, Wallet } from 'lucide-react';
 
 const reportCategories = [
   {
@@ -32,6 +32,14 @@ const reportCategories = [
     icon: Database,
     reports: [
       { name: 'Purchase Reports Suite', path: '/reports/purchases' },
+    ],
+  },
+  {
+    key: 'finance',
+    title: 'Finance Reports',
+    icon: Wallet,
+    reports: [
+      { name: 'Complete Finance Reports Suite', path: '/reports/finance' },
     ],
   },
   {

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
-import { Plus, Pencil, Trash2, X, UserCheck, AlertTriangle, Banknote } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, UserCheck, AlertTriangle, Banknote, Landmark } from 'lucide-react'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import {
@@ -39,6 +39,10 @@ function RepForm({ initialValue, onCancel, onSave }) {
   const [email, setEmail] = useState(initialValue?.email ?? '')
   const [role, setRole] = useState(initialValue?.role ?? '')
   const [isRep, setIsRep] = useState(initialValue?.is_rep ?? false)
+  const [isActive, setIsActive] = useState(initialValue?.is_active ?? true)
+  const [bankName, setBankName] = useState(initialValue?.bank_name ?? '')
+  const [bankAccountNumber, setBankAccountNumber] = useState(initialValue?.bank_account_number ?? '')
+  const [salaryAmount, setSalaryAmount] = useState(() => formatMoneyInput(initialValue?.salary_amount))
   const [salary, setSalary] = useState(() => formatMoneyInput(initialValue?.salary))
   const [allowance, setAllowance] = useState(() => formatMoneyInput(initialValue?.allowance))
   const [otherAllowance, setOtherAllowance] = useState(() => formatMoneyInput(initialValue?.other_allowance))
@@ -64,6 +68,10 @@ function RepForm({ initialValue, onCancel, onSave }) {
         email: email.trim(),
         role: role.trim(),
         is_rep: isRep,
+        is_active: isActive,
+        bank_name: bankName.trim(),
+        bank_account_number: bankAccountNumber.trim(),
+        salary_amount: parseMoneyInput(salaryAmount),
         salary: parseMoneyInput(salary),
         allowance: parseMoneyInput(allowance),
         other_allowance: parseMoneyInput(otherAllowance),
@@ -160,7 +168,39 @@ function RepForm({ initialValue, onCancel, onSave }) {
                 Is Rep (shows in invoice)
               </label>
             </div>
+            <div className="flex items-end gap-2 pb-1">
+              <input
+                type="checkbox"
+                id="isActive"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="rounded border-slate-300 text-slate-900 focus:ring-slate-900/20"
+              />
+              <label htmlFor="isActive" className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                Active employee
+              </label>
+            </div>
           </div>
+
+          {!isRep ? (
+            <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Landmark size={16} className="text-slate-600 dark:text-slate-300" />
+                <span className="text-sm font-semibold text-slate-900 dark:text-white">Salary transfer details</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Bank Name</label>
+                  <input value={bankName} onChange={(e) => setBankName(e.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Bank Account Number</label>
+                  <input value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value.replace(/[^0-9A-Za-z-]/g, ''))} className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm" />
+                </div>
+                <MoneyField label="Monthly Salary" value={salaryAmount} onChange={setSalaryAmount} hint="Amount used in salary transfer letters" />
+              </div>
+            </div>
+          ) : null}
 
           <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
             <div className="flex items-center gap-2 mb-3">
@@ -293,6 +333,10 @@ export default function RepsPage() {
       email: values.email,
       role: values.role,
       is_rep: values.is_rep,
+      is_active: values.is_active,
+      bank_name: values.is_rep ? null : values.bank_name,
+      bank_account_number: values.is_rep ? null : values.bank_account_number,
+      salary_amount: values.is_rep ? 0 : values.salary_amount,
       salary: values.salary,
       allowance: values.allowance,
       other_allowance: values.other_allowance,
@@ -365,12 +409,15 @@ export default function RepsPage() {
       ) : null}
 
       <div className="bg-white border border-slate-200/60 rounded-xl overflow-x-auto shadow-sm dark:bg-emerald-950/25 dark:border-emerald-400/15">
-        <table className="w-full text-sm min-w-[900px]">
+        <table className="w-full text-sm min-w-[1180px]">
           <thead className="bg-slate-50/50 border-b border-slate-200 text-slate-500 dark:bg-emerald-950/35 dark:border-emerald-900/40 dark:text-emerald-100/80">
             <tr>
               <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wide">Name</th>
               <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wide">Role</th>
               <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wide">Type</th>
+              <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wide">Bank</th>
+              <th className="text-left font-medium px-4 py-3 text-xs uppercase tracking-wide">Account No.</th>
+              <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wide">Transfer Salary</th>
               <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wide">Salary</th>
               <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wide">Allowance</th>
               <th className="text-right font-medium px-4 py-3 text-xs uppercase tracking-wide">Other</th>
@@ -382,7 +429,7 @@ export default function RepsPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={9} className="px-5 py-8">
+                <td colSpan={12} className="px-5 py-8">
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-slate-900"></div>
                   </div>
@@ -390,11 +437,11 @@ export default function RepsPage() {
               </tr>
             ) : error ? (
               <tr>
-                <td colSpan={9} className="px-5 py-4 text-red-600 text-center">{error}</td>
+                <td colSpan={12} className="px-5 py-4 text-red-600 text-center">{error}</td>
               </tr>
             ) : sortedRows.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-5 py-8 text-slate-400 dark:text-emerald-100/60 text-center">
+                <td colSpan={12} className="px-5 py-8 text-slate-400 dark:text-emerald-100/60 text-center">
                   <UserCheck size={24} className="mx-auto mb-2 opacity-40 dark:text-emerald-200/30" />
                   No employees yet. Add your first employee!
                 </td>
@@ -409,6 +456,9 @@ export default function RepsPage() {
                       {row.is_rep ? 'Rep' : 'Employee'}
                     </span>
                   </td>
+                  <td className="px-4 py-3.5 text-slate-600 dark:text-emerald-100/70">{row.is_rep ? '—' : (row.bank_name || '—')}</td>
+                  <td className="px-4 py-3.5 text-slate-600 dark:text-emerald-100/70 font-mono text-xs">{row.is_rep ? '—' : (row.bank_account_number || '—')}</td>
+                  <td className="px-4 py-3.5 text-right text-slate-700 dark:text-emerald-100/80 tabular-nums">{row.is_rep ? '—' : fmtMoney(row.salary_amount ?? 0)}</td>
                   <td className="px-4 py-3.5 text-right text-slate-700 dark:text-emerald-100/80 tabular-nums">
                     {fmtMoney(row.salary ?? 0)}
                   </td>

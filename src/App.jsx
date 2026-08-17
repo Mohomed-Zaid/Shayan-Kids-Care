@@ -54,6 +54,8 @@ import CustomerReportsPage from './pages/reports/CustomerReportsPage'
 import ReportsLandingPage from './pages/reports/ReportsLandingPage'
 import PurchaseReportsPage from './pages/reports/PurchaseReportsPage'
 import InventoryReportsPage from './pages/reports/InventoryReportsPage'
+import FinanceReportsPage from './pages/reports/FinanceReportsPage'
+import SalaryTransferRequestPage from './pages/SalaryTransferRequestPage'
 
 function P({ module, action = 'view', children }) {
   return (
@@ -110,6 +112,7 @@ export default function App() {
                   <Route path="/reports/customers" element={<P module="reports_customers"><CustomerReportsPage /></P>} />
                   <Route path="/reports/purchases" element={<P module="reports_purchase"><PurchaseReportsPage /></P>} />
                   <Route path="/reports/inventory/detailed" element={<P module="reports_inventory"><InventoryReportsPage /></P>} />
+                  <Route path="/reports/finance" element={<P module="reports_finance"><FinanceReportsPage /></P>} />
                   
                   <Route path="/finance/journal-entry" element={<P module="finance_journal_entry"><JournalEntryPage /></P>} />
                   <Route path="/finance/rep-payments" element={<P module="finance_rep_payments"><RepPaymentsPage /></P>} />
@@ -120,6 +123,7 @@ export default function App() {
                   <Route path="/finance/banks" element={<P module="finance_banks"><BanksPage /></P>} />
                   <Route path="/finance/cheques" element={<P module="finance_cheques"><ChequeAdministrationPage /></P>} />
                   <Route path="/finance/bank-reconciliation" element={<P module="finance_bank_reconciliation"><BankReconciliationPage /></P>} />
+                  <Route path="/finance/bank-letters/salary-transfer" element={<P module="finance_bank_letters"><SalaryTransferRequestPage /></P>} />
                   <Route path="/finance/delete-receivable" element={<P module="finance_delete_receivable"><DeleteReceivablePage /></P>} />
                   <Route path="/finance/delete-payable" element={<P module="finance_delete_payable"><DeletePayablePage /></P>} />
                   <Route path="/returns" element={<P module="returns"><ReturnsPage /></P>} />
