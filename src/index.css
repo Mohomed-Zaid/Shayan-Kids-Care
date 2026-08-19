@@ -739,3 +739,69 @@
   .field { @apply rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-white; }
   .action { @apply inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-50 dark:hover:bg-emerald-900/40; }
 }
+/* Receivable payment status marks are kept as CSS so html2canvas can render them. */
+.receipt-status-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+  padding: 4px 0;
+  text-align: center;
+}
+
+.paid-stamp {
+  align-items: center;
+  border: 5px solid #dc2626;
+  border-radius: 50%;
+  box-sizing: border-box;
+  color: #dc2626;
+  display: flex;
+  height: 95px;
+  justify-content: center;
+  opacity: 0.82;
+  position: relative;
+  transform: rotate(-12deg);
+  width: 95px;
+}
+
+.paid-stamp::before {
+  border: 2px dashed #dc2626;
+  border-radius: 50%;
+  content: '';
+  inset: 5px;
+  position: absolute;
+}
+
+.paid-stamp span {
+  border-bottom: 3px solid #dc2626;
+  border-top: 3px solid #dc2626;
+  font-size: 27px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  line-height: 1.15;
+  padding: 2px 4px;
+  text-shadow: 0.5px 0 #dc2626, -0.5px 0 #dc2626;
+}
+
+.receipt-partial-wrap {
+  align-items: center;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.partial-payment-stamp {
+  border: 2px solid #d97706;
+  border-radius: 5px;
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  opacity: 0.9;
+  padding: 5px 10px;
+  transform: rotate(-2deg);
+}
+
+.partial-payment-balance {
+  color: #b45309;
+  font-size: 11px;
+  font-weight: 700;
+}

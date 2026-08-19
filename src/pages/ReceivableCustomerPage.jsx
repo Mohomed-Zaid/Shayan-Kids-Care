@@ -14,6 +14,7 @@ import {
 } from '../lib/chequeValidation'
 import ChequeNumberField, { ChequeBankNameDisplay } from '../components/ChequeNumberField'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
+import ReceiptPaymentStatus from '../components/ReceiptPaymentStatus'
 import { ArrowLeft, Plus, FileText } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 import ControlledDateField from '../components/ControlledDateField'
@@ -88,6 +89,8 @@ export default function ReceivableCustomerPage() {
     cloned.style.backgroundColor = '#ffffff'
     cloned.style.color = '#000000'
     cloned.querySelectorAll('*').forEach((el) => {
+      if (el.closest('[data-payment-status]')) return
+
       const cs = window.getComputedStyle(el)
       const bg = cs.backgroundColor
       const isTransparentBg = bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent'
@@ -666,6 +669,8 @@ export default function ReceivableCustomerPage() {
                   {receiptData.reference ? <div><span className="font-bold">Reference</span>: {receiptData.reference}</div> : null}
                 </div>
               ) : null}
+
+              <ReceiptPaymentStatus remainingBalance={receiptData.balanceAfter} />
 
               <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px]">
                 <div className="border-t border-black pt-6">Prepared</div>
