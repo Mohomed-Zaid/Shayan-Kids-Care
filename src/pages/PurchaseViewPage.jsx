@@ -18,7 +18,7 @@ export default function PurchaseViewPage() {
       const [{ data: pData, error: pErr }, { data: iData, error: iErr }] = await Promise.all([
         supabase
           .from('purchases')
-          .select('id, date, ref_no, type, total_amount, created_at, vendors(name, code, phone, address)')
+          .select('id, date, ref_no, type, total_amount, status, reversal_reason, reversed_at, reversed_by, created_at, vendors(name, code, phone, address)')
           .eq('id', id)
           .single(),
         supabase
@@ -91,11 +91,19 @@ export default function PurchaseViewPage() {
                 {purchase.ref_no ? `Ref: ${purchase.ref_no}` : ''} | {new Date(purchase.date ?? purchase.created_at).toLocaleDateString()}
               </div>
             </div>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300">
-              {purchase.type ?? 'purchase'}
+            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${String(purchase.status).toLowerCase() === 'reversed' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' : 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300'}`}>
+              {String(purchase.status).toLowerCase() === 'reversed' ? 'REVERSED' : (purchase.type ?? 'purchase')}
             </span>
           </div>
         </div>
+
+        {String(purchase.status).toLowerCase() === 'reversed' ? (
+          <div className="mx-6 mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
+            <div className="font-bold">Purchase reversed</div>
+            <div className="mt-1">Reason: {purchase.reversal_reason || '-'}</div>
+            <div className="mt-1 text-xs">{purchase.reversed_at ? new Date(purchase.reversed_at).toLocaleString() : ''}{purchase.reversed_by ? ` · ${purchase.reversed_by}` : ''}</div>
+          </div>
+        ) : null}
 
         <div className="p-6 border-b border-slate-200 dark:border-slate-700 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>

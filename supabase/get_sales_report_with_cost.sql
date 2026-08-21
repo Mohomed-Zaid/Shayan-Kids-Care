@@ -127,7 +127,7 @@ as $$
       join public.purchases pu on pu.id = pi.purchase_id
       where pi.variant_id = si.variant_id
         and pu.purchase_date <= s.created_at
-        and coalesce(lower(pu.status), 'completed') not in ('cancelled', 'canceled', 'draft', 'deleted')
+        and coalesce(lower(pu.status), 'completed') not in ('cancelled', 'canceled', 'draft', 'deleted', 'reversed', 'void')
       order by
         pu.purchase_date desc,
         pi.created_at desc,

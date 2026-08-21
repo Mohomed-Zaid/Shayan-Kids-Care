@@ -188,7 +188,7 @@ export default function DashboardPage() {
           .gte('invoices.created_at', oldestMonthStart.toISOString()),
         supabase
           .from('purchase_items')
-          .select('product_id, cost, purchases(created_at)')
+          .select('product_id, cost, purchases(created_at, status)')
           .order('id', { ascending: false })
           .limit(5000),
         supabase
@@ -205,7 +205,7 @@ export default function DashboardPage() {
           .eq('status', 'deposited'),
         supabase
           .from('returns')
-          .select('total_amount'),
+          .select('total_amount, status'),
         supabase
           .from('purchases')
           .select('total_amount'),
@@ -248,7 +248,7 @@ export default function DashboardPage() {
       const depositedCheques = (depositedChequeRes.data ?? []).reduce((sum, row) => sum + resolvedChequeAmount(row), 0)
       const receivedPayments = Math.max(0, allReceivablePayments - returnCheque)
       const returnAmount = (returnsRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
-      const totalPurchases = (payableRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
+      const totalPurchases = (payableRes.data ?? []).filter((row) => !['reversed','cancelled','canceled','deleted','void'].includes(String(row.status ?? '').toLowerCase())).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
       const totalPurchasePayments = (purchasePaymentsRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
       const payable = Math.max(0, totalPurchases - totalPurchasePayments)
 
@@ -278,6 +278,7 @@ export default function DashboardPage() {
       // Build cost timeline per product: [{date, cost}] sorted oldest-first
       const costTimelineByProduct = new Map()
       for (const pi of [...(purchaseItemsRes.data ?? [])].reverse()) {
+        if (['reversed','cancelled','canceled','deleted','void'].includes(String(pi.purchases?.status ?? '').toLowerCase())) continue
         const pid = pi.product_id
         if (!pid) continue
         const date = pi.purchases?.created_at

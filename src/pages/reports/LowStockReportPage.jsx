@@ -24,12 +24,13 @@ function LowStockReportPage() {
     try {
       const [{ data: products, error }, { data: purchases }] = await Promise.all([
         supabase.from('products').select('*').order('name'),
-        supabase.from('purchase_items').select('product_id, cost, purchases(date, created_at)'),
+        supabase.from('purchase_items').select('product_id, cost, purchases(date, created_at, status)'),
       ]);
       if (error) throw error;
 
       const latestCostByProduct = new Map();
       for (const purchase of purchases ?? []) {
+        if (['reversed','cancelled','canceled','deleted','void'].includes(String(purchase.purchases?.status ?? '').toLowerCase())) continue;
         const productId = purchase.product_id;
         if (!productId) continue;
         const dateValue = purchase.purchases?.date || purchase.purchases?.created_at || '';

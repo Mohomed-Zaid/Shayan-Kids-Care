@@ -13,6 +13,7 @@ import {
 } from '../lib/chequeValidation'
 import ChequeNumberField, { ChequeBankNameDisplay } from '../components/ChequeNumberField'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
+import PaidStamp from '../components/PaidStamp'
 import ControlledDateField from '../components/ControlledDateField'
 import { Search, Eye, FileText, Plus } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
@@ -66,7 +67,7 @@ export default function PayablesPage() {
     const [purRes, payRes, bankRes] = await Promise.all([
       supabase
         .from('purchases')
-        .select('id, date, ref_no, payment_type, total_amount, vendor_id, vendors(name, phone)')
+        .select('id, date, ref_no, payment_type, total_amount, vendor_id, status, vendors(name, phone)')
         .order('date', { ascending: false }),
       supabase
         .from('purchase_payments')
@@ -79,7 +80,7 @@ export default function PayablesPage() {
       setError(purRes.error.message)
       setPurchases([])
     } else {
-      setPurchases(purRes.data ?? [])
+      setPurchases((purRes.data ?? []).filter((p) => !['reversed','cancelled','canceled','deleted','void'].includes(String(p.status ?? '').toLowerCase())))
     }
 
     if (payRes.error) {
@@ -263,6 +264,8 @@ export default function PayablesPage() {
     cloned.style.backgroundColor = '#ffffff'
     cloned.style.color = '#000000'
     cloned.querySelectorAll('*').forEach((el) => {
+      if (el.closest('[data-payment-status]')) return
+
       const cs = window.getComputedStyle(el)
       const bg = cs.backgroundColor
       const isTransparentBg = bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent'
@@ -549,6 +552,8 @@ export default function PayablesPage() {
                   {receiptData.reference ? <div><span className="font-bold">Reference</span>: {receiptData.reference}</div> : null}
                 </div>
               ) : null}
+
+              <PaidStamp />
 
               <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px]">
                 <div className="border-t border-black pt-6">Prepared</div>

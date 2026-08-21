@@ -4,7 +4,6 @@ import { Plus, Pencil, Trash2, X, Package, AlertTriangle, Search, ArrowUpDown, F
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import PermissionGate from '../components/PermissionGate'
-import { usePermissions } from '../contexts/PermissionsContext'
 
 const FIXED_CATEGORIES = ['Baby Items', 'Toys']
 
@@ -140,7 +139,6 @@ function ProductForm({ initialValue, onCancel, onSave }) {
 }
 
 export default function ProductsPage() {
-  const { isSuperAdmin } = usePermissions()
   const [rows, setRows] = useState([])
 
   useEffect(() => {
@@ -209,7 +207,7 @@ export default function ProductsPage() {
     setError(null)
     const [{ data, error: err }, { data: purchases, error: purchaseErr }] = await Promise.all([
       supabase.from('products').select('*').order('created_at', { ascending: false }),
-      supabase.from('purchase_items').select('product_id, cost, purchases(date, created_at)'),
+      supabase.from('purchase_items').select('product_id, cost, purchases(date, created_at, status)'),
     ])
     if (err) {
       setError(err.message)
@@ -217,6 +215,7 @@ export default function ProductsPage() {
     } else {
       const latestCostByProduct = new Map()
       for (const purchase of purchases ?? []) {
+        if (['reversed','cancelled','canceled','deleted','void'].includes(String(purchase.purchases?.status ?? '').toLowerCase())) continue
         const productId = purchase.product_id
         if (!productId) continue
         const dateValue = purchase.purchases?.date || purchase.purchases?.created_at || ''
@@ -403,12 +402,11 @@ export default function ProductsPage() {
                     {(() => {
                       const stock = Number(row.stock ?? 0)
                       if (stock <= 0) {
-                        if (isSuperAdmin) {
                           if (stock < 0) {
                             return (
                               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300">
                                 <AlertTriangle size={10} />
-                                Backorder: {Math.abs(stock)} units needed
+                                Backorder Needed: {Math.abs(stock)} Units
                               </span>
                             )
                           } else {
@@ -419,9 +417,6 @@ export default function ProductsPage() {
                               </span>
                             )
                           }
-                        } else {
-                          return null
-                        }
                       } else if (stock <= 5) {
                         return (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">

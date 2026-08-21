@@ -247,20 +247,14 @@ function OutstandingReceivablesReportPage() {
 
   const summaryCards = useMemo(() => {
     const totalOutstanding = filteredAndSortedData.reduce((sum, c) => sum + c.balance, 0);
-    const customersWithDue = filteredAndSortedData.filter(c => c.balance > 0).length;
     const customersOverLimit = filteredAndSortedData.filter(c => getCustomerStatus(c) === 'Credit Limit Exceeded').length;
-    const totalCustomers = filteredAndSortedData.length;
 
     return [
       { label: 'Total Outstanding', value: fmt(totalOutstanding) },
       { label: 'Current (0-30)', value: fmt(overallAgingSummary.current) },
       { label: '31-60', value: fmt(overallAgingSummary['31-60']) },
-      { label: '61-90', value: fmt(overallAgingSummary['61-90']) },
-      { label: '91-120', value: fmt(overallAgingSummary['91-120']) },
       { label: 'Over 120', value: fmt(overallAgingSummary['over-120']) },
-      { label: 'Customers with Due', value: customersWithDue },
       { label: 'Over Credit Limit', value: customersOverLimit },
-      { label: 'Total Customers', value: totalCustomers },
     ];
   }, [filteredAndSortedData, overallAgingSummary]);
 

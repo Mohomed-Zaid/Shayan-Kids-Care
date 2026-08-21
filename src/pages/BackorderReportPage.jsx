@@ -32,9 +32,10 @@ export default function BackorderReportPage() {
       if (error) throw error;
       const { data: purchases } = await supabase
         .from('purchase_items')
-        .select('product_id, cost, purchases(date, created_at)');
+        .select('product_id, cost, purchases(date, created_at, status)');
       const latestCostByProduct = new Map();
       for (const purchase of purchases ?? []) {
+        if (['reversed','cancelled','canceled','deleted','void'].includes(String(purchase.purchases?.status ?? '').toLowerCase())) continue;
         const productId = purchase.product_id;
         if (!productId) continue;
         const dateValue = purchase.purchases?.date || purchase.purchases?.created_at || '';

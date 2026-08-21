@@ -13,7 +13,10 @@ import {
 } from '../lib/chequeValidation'
 import ChequeNumberField from '../components/ChequeNumberField'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
-import { ArrowLeft, Plus, FileText, Trash2, Eye, Pencil, Save, X } from 'lucide-react'
+import PaidStamp from '../components/PaidStamp'
+import PurchaseReversalDialog from '../components/PurchaseReversalDialog'
+import { isPurchaseReversed, reversePurchase } from '../lib/purchaseReversal'
+import { ArrowLeft, Plus, FileText, RotateCcw, Eye, Pencil, Save, X } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 import ControlledDateField from '../components/ControlledDateField'
 
@@ -22,13 +25,14 @@ const fmt = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimum
 export default function PayableVendorPage() {
   const { vendorId } = useParams()
   const toast = useToast()
-  const { isSuperAdmin } = usePermissions()
+  const { isSuperAdmin, can } = usePermissions()
 
   const receiptRef = useRef(null)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [purchaseDeletingId, setPurchaseDeletingId] = useState('')
+  const [purchaseToReverse, setPurchaseToReverse] = useState(null)
   const [error, setError] = useState(null)
 
   const [vendor, setVendor] = useState(null)
@@ -195,7 +199,7 @@ export default function PayableVendorPage() {
       supabase.from('vendors').select('id, name, phone, address').eq('id', vendorId).single(),
       supabase
         .from('purchases')
-        .select('id, date, ref_no, payment_type, total_amount')
+        .select('id, date, ref_no, payment_type, total_amount, status, reversal_reason, reversed_at, reversed_by')
         .eq('vendor_id', vendorId)
         .order('date', { ascending: false }),
       supabase
@@ -245,7 +249,7 @@ export default function PayableVendorPage() {
   }, [vendorId])
 
   const paymentsForVendor = useMemo(() => {
-    const purchaseIds = new Set(purchases.map((p) => p.id))
+    const purchaseIds = new Set(purchases.filter((p) => !isPurchaseReversed(p)).map((p) => p.id))
     return payments.filter((p) => purchaseIds.has(p.purchase_id))
   }, [payments, purchases])
 
@@ -260,10 +264,11 @@ export default function PayableVendorPage() {
 
   const purRows = useMemo(() => {
     return purchases.map((pur) => {
+      const reversed = isPurchaseReversed(pur)
       const paid = paymentSumByPurchase.get(pur.id) ?? 0
       const total = Number(pur.total_amount ?? 0)
-      const balance = total - paid
-      const status = paid === 0 ? 'unpaid' : balance > 0 ? 'partial' : 'paid'
+      const balance = reversed ? 0 : total - paid
+      const status = reversed ? 'reversed' : paid === 0 ? 'unpaid' : balance > 0 ? 'partial' : 'paid'
       const daysOutstanding = Math.floor((Date.now() - new Date(pur.date ?? Date.now()).getTime()) / 86400000)
       const agingBucket = daysOutstanding <= 30 ? '0-30' : daysOutstanding <= 60 ? '31-60' : '60+'
       return { ...pur, paid, balance, status, daysOutstanding, agingBucket }
@@ -316,50 +321,16 @@ export default function PayableVendorPage() {
     await load()
   }
 
-  const deletePurchase = async (purchaseId) => {
-    if (!confirm('Delete this purchase and all its items/payments?')) return
-    setPurchaseDeletingId(purchaseId)
-
+  const confirmPurchaseReversal = async (reason) => {
+    if (!purchaseToReverse) return
+    setPurchaseDeletingId(purchaseToReverse.id)
     try {
-      const { data: items, error: itemsErr } = await supabase
-        .from('purchase_items')
-        .select('id, product_id, quantity')
-        .eq('purchase_id', purchaseId)
-
-      if (itemsErr) throw itemsErr
-
-      const ids = Array.from(new Set((items ?? []).map((x) => x.product_id).filter(Boolean)))
-      if (ids.length > 0) {
-        const { data: prods, error: prodErr } = await supabase.from('products').select('id, stock').in('id', ids)
-        if (prodErr) throw prodErr
-
-        const stockById = new Map((prods ?? []).map((p) => [p.id, Number(p.stock ?? 0)]))
-        for (const it of items ?? []) {
-          const current = stockById.get(it.product_id) ?? 0
-          const next = Math.max(0, current - Number(it.quantity ?? 0))
-          stockById.set(it.product_id, next)
-        }
-
-        for (const [pid, next] of stockById.entries()) {
-          const { error: updErr } = await supabase.from('products').update({ stock: next }).eq('id', pid)
-          if (updErr) throw updErr
-        }
-      }
-
-      const { error: payErr } = await supabase.from('purchase_payments').delete().eq('purchase_id', purchaseId)
-      if (payErr) throw payErr
-
-      const { error: delItemsErr } = await supabase.from('purchase_items').delete().eq('purchase_id', purchaseId)
-      if (delItemsErr) throw delItemsErr
-
-      const { error: purErr } = await supabase.from('purchases').delete().eq('id', purchaseId)
-      if (purErr) throw purErr
-
-      toast.success('Purchase deleted')
-      logAction({ action: 'delete_purchase', targetType: 'purchase', targetId: purchaseId })
+      await reversePurchase(purchaseToReverse.id, reason)
+      toast.success('Purchase reversed and inventory adjusted')
+      setPurchaseToReverse(null)
       await load()
     } catch (e) {
-      toast.error(e?.message ?? 'Failed to delete purchase')
+      toast.error(e?.message ?? 'Failed to reverse purchase')
     } finally {
       setPurchaseDeletingId('')
     }
@@ -405,9 +376,10 @@ export default function PayableVendorPage() {
   }
 
   const totals = useMemo(() => {
-    const purchased = purRows.reduce((s, r) => s + Number(r.total_amount ?? 0), 0)
-    const paid = purRows.reduce((s, r) => s + Number(r.paid ?? 0), 0)
-    const balance = purRows.reduce((s, r) => s + Number(r.balance ?? 0), 0)
+    const active = purRows.filter((r) => r.status !== 'reversed')
+    const purchased = active.reduce((s, r) => s + Number(r.total_amount ?? 0), 0)
+    const paid = active.reduce((s, r) => s + Number(r.paid ?? 0), 0)
+    const balance = active.reduce((s, r) => s + Number(r.balance ?? 0), 0)
     return { purchased, paid, balance }
   }, [purRows])
 
@@ -417,11 +389,12 @@ export default function PayableVendorPage() {
   }, [payForm.method, cheques])
 
   const openPay = () => {
-    const firstPur = purRows.find((x) => (x.balance ?? 0) > 0) ?? purRows[0]
+    const active = purRows.filter((x) => x.status !== 'reversed')
+    const firstPur = active.find((x) => (x.balance ?? 0) > 0) ?? active[0]
     const balance = firstPur?.balance ?? 0
     setPayForm((p) => ({
       ...p,
-      purchase_id: firstPur?.id ?? (purRows[0]?.id ?? ''),
+      purchase_id: firstPur?.id ?? '',
       amount: balance ? balance.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 }) : '',
       method: 'cash',
       bank_name: '',
@@ -452,6 +425,8 @@ export default function PayableVendorPage() {
     cloned.style.backgroundColor = '#ffffff'
     cloned.style.color = '#000000'
     cloned.querySelectorAll('*').forEach((el) => {
+      if (el.closest('[data-payment-status]')) return
+
       const cs = window.getComputedStyle(el)
       const bg = cs.backgroundColor
       const isTransparentBg = bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent'
@@ -676,6 +651,8 @@ export default function PayableVendorPage() {
                 </div>
               ) : null}
 
+              <PaidStamp />
+
               <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[10px]">
                 <div className="border-t border-black pt-6">Prepared</div>
                 <div className="border-t border-black pt-6">Approved</div>
@@ -694,7 +671,7 @@ export default function PayableVendorPage() {
 
         <button
           onClick={openPay}
-          disabled={purRows.length === 0}
+          disabled={!purRows.some((p) => p.status !== 'reversed')}
           className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 transition-colors shadow-sm"
         >
           <Plus size={16} />
@@ -774,11 +751,12 @@ export default function PayableVendorPage() {
                   <td className={`px-5 py-3.5 text-right font-extrabold ${pur.balance < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-emerald-50'}`}>{fmt(pur.balance)}</td>
                   <td className="px-5 py-3.5">
                     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${
+                      pur.status === 'reversed' ? 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-100' :
                       pur.status === 'unpaid' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
                       pur.status === 'partial' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' :
                       'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
                     }`}>
-                      {pur.status === 'unpaid' ? 'Unpaid' : pur.status === 'partial' ? 'Partial' : 'Paid'}
+                      {pur.status === 'reversed' ? 'Reversed' : pur.status === 'unpaid' ? 'Unpaid' : pur.status === 'partial' ? 'Partial' : 'Paid'}
                     </span>
                   </td>
                   <td className="px-5 py-3.5 text-center">
@@ -830,15 +808,11 @@ export default function PayableVendorPage() {
                       <Eye size={14} />
                       View Purchase
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => deletePurchase(pur.id)}
-                      disabled={purchaseDeletingId === pur.id}
-                      className="ml-2 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
-                    >
-                      <Trash2 size={14} />
-                      {purchaseDeletingId === pur.id ? 'Deleting...' : 'Delete'}
-                    </button>
+                    {pur.status !== 'reversed' && (isSuperAdmin || can('finance_payables', 'delete') || can('inventory_purchase', 'delete')) ? (
+                      <button type="button" onClick={() => setPurchaseToReverse(pur)} disabled={purchaseDeletingId === pur.id} className="ml-2 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors">
+                        <RotateCcw size={14} /> Reverse Purchase
+                      </button>
+                    ) : null}
                   </td>
                 </tr>
               ))
@@ -998,7 +972,7 @@ export default function PayableVendorPage() {
                     }}
                     className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
                   >
-                    {purRows.map((pur) => (
+                    {purRows.filter((pur) => pur.status !== 'reversed').map((pur) => (
                       <option key={pur.id} value={pur.id}>
                         PUR-{String(pur.id).slice(0, 8)} — {pur.ref_no || pur.date} — Balance {fmt(pur.balance)}
                       </option>
@@ -1178,6 +1152,13 @@ export default function PayableVendorPage() {
         </div>
       ) : null}
 
+      <PurchaseReversalDialog
+        purchase={purchaseToReverse}
+        busy={Boolean(purchaseDeletingId)}
+        onClose={() => !purchaseDeletingId && setPurchaseToReverse(null)}
+        onConfirm={confirmPurchaseReversal}
+      />
+
       {viewOpen && viewPurchase ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <div className="w-full max-w-3xl max-h-[90vh] bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden flex flex-col">
@@ -1189,7 +1170,7 @@ export default function PayableVendorPage() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {!viewEditing ? (
+                {viewPurchase.status === 'reversed' ? null : !viewEditing ? (
                   <button
                     onClick={startViewEdit}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 transition-colors"
@@ -1227,6 +1208,13 @@ export default function PayableVendorPage() {
             </div>
 
             <div className="p-5 overflow-y-auto space-y-4">
+              {viewPurchase.status === 'reversed' ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
+                  <div className="font-bold">Purchase Reversed</div>
+                  <div className="mt-1">Reason: {viewPurchase.reversal_reason || '-'}</div>
+                  <div className="mt-1 text-xs">{viewPurchase.reversed_at ? new Date(viewPurchase.reversed_at).toLocaleString() : ''}{viewPurchase.reversed_by ? ` · ${viewPurchase.reversed_by}` : ''}</div>
+                </div>
+              ) : null}
               {/* Purchase Info */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <div>

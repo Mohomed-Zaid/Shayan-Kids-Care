@@ -95,8 +95,9 @@ export function buildFinanceReports(raw) {
   const banks = keyBy(raw.banks)
   const invoices = raw.invoices ?? []
   const invoicePayments = raw.invoice_payments ?? []
-  const purchases = raw.purchases ?? []
-  const purchasePayments = raw.purchase_payments ?? []
+  const purchases = (raw.purchases ?? []).filter((row) => !['reversed', 'cancelled', 'canceled', 'deleted', 'void'].includes(String(row.status ?? '').toLowerCase()))
+  const activePurchaseIds = new Set(purchases.map((row) => String(row.id)))
+  const purchasePayments = (raw.purchase_payments ?? []).filter((row) => activePurchaseIds.has(String(row.purchase_id)))
   const returns = raw.returns ?? []
   const cheques = raw.customer_cheques ?? []
   const repPayments = raw.rep_commission_payments ?? raw.rep_payments ?? []

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import Chart from 'react-apexcharts'
 import html2pdf from 'html2pdf.js'
 import * as XLSX from 'xlsx'
-import { BarChart3, Banknote, Boxes, ChevronDown, ChevronRight, CircleDollarSign, Download, FileSpreadsheet, Filter, Landmark, Printer, ReceiptText, RefreshCw, Scale, ShoppingCart, TrendingUp, WalletCards } from 'lucide-react'
+import { Boxes, ChevronDown, ChevronRight, CircleDollarSign, Download, FileSpreadsheet, Filter, Landmark, Printer, RefreshCw, Scale, TrendingUp } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { supabase } from '../../lib/supabaseClient'
 import { exportToExcel, exportToPDF, LoadingSkeleton } from '../../components/reports'
@@ -40,12 +40,12 @@ async function fetchReportData(start, end) {
     `).gte('created_at', startOfDay(start)).lte('created_at', endOfDay(end)).order('created_at', { ascending: false }),
     supabase.from('invoice_payments').select('id, invoice_id, amount, paid_at, method'),
     supabase.from('products').select('id, name, code, price, stock').order('name'),
-    supabase.from('purchase_items').select('id, product_id, quantity, cost, purchases(date, created_at)'),
+    supabase.from('purchase_items').select('id, product_id, quantity, cost, purchases(date, created_at, status)'),
     supabase.from('orders').select('id, rep_id').gte('created_at', startOfDay(start)).lte('created_at', endOfDay(end)),
   ])
   if (invoiceResult.error) throw invoiceResult.error
   if (productResult.error) throw productResult.error
-  return { invoices: invoiceResult.data || [], payments: paymentResult.error ? [] : (paymentResult.data || []), products: productResult.data || [], variants: [], purchases: purchaseResult.error ? [] : (purchaseResult.data || []), reportRows: [], rpcError: '', orders: orderResult.error ? [] : (orderResult.data || []) }
+  return { invoices: invoiceResult.data || [], payments: paymentResult.error ? [] : (paymentResult.data || []), products: productResult.data || [], variants: [], purchases: purchaseResult.error ? [] : (purchaseResult.data || []).filter((x) => !['reversed','cancelled','canceled','deleted','void'].includes(String(x.purchases?.status ?? '').toLowerCase())), reportRows: [], rpcError: '', orders: orderResult.error ? [] : (orderResult.data || []) }
 }
 
 function PrintHeader({ title, generatedBy, range }) {
@@ -150,15 +150,16 @@ function exportSalesReportPDF({ mode, title, range, generatedBy, model, exportRo
 
 function Summary({ totals }) {
   const cards = [
-    ['Total Sales', money(totals.sales), CircleDollarSign, 'emerald'], ['Total Invoices', number(totals.invoices), ReceiptText, 'blue'], ['Cash Sales', money(totals.cash), Banknote, 'emerald'],
-    ['Credit Sales', money(totals.credit), WalletCards, 'amber'], ['Total Cost', money(totals.cost), Scale, 'slate'], ['Gross Profit', money(totals.profit), TrendingUp, totals.profit >= 0 ? 'emerald' : 'rose'], ['Profit Margin', `${Number(totals.margin || 0).toFixed(2)}%`, TrendingUp, totals.margin >= 0 ? 'emerald' : 'rose'],
-    ['Outstanding', money(totals.outstanding), Landmark, totals.outstanding > 0 ? 'amber' : 'emerald'], ['Average Invoice', money(totals.average), ShoppingCart, 'cyan'], ['Quantity Sold', number(totals.quantity), Boxes, 'indigo'],
+    ['Total Sales', money(totals.sales), CircleDollarSign, 'emerald'],
+    ['Total Cost', money(totals.cost), Scale, 'slate'],
+    ['Gross Profit', money(totals.profit), TrendingUp, totals.profit >= 0 ? 'emerald' : 'rose'],
+    ['Outstanding', money(totals.outstanding), Landmark, totals.outstanding > 0 ? 'amber' : 'emerald'],
+    ['Quantity Sold', number(totals.quantity), Boxes, 'indigo'],
   ]
   const tones = { emerald:'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300', slate:'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300', rose:'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300', violet:'bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300', blue:'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300', amber:'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300', cyan:'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-300', indigo:'bg-indigo-50 text-indigo-700 dark:bg-indigo-500/10 dark:text-indigo-300' }
-  return <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 print:grid-cols-5">
-    {cards.map(([label, value, Icon, tone]) => <div key={label} className="group relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-emerald-400/15 bg-white dark:bg-emerald-950/25 p-4 shadow-[0_1px_3px_rgba(15,23,42,.04)] transition hover:-translate-y-0.5 hover:shadow-lg print:shadow-none print:p-2">
-      <div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-emerald-100/55">{label}</p><p className="mt-2 text-lg font-extrabold tracking-tight text-slate-900 dark:text-white print:text-sm">{value}</p></div><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${tones[tone]}`}><Icon size={18}/></span></div>
-      <div className={`absolute inset-x-0 bottom-0 h-0.5 opacity-70 ${tone === 'rose' ? 'bg-rose-500' : tone === 'amber' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+  return <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5 print:grid-cols-5">
+    {cards.map(([label, value, Icon, tone]) => <div key={label} className="rounded-lg border border-slate-200 bg-white p-3 dark:border-emerald-400/15 dark:bg-emerald-950/25 print:p-2">
+      <div className="flex items-start justify-between gap-3"><div><p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 dark:text-emerald-100/55">{label}</p><p className="mt-1 text-base font-extrabold tabular-nums text-slate-900 dark:text-white print:text-sm">{value}</p></div><span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${tones[tone]}`}><Icon size={16}/></span></div>
     </div>)}
   </div>
 }
@@ -227,7 +228,7 @@ function AggregateTable({ mode, rows }) {
   return <TableShell><table className="w-full"><thead className="bg-slate-50 dark:bg-emerald-900/30"><tr>{cols.map(([label]) => <Th key={label}>{label}</Th>)}</tr></thead><tbody>{rows.map((row, i) => <tr key={row.id || row.label || i} className="border-t border-slate-100 dark:border-emerald-400/10 hover:bg-slate-50 dark:hover:bg-emerald-500/5">{cols.map(([label,key,type]) => <Td key={label} className={key === 'profit' ? (row[key] >= 0 ? 'text-emerald-600 font-semibold' : 'text-red-600 font-semibold') : ''}>{type === 'money' ? money(row[key]) : type === 'percent' ? `${Number(row[key] || 0).toFixed(2)}%` : (row[key] ?? '—')}</Td>)}</tr>)}</tbody></table>{!rows.length && <p className="p-10 text-center text-slate-500">No report data matches these filters.</p>}</TableShell>
 }
 
-function Charts({ invoices, productRows, repRows }) {
+function Charts({ mode, invoices, productRows }) {
   const base = {
     chart: {
       background: 'transparent',
@@ -271,40 +272,17 @@ function Charts({ invoices, productRows, repRows }) {
   }
   const months = new Map()
   for (const inv of invoices) { const key = new Date(inv.created_at).toLocaleDateString(undefined, { month: 'short', year: '2-digit' }); const x = months.get(key) || { sales: 0, profit: 0 }; x.sales += inv.sales; x.profit += inv.profit; months.set(key, x) }
-  const payment = ['cash','credit'].map((key) => invoices.filter((x) => x.payment_type === key).reduce((s,x) => s + x.sales, 0))
   const topProductsOptions = { ...base, xaxis: { ...base.xaxis, categories: productRows.slice(0, 8).map((x) => x.name) } }
   const monthlyOptions = {
     ...base,
     fill: { type: 'gradient', gradient: { shadeIntensity: 0.45, opacityFrom: 0.45, opacityTo: 0.06, stops: [0, 90, 100] } },
     xaxis: { ...base.xaxis, categories: [...months.keys()] },
   }
-  const repOptions = { ...base, colors: ['#22d3ee'], xaxis: { ...base.xaxis, categories: repRows.slice(0, 8).map((x) => x.name) } }
-  const paymentOptions = {
-    ...base,
-    labels: ['Cash', 'Credit'],
-    stroke: { colors: ['rgba(2, 6, 23, 0.95)'], width: 3 },
-    plotOptions: {
-      pie: {
-        donut: {
-          size: '68%',
-          labels: {
-            show: true,
-            name: { color: '#cbd5e1', fontSize: '12px' },
-            value: { color: '#f8fafc', fontSize: '20px', fontWeight: 800 },
-            total: { show: true, label: 'Total', color: '#94a3b8' },
-          },
-        },
-      },
-    },
-  }
-  return <div className="grid lg:grid-cols-2 gap-4 print:hidden">
-    <ChartCard title="Top Selling Products"><Chart type="bar" height={280} options={topProductsOptions} series={[{name:'Quantity',data:productRows.slice(0,8).map(x=>x.sold)}]} /></ChartCard>
-    <ChartCard title="Monthly Sales & Profit Trend"><Chart type="area" height={280} options={monthlyOptions} series={[{name:'Sales',data:[...months.values()].map(x=>x.sales)},{name:'Profit',data:[...months.values()].map(x=>x.profit)}]} /></ChartCard>
-    <ChartCard title="Sales by Rep"><Chart type="bar" height={280} options={repOptions} series={[{name:'Sales',data:repRows.slice(0,8).map(x=>x.sales)}]} /></ChartCard>
-    <ChartCard title="Sales by Payment Method"><Chart type="donut" height={280} options={paymentOptions} series={payment} /></ChartCard>
-  </div>
+  if (mode === 'monthly') return <div className="print:hidden"><ChartCard title="Monthly Sales & Profit Trend"><Chart type="area" height={250} options={monthlyOptions} series={[{name:'Sales',data:[...months.values()].map(x=>x.sales)},{name:'Profit',data:[...months.values()].map(x=>x.profit)}]} /></ChartCard></div>
+  if (mode === 'product') return <div className="print:hidden"><ChartCard title="Top Selling Products"><Chart type="bar" height={250} options={topProductsOptions} series={[{name:'Quantity',data:productRows.slice(0,8).map(x=>x.sold)}]} /></ChartCard></div>
+  return null
 }
-function ChartCard({ title, children }) { return <div className="overflow-hidden rounded-2xl border border-emerald-400/15 bg-slate-950/70 p-5 shadow-[0_18px_45px_rgba(2,6,23,.22)] ring-1 ring-white/[.03]"><div className="mb-3 flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_14px_rgba(52,211,153,.75)]"/><h3 className="text-sm font-extrabold text-slate-100">{title}</h3></div><div className="rounded-xl border border-white/[.04] bg-slate-950/55 p-3 shadow-inner">{children}</div></div> }
+function ChartCard({ title, children }) { return <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-emerald-400/15 dark:bg-emerald-950/25"><h3 className="mb-3 text-sm font-bold text-slate-900 dark:text-white">{title}</h3>{children}</div> }
 
 export default function SalesReportsPage({ initialMode = 'daily' }) {
   const { user } = useAuth()
@@ -389,13 +367,13 @@ export default function SalesReportsPage({ initialMode = 'daily' }) {
   if (loading) return <LoadingSkeleton />
   return <div id="sales-report" className="space-y-5 print:text-black">
     <PrintHeader title={title} generatedBy={generatedBy} range={range} />
-    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-emerald-950 to-emerald-900 p-6 text-white shadow-xl shadow-emerald-950/10 print:hidden"><div className="absolute -right-16 -top-20 h-64 w-64 rounded-full bg-emerald-400/10 blur-3xl"/><div className="absolute bottom-0 right-1/3 h-24 w-24 rounded-full bg-cyan-300/10 blur-2xl"/><div className="relative flex flex-col xl:flex-row xl:items-end gap-5"><div className="flex items-start gap-4"><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/10 shadow-inner"><BarChart3 size={24}/></span><div><p className="text-[10px] font-extrabold uppercase tracking-[.22em] text-emerald-300">Finance & performance</p><h1 className="mt-1 text-2xl font-extrabold tracking-tight">Sales Intelligence</h1><p className="mt-1 max-w-xl text-sm text-emerald-100/65">Revenue, historical cost, profitability and receivables—one reliable view for owners and accountants.</p></div></div><div className="xl:ml-auto inline-flex w-fit flex-wrap gap-1 rounded-xl border border-white/10 bg-black/15 p-1 backdrop-blur">{modes.map(([key,label])=><button key={key} onClick={()=>setMode(key)} className={`px-3 py-2 rounded-lg text-xs font-bold transition ${mode===key?'bg-white text-emerald-950 shadow-md':'text-emerald-100/75 hover:bg-white/10 hover:text-white'}`}>{label}</button>)}</div></div></div>
+    <header className="rounded-lg border border-slate-200 bg-white p-4 dark:border-emerald-400/15 dark:bg-emerald-950/25 print:hidden"><div className="flex flex-col gap-4 xl:flex-row xl:items-center"><div><p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-300">Sales reports</p><h1 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">Sales Reports</h1><p className="mt-0.5 text-sm text-slate-500 dark:text-emerald-100/65">Detailed sales, historical cost, profitability and receivables.</p></div><div className="xl:ml-auto inline-flex w-fit flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-emerald-400/15 dark:bg-emerald-950/40">{modes.map(([key,label])=><button key={key} onClick={()=>setMode(key)} className={`rounded-md px-3 py-1.5 text-xs font-bold ${mode===key?'bg-emerald-600 text-white':'text-slate-600 hover:bg-white dark:text-emerald-100/75 dark:hover:bg-emerald-900'}`}>{label}</button>)}</div></div></header>
     <Filters {...{preset,setPreset,range,setRange,filters,setFilters,options,onRefresh:load}} />
     {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"><b>Report could not load:</b> {error}<br/><span className="text-xs">If the error mentions cost_price, run supabase/sales_reports_historical_cost.sql in Supabase.</span></div>}
     <Summary totals={model.totals} />
     <div className="flex flex-wrap justify-between items-center gap-3 print:hidden"><div><div className="flex items-center gap-2"><span className="h-5 w-1 rounded-full bg-emerald-500"/><h2 className="font-extrabold text-lg text-slate-900 dark:text-white">{title}</h2></div><p className="ml-3 mt-0.5 text-xs text-slate-500">{range.start} to {range.end} <span className="mx-1">·</span> {model.invoices.length} invoices</p></div><div className="flex flex-wrap gap-2"><button onClick={()=>window.print()} className="report-action"><Printer size={15}/>Print</button><button onClick={()=>exportSalesReportPDF({ mode, title, range, generatedBy, model, exportRows })} className="report-action"><Download size={15}/>PDF</button><button onClick={()=>exportToExcel(exportRows,`${mode}-sales-report.xlsx`,'Sales Report')} className="report-action"><FileSpreadsheet size={15}/>Excel</button><button onClick={doCsv} className="report-action"><Download size={15}/>CSV</button></div></div>
     {mode==='daily'?<DailyTable invoices={model.invoices} totals={model.totals} expanded={expanded} setExpanded={setExpanded}/>:<AggregateTable mode={mode} rows={model[mode]} />}
-    <Charts invoices={model.invoices} productRows={model.product} repRows={model.rep} />
+    <Charts mode={mode} invoices={model.invoices} productRows={model.product} />
     <div className="hidden print:flex justify-between border-t pt-3 text-[10px]"><span>Shayan's Kids Care · {title}</span><span className="print-page-number">Page</span></div>
   </div>
 }

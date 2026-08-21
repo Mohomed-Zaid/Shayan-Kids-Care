@@ -90,6 +90,7 @@ set cost_price = (
     or (ii.variant_id is null and pv.product_id = ii.product_id)
   )
     and p.purchase_date <= i.created_at
+    and coalesce(lower(p.status), 'completed') not in ('cancelled', 'canceled', 'draft', 'deleted', 'reversed', 'void')
   order by p.purchase_date desc, pi.created_at desc, pi.id desc
   limit 1
 )
@@ -105,6 +106,7 @@ where ii.cost_price is null
       or (ii.variant_id is null and pv.product_id = ii.product_id)
     )
       and p.purchase_date <= i.created_at
+      and coalesce(lower(p.status), 'completed') not in ('cancelled', 'canceled', 'draft', 'deleted', 'reversed', 'void')
   );
 
 create index if not exists invoices_sales_report_date_idx

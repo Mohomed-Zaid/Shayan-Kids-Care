@@ -739,7 +739,7 @@
   .field { @apply rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-white; }
   .action { @apply inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-50 dark:hover:bg-emerald-900/40; }
 }
-/* Receivable payment status marks are kept as CSS so html2canvas can render them. */
+/* Receipt payment status marks are kept as CSS so html2canvas can render them. */
 .receipt-status-wrap {
   display: flex;
   justify-content: center;
@@ -804,4 +804,20 @@
   color: #b45309;
   font-size: 11px;
   font-weight: 700;
+}
+
+.pdf-export-document.vendor-export-document {
+  left: auto !important;
+  position: static !important;
+  top: auto !important;
+}
+
+.vendor-page-number::after {
+  content: counter(page);
+}
+
+@media print {
+  .vendor-screen-only { display: none !important; }
+  .vendor-export-document { left: auto !important; position: static !important; top: auto !important; width: auto !important; }
+  @page { margin: 10mm; }
 }

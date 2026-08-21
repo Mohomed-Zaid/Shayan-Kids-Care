@@ -1,9 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
-import { Search, Eye, Trash2, ArrowUpDown, Pencil, Check, X } from 'lucide-react'
+import { usePermissions } from '../contexts/PermissionsContext'
+import PurchaseReversalDialog from '../components/PurchaseReversalDialog'
+import { isPurchaseReversed, reversePurchase } from '../lib/purchaseReversal'
+import { Search, Eye, RotateCcw, ArrowUpDown, Pencil, Check, X } from 'lucide-react'
 
 export default function PurchaseListPage() {
+  const { isSuperAdmin, can } = usePermissions()
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -11,13 +15,15 @@ export default function PurchaseListPage() {
   const [sortDir, setSortDir] = useState('desc')
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
+  const [purchaseToReverse, setPurchaseToReverse] = useState(null)
+  const [reversing, setReversing] = useState(false)
 
   const load = async () => {
     setLoading(true)
     setError(null)
     const { data, error: err } = await supabase
       .from('purchase_items')
-      .select('id, purchase_id, product_id, quantity, cost, mrp, description, total, exp_date, remarks, products(name, code), purchases(id, date, ref_no, type, created_at, vendors(name))')
+      .select('id, purchase_id, product_id, quantity, cost, mrp, description, total, exp_date, remarks, products(name, code), purchases(id, date, ref_no, type, status, reversal_reason, reversed_at, reversed_by, created_at, vendors(name))')
       .order('created_at', { referencedTable: 'purchases', ascending: false })
     if (err) {
       setError(err.message)
@@ -62,12 +68,18 @@ export default function PurchaseListPage() {
 
   const fmt = (val) => `Rs. ${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
-  const handleDelete = async (purchaseId) => {
-    if (!window.confirm('Are you sure you want to delete this purchase and all its items?')) return
-    await supabase.from('purchase_items').delete().eq('purchase_id', purchaseId)
-    const { error: err } = await supabase.from('purchases').delete().eq('id', purchaseId)
-    if (err) { alert(err.message); return }
-    setRows((prev) => prev.filter((r) => r.purchase_id !== purchaseId))
+  const handleReverse = async (reason) => {
+    if (!purchaseToReverse) return
+    setReversing(true)
+    try {
+      await reversePurchase(purchaseToReverse.id, reason)
+      setPurchaseToReverse(null)
+      await load()
+    } catch (err) {
+      alert(err?.message ?? 'Failed to reverse purchase')
+    } finally {
+      setReversing(false)
+    }
   }
 
   const startEdit = (row) => {
@@ -167,6 +179,7 @@ export default function PurchaseListPage() {
               ) : (
                 filteredRows.map((row) => {
                   const purchase = row.purchases ?? {}
+                  const reversed = isPurchaseReversed(purchase)
                   const vendor = purchase.vendors ?? {}
                   const isEditing = editingId === row.id
                   const profitPct = (isEditing ? editForm.mrp : row.mrp) && (isEditing ? editForm.cost : row.cost) && Number(isEditing ? editForm.cost : row.cost) > 0
@@ -176,7 +189,7 @@ export default function PurchaseListPage() {
                   return (
                     <tr key={row.id} className={`border-b border-slate-50 dark:border-slate-800 transition-colors ${isEditing ? 'bg-sky-50/50 dark:bg-sky-900/20' : 'hover:bg-slate-50/50 dark:hover:bg-slate-800/50'}`}>
                       <td className="px-4 py-3 text-slate-900 dark:text-white whitespace-nowrap">{new Date(purchase.date ?? purchase.created_at).toLocaleDateString()}</td>
-                      <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{purchase.ref_no || '-'}</td>
+                      <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{purchase.ref_no || '-'} {reversed ? <span className="ml-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">REVERSED</span> : null}</td>
                       <td className="px-4 py-3 font-medium text-slate-900 dark:text-white">{vendor.name ?? '-'}</td>
                       <td className="px-4 py-3 text-slate-700 dark:text-slate-300">{row.products?.code ? `${row.products.code} - ` : ''}{row.products?.name ?? '-'}</td>
                       <td className="px-4 py-3">
@@ -227,20 +240,20 @@ export default function PurchaseListPage() {
                             >
                               <Eye size={14} />
                             </Link>
-                            <button
+                            {!reversed && (isSuperAdmin || can('inventory_purchase', 'delete')) ? <button
                               onClick={() => startEdit(row)}
                               className="inline-flex items-center p-1 text-sky-600 hover:text-sky-800 dark:text-sky-400 dark:hover:text-sky-200 transition-colors"
                               title="Edit"
                             >
                               <Pencil size={14} />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(purchase.id)}
+                            </button> : null}
+                            {!reversed ? <button
+                              onClick={() => setPurchaseToReverse(purchase)}
                               className="inline-flex items-center p-1 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
-                              title="Delete purchase"
+                              title="Reverse purchase"
                             >
-                              <Trash2 size={14} />
-                            </button>
+                              <RotateCcw size={14} />
+                            </button> : null}
                           </>
                         )}
                       </td>
@@ -252,6 +265,7 @@ export default function PurchaseListPage() {
           </table>
         </div>
       </div>
+      <PurchaseReversalDialog purchase={purchaseToReverse} busy={reversing} onClose={() => !reversing && setPurchaseToReverse(null)} onConfirm={handleReverse} />
     </div>
   )
 }

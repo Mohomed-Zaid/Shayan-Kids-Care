@@ -23,6 +23,8 @@ import OrderViewPage from './pages/OrderViewPage'
 import OrderEditPage from './pages/OrderEditPage'
 import HomePage from './pages/HomePage'
 import PurchasePage from './pages/PurchasePage'
+import PurchaseListPage from './pages/PurchaseListPage'
+import PurchaseViewPage from './pages/PurchaseViewPage'
 import BeginningStockPage from './pages/BeginningStockPage'
 import VendorsPage from './pages/VendorsPage'
 import JournalsPage from './pages/JournalsPage'
@@ -55,6 +57,8 @@ import ReportsLandingPage from './pages/reports/ReportsLandingPage'
 import PurchaseReportsPage from './pages/reports/PurchaseReportsPage'
 import InventoryReportsPage from './pages/reports/InventoryReportsPage'
 import FinanceReportsPage from './pages/reports/FinanceReportsPage'
+import VendorReportsPage from './pages/reports/VendorReportsPage'
+import RepCommissionReportsPage from './pages/reports/RepCommissionReportsPage'
 import SalaryTransferRequestPage from './pages/SalaryTransferRequestPage'
 
 function P({ module, action = 'view', children }) {
@@ -94,6 +98,8 @@ export default function App() {
                   <Route path="/orders/:id" element={<P module="orders"><OrderViewPage /></P>} />
                   <Route path="/sms-service" element={<P module="sms"><SMSServicePage /></P>} />
                   <Route path="/inventory/purchase" element={<P module="inventory_purchase"><PurchasePage /></P>} />
+                  <Route path="/inventory/purchases" element={<P module="inventory_purchase"><PurchaseListPage /></P>} />
+                  <Route path="/inventory/purchases/:id" element={<P module="inventory_purchase"><PurchaseViewPage /></P>} />
                   <Route path="/inventory/beginning-stock" element={<P module="inventory_beginning_stock"><BeginningStockPage /></P>} />
                   
                   {/* Reports */}
@@ -113,6 +119,8 @@ export default function App() {
                   <Route path="/reports/purchases" element={<P module="reports_purchase"><PurchaseReportsPage /></P>} />
                   <Route path="/reports/inventory/detailed" element={<P module="reports_inventory"><InventoryReportsPage /></P>} />
                   <Route path="/reports/finance" element={<P module="reports_finance"><FinanceReportsPage /></P>} />
+                  <Route path="/reports/vendors" element={<P module="reports_vendors"><VendorReportsPage /></P>} />
+                  <Route path="/reports/reps" element={<P module="reports_reps"><RepCommissionReportsPage /></P>} />
                   
                   <Route path="/finance/journal-entry" element={<P module="finance_journal_entry"><JournalEntryPage /></P>} />
                   <Route path="/finance/rep-payments" element={<P module="finance_rep_payments"><RepPaymentsPage /></P>} />

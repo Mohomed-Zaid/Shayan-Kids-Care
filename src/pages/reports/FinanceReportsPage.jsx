@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import Chart from 'react-apexcharts'
-import { BarChart3, Check, ChevronDown, Download, FileSpreadsheet, Filter, Printer, RefreshCw, Search, Settings2 } from 'lucide-react'
+import { Check, ChevronDown, Download, FileSpreadsheet, Filter, Printer, RefreshCw, Search, Settings2 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { supabase } from '../../lib/supabaseClient'
 import { useAuth } from '../../contexts/AuthContext'
@@ -65,34 +64,6 @@ function FilterField({ label, children }) {
 
 const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-emerald-500 dark:border-emerald-400/20 dark:bg-slate-950 dark:text-white'
 
-function Charts({ reports }) {
-  const monthSeries = (rows, inField, outField) => {
-    const map = new Map()
-    rows.forEach((row) => { const key = dateKey(row.date).slice(0, 7); if (!key) return; const val = map.get(key) ?? [0, 0]; val[0] += Number(row[inField] ?? 0); val[1] += Number(row[outField] ?? 0); map.set(key, val) })
-    const keys = [...map.keys()].sort().slice(-12)
-    return { keys, one: keys.map((key) => map.get(key)[0]), two: keys.map((key) => map.get(key)[1]) }
-  }
-  const aging = (rows) => ['Current', '31-60', '61-90', '91-120', '120+'].map((bucket) => rows.filter((r) => r.agingBucket === bucket).reduce((s, r) => s + Number(r.outstanding ?? 0), 0))
-  const cash = monthSeries(reports['cash-book'], 'cashIn', 'cashOut')
-  const bank = monthSeries(reports['bank-book'], 'deposit', 'withdrawal')
-  const collections = monthSeries(reports['cash-book'].filter((r) => r.transactionType === 'Customer Payment'), 'cashIn', 'cashOut')
-  const vendor = monthSeries(reports['cash-book'].filter((r) => r.transactionType === 'Vendor Payment'), 'cashOut', 'cashIn')
-  const commissionNames = reports.commissions.map((r) => r.rep).slice(0, 12)
-  const chartClass = 'rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-emerald-400/20 dark:bg-emerald-950/30'
-  const base = { chart: { toolbar: { show: false }, foreColor: '#64748b' }, dataLabels: { enabled: false }, grid: { borderColor: '#e2e8f0' }, tooltip: { y: { formatter: (v) => money(v) } } }
-  const cards = [
-    ['Receivables Aging', 'bar', { ...base, xaxis: { categories: ['Current', '31-60', '61-90', '91-120', '120+'] }, colors: ['#10b981'] }, [{ name: 'Outstanding', data: aging(reports.receivables) }]],
-    ['Payables Aging', 'bar', { ...base, xaxis: { categories: ['Current', '31-60', '61-90', '91-120', '120+'] }, colors: ['#f59e0b'] }, [{ name: 'Outstanding', data: aging(reports.payables) }]],
-    ['Cash In vs Cash Out', 'bar', { ...base, xaxis: { categories: cash.keys }, colors: ['#10b981', '#ef4444'] }, [{ name: 'Cash In', data: cash.one }, { name: 'Cash Out', data: cash.two }]],
-    ['Bank Balance Trend', 'line', { ...base, xaxis: { categories: bank.keys }, colors: ['#0ea5e9'] }, [{ name: 'Net Bank Movement', data: bank.one.map((x, i) => x - bank.two[i]) }]],
-    ['Monthly Collections', 'area', { ...base, xaxis: { categories: collections.keys }, colors: ['#14b8a6'] }, [{ name: 'Collections', data: collections.one }]],
-    ['Monthly Vendor Payments', 'area', { ...base, xaxis: { categories: vendor.keys }, colors: ['#f97316'] }, [{ name: 'Vendor Payments', data: vendor.one }]],
-    ['Commission vs Rep Payments', 'bar', { ...base, xaxis: { categories: commissionNames }, colors: ['#8b5cf6', '#22c55e'] }, [{ name: 'Commission', data: reports.commissions.slice(0, 12).map((r) => r.commissionEarned) }, { name: 'Paid', data: reports.commissions.slice(0, 12).map((r) => r.amountPaid) }]],
-    ['Net Cash Flow Trend', 'line', { ...base, xaxis: { categories: [...new Set([...cash.keys, ...bank.keys])].sort() }, colors: ['#2563eb'] }, [{ name: 'Net Flow', data: [...new Set([...cash.keys, ...bank.keys])].sort().map((key) => { const ci = cash.keys.indexOf(key); const bi = bank.keys.indexOf(key); return (ci >= 0 ? cash.one[ci] - cash.two[ci] : 0) + (bi >= 0 ? bank.one[bi] - bank.two[bi] : 0) }) }]],
-  ]
-  return <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">{cards.map(([title, type, options, series]) => <div className={chartClass} key={title}><h3 className="mb-2 font-bold text-slate-800 dark:text-white">{title}</h3><Chart type={type} height={250} options={options} series={series} /></div>)}</div>
-}
-
 function PrintDocument({ report, columns, rows, summary, filters, generatedBy }) {
   const filterText = [filters.customerId && 'Customer selected', filters.vendorId && 'Vendor selected', filters.bank && `Bank: ${filters.bank}`, filters.method && `Method: ${filters.method}`, filters.status && `Status: ${filters.status}`, filters.repId && 'Rep selected', filters.accountId && 'Account selected'].filter(Boolean).join(' • ') || 'No additional filters'
   return <div id="finance-report-print" className="bg-white p-6 text-slate-900">
@@ -124,7 +95,6 @@ export default function FinanceReportsPage() {
   const [sort, setSort] = useState({ key: 'date', direction: 'desc' })
   const [visible, setVisible] = useState({})
   const [showColumns, setShowColumns] = useState(false)
-  const [showCharts, setShowCharts] = useState(true)
 
   const load = async () => {
     setLoading(true)
@@ -203,15 +173,12 @@ export default function FinanceReportsPage() {
 
   const trialDifference = report.key === 'trial-balance' ? Number(summary.find(([label]) => label === 'Difference')?.[1] ?? 0) : 0
   return <div className="space-y-5">
-    <section className="overflow-hidden rounded-2xl bg-gradient-to-r from-slate-950 via-emerald-950 to-teal-900 p-6 text-white shadow-xl">
-      <div className="flex flex-col justify-between gap-5 lg:flex-row lg:items-center"><div className="flex items-center gap-4"><div className="rounded-xl bg-white/10 p-3"><BarChart3 size={32}/></div><div><h1 className="text-2xl font-black">Finance Reports</h1><p className="text-sm text-emerald-100/70">Complete receivables, payables, banking, accounting, profit and cash flow visibility</p></div></div><button onClick={load} className="inline-flex items-center gap-2 self-start rounded-lg bg-white/10 px-4 py-2 text-sm font-bold hover:bg-white/20"><RefreshCw size={16}/>Refresh live data</button></div>
-    </section>
+    <header className="rounded-lg border border-slate-200 bg-white p-4 dark:border-emerald-400/20 dark:bg-emerald-950/30">
+      <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center"><div><p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-300">Finance reports</p><h1 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">Finance Reports</h1><p className="mt-0.5 text-sm text-slate-500 dark:text-emerald-100/70">Receivables, payables, banking, accounting, profit and cash flow detail.</p></div><button onClick={load} className="inline-flex items-center gap-2 self-start rounded-md border border-slate-300 px-3 py-1.5 text-sm font-bold text-slate-700 hover:bg-slate-50 dark:border-emerald-400/20 dark:text-emerald-100 dark:hover:bg-emerald-900"><RefreshCw size={15}/>Refresh data</button></div>
+    </header>
 
-    <SummaryGrid items={financeDashboard(reports)} compact />
+    <SummaryGrid items={financeDashboard(reports).filter(([label]) => ['Total Receivables', 'Total Payables', 'Bank Balance', 'Gross Profit'].includes(label))} compact />
     {warnings.length > 0 && <details className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"><summary className="cursor-pointer font-bold">Some optional data sources were unavailable ({warnings.length})</summary><ul className="mt-2 list-disc pl-5">{warnings.map((x) => <li key={x}>{x}</li>)}</ul></details>}
-    <button onClick={() => setShowCharts((v) => !v)} className="text-sm font-bold text-emerald-700 dark:text-emerald-300">{showCharts ? 'Hide' : 'Show'} financial charts</button>
-    {showCharts && <Charts reports={reports}/>} 
-
     <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white p-2 dark:border-emerald-400/20 dark:bg-emerald-950/30"><div className="flex min-w-max gap-1">{allowedReports.map((item) => <button key={item.key} onClick={() => changeActive(item.key)} className={`rounded-lg px-3 py-2 text-xs font-bold ${item.key === report.key ? 'bg-emerald-600 text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-emerald-100/70 dark:hover:bg-emerald-500/10'}`}>{item.title}</button>)}</div></div>
 
     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-emerald-400/20 dark:bg-emerald-950/30">
@@ -240,14 +207,14 @@ export default function FinanceReportsPage() {
         <div className="col-span-2 flex items-end gap-2"><button onClick={applyFilters} className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-bold text-white"><Filter size={15}/>Apply Filters</button><button onClick={resetFilters} className="rounded-lg border px-3 py-2 text-sm font-bold">Reset</button></div>
       </div>
 
-      <SummaryGrid items={summary}/>
+      <SummaryGrid items={summary.slice(0, 5)}/>
       {trialDifference > 0.005 && <div className="mt-3 rounded-lg bg-rose-50 p-3 font-bold text-rose-700">Trial Balance is out of balance.</div>}
 
       <div className="mt-5 flex flex-wrap items-center gap-3"><div className="relative min-w-[240px] flex-1"><Search size={16} className="absolute left-3 top-3 text-slate-400"/><input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} className={`${inputClass} pl-9`} placeholder="Search all report columns..."/></div><div className="relative"><button onClick={() => setShowColumns((v) => !v)} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold"><Settings2 size={15}/>Columns <ChevronDown size={14}/></button>{showColumns && <div className="absolute right-0 z-20 mt-2 max-h-80 w-64 overflow-y-auto rounded-xl border bg-white p-2 shadow-xl dark:border-emerald-400/20 dark:bg-slate-950">{columns.map(([key, label]) => <label key={key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm"><input type="checkbox" checked={visible[key] !== false} onChange={(e) => setVisible((v) => ({ ...v, [key]: e.target.checked }))}/>{label}</label>)}</div>}</div></div>
 
-      <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 dark:border-emerald-400/20"><table className="min-w-full whitespace-nowrap text-sm"><thead className="bg-slate-50 dark:bg-emerald-950/60"><tr>{shownColumns.map(([key, label]) => <th key={key} onClick={() => toggleSort(key)} className="cursor-pointer px-3 py-3 text-left text-[11px] font-black uppercase tracking-wide text-slate-500">{label}{sort.key === key ? (sort.direction === 'asc' ? ' ↑' : ' ↓') : ''}</th>)}</tr></thead><tbody className="divide-y divide-slate-100 dark:divide-emerald-400/10">{pageRows.map((row, index) => <tr key={row.id ?? index} className="hover:bg-slate-50 dark:hover:bg-emerald-500/5">{shownColumns.map(([key, , type]) => <td key={key} className={`px-3 py-2.5 text-slate-700 dark:text-emerald-50 ${type === 'money' ? 'text-right font-semibold' : ''}`}>{type === 'money' ? money(row[key]) : type === 'date' ? formatDate(row[key]) : String(row[key] ?? '-')}</td>)}</tr>)}{pageRows.length === 0 && <tr><td colSpan={shownColumns.length} className="p-10 text-center text-slate-500">No rows match the applied filters.</td></tr>}</tbody></table></div>
+      <div className="mt-4 max-h-[68vh] overflow-auto rounded-lg border border-slate-200 dark:border-emerald-400/20"><table className="min-w-full whitespace-nowrap text-sm"><thead className="sticky top-0 z-20 bg-slate-50 dark:bg-emerald-950"><tr>{shownColumns.map(([key, label, type]) => <th key={key} onClick={() => toggleSort(key)} className={`cursor-pointer px-3 py-3 text-[11px] font-black uppercase tracking-wide text-slate-500 ${type === 'money' ? 'text-right' : 'text-left'}`}>{label}{sort.key === key ? (sort.direction === 'asc' ? ' ↑' : ' ↓') : ''}</th>)}</tr></thead><tbody className="divide-y divide-slate-100 dark:divide-emerald-400/10">{pageRows.map((row, index) => <tr key={row.id ?? index} className="hover:bg-slate-50 dark:hover:bg-emerald-500/5">{shownColumns.map(([key, , type]) => <td key={key} className={`px-3 py-2.5 tabular-nums text-slate-700 dark:text-emerald-50 ${type === 'money' ? 'text-right font-semibold' : ''}`}>{type === 'money' ? money(row[key]) : type === 'date' ? formatDate(row[key]) : String(row[key] ?? '-')}</td>)}</tr>)}{pageRows.length === 0 && <tr><td colSpan={shownColumns.length} className="p-10 text-center text-slate-500">No rows match the applied filters.</td></tr>}</tbody></table></div>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600 dark:text-emerald-100/70"><div>Showing {filteredRows.length ? (page - 1) * pageSize + 1 : 0}–{Math.min(page * pageSize, filteredRows.length)} of {filteredRows.length}</div><div className="flex items-center gap-2"><select className={inputClass} value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1) }}><option>10</option><option>25</option><option>50</option><option>100</option></select><button className="rounded border px-3 py-2 disabled:opacity-40" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</button><span>{page} / {totalPages}</span><button className="rounded border px-3 py-2 disabled:opacity-40" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</button></div></div>
     </section>
-    <div className="fixed left-[-10000px] top-0 w-[1500px]"><PrintDocument report={report} columns={shownColumns} rows={filteredRows} summary={summary} filters={filters} generatedBy={generatedBy}/></div>
+    <div className="fixed left-[-10000px] top-0 w-[1500px]"><PrintDocument report={report} columns={shownColumns} rows={filteredRows} summary={summary.slice(0, 5)} filters={filters} generatedBy={generatedBy}/></div>
   </div>
 }

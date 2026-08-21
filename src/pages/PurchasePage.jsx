@@ -216,7 +216,7 @@ export default function PurchasePage() {
       supabase.from('purchases').select('*', { count: 'exact', head: true }),
       supabase
         .from('purchase_items')
-        .select('id, product_id, cost, mrp, quantity, purchases(id, date, vendor_id, vendors(name))')
+        .select('id, product_id, cost, mrp, quantity, purchases(id, date, vendor_id, status, vendors(name))')
         .order('id', { ascending: false }),
     ])
 
@@ -225,7 +225,7 @@ export default function PurchasePage() {
 
     setVendors(vData ?? [])
     setProducts(pData ?? [])
-    setPrevCosts(piData ?? [])
+    setPrevCosts((piData ?? []).filter((x) => !['reversed','cancelled','canceled','deleted','void'].includes(String(x.purchases?.status ?? '').toLowerCase())))
     setRefNo(`PUR-${String((count ?? 0) + 1).padStart(4, '0')}`)
     setLoading(false)
   }

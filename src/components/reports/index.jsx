@@ -6,18 +6,18 @@ import * as XLSX from 'xlsx';
 
 export function ReportHeader({ title, subtitle, generatedBy, generatedDate }) {
   return (
-    <div className="bg-white dark:bg-emerald-950/25 border border-slate-200 dark:border-emerald-400/20 rounded-xl p-6 mb-6 shadow-sm">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4 dark:border-emerald-400/20 dark:bg-emerald-950/25">
+      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-center">
         <div className="flex items-center gap-3">
           <Link
             to="/reports"
-            className="p-2 rounded-lg border border-slate-300 dark:border-emerald-400/20 text-slate-700 dark:text-emerald-50 hover:bg-slate-50 dark:hover:bg-emerald-500/10 transition-colors"
+            className="rounded-md border border-slate-300 p-1.5 text-slate-700 transition-colors hover:bg-slate-50 dark:border-emerald-400/20 dark:text-emerald-50 dark:hover:bg-emerald-500/10"
           >
             <ArrowLeft size={20} />
           </Link>
           <div>
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white">{title}</h1>
-            {subtitle && <p className="text-slate-500 dark:text-emerald-100/70 mt-1">{subtitle}</p>}
+            <h1 className="text-xl font-bold text-slate-900 dark:text-white">{title}</h1>
+            {subtitle && <p className="mt-0.5 text-sm text-slate-500 dark:text-emerald-100/70">{subtitle}</p>}
           </div>
         </div>
         <div className="text-sm text-slate-600 dark:text-emerald-100/70">
@@ -31,14 +31,14 @@ export function ReportHeader({ title, subtitle, generatedBy, generatedDate }) {
 
 export function SummaryCards({ cards }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
+    <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
       {cards.map((card, idx) => (
         <div
           key={idx}
-          className="bg-white dark:bg-emerald-950/25 border border-slate-200 dark:border-emerald-400/20 rounded-xl p-5 shadow-sm hover:shadow-md transition-shadow"
+          className="rounded-lg border border-slate-200 bg-white p-3 dark:border-emerald-400/20 dark:bg-emerald-950/25"
         >
-          <p className="text-sm text-slate-500 dark:text-emerald-100/60 mb-1">{card.label}</p>
-          <p className="text-2xl font-bold text-slate-900 dark:text-white">{card.value}</p>
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-emerald-100/60">{card.label}</p>
+          <p className="text-base font-bold tabular-nums text-slate-900 dark:text-white">{card.value}</p>
         </div>
       ))}
     </div>
@@ -47,26 +47,26 @@ export function SummaryCards({ cards }) {
 
 export function ReportActions({ onPrint, onExportPDF, onExportExcel, children }) {
   return (
-    <div className="flex flex-wrap items-center gap-3 mb-6">
+    <div className="mb-4 flex flex-wrap items-center gap-2 print:hidden">
       {children}
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex flex-wrap items-center gap-2">
         <button
           onClick={onPrint}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-slate-300 dark:border-emerald-400/20 text-slate-700 dark:text-emerald-50 hover:bg-slate-50 dark:hover:bg-emerald-500/10 transition-colors"
+          className="flex items-center gap-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-emerald-400/20 dark:text-emerald-50 dark:hover:bg-emerald-500/10"
         >
           <Printer size={16} />
           Print
         </button>
         <button
           onClick={onExportPDF}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-slate-300 dark:border-emerald-400/20 text-slate-700 dark:text-emerald-50 hover:bg-slate-50 dark:hover:bg-emerald-500/10 transition-colors"
+          className="flex items-center gap-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-emerald-400/20 dark:text-emerald-50 dark:hover:bg-emerald-500/10"
         >
           <FileText size={16} />
           Download PDF
         </button>
         <button
           onClick={onExportExcel}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm"
+          className="flex items-center gap-2 rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
         >
           <Download size={16} />
           Export Excel
@@ -78,7 +78,7 @@ export function ReportActions({ onPrint, onExportPDF, onExportExcel, children })
 
 export function ReportPagination({ page, setPage, totalPages, pageSize, setPageSize, total }) {
   return (
-    <div className="flex items-center justify-between mt-6 bg-white dark:bg-emerald-950/25 border border-slate-200 dark:border-emerald-400/20 rounded-xl p-4 shadow-sm">
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3 dark:border-emerald-400/20 dark:bg-emerald-950/25 print:hidden">
       <p className="text-sm text-slate-600 dark:text-emerald-100/70">
         Showing <span className="font-medium">{((page - 1) * pageSize) + 1}</span> to <span className="font-medium">{Math.min(page * pageSize, total)}</span> of <span className="font-medium">{total}</span>
       </p>
@@ -197,7 +197,19 @@ export function exportToPDF(elementId, filename = 'report.pdf', options = {}) {
     jsPDF: { unit: 'in', format, orientation },
     pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.pdf-avoid-break'] },
   };
-  html2pdf().set(opt).from(cloned).save().finally(() => {
+  const worker = html2pdf().set(opt).from(cloned);
+  const save = options.pageNumbers
+    ? worker.toPdf().get('pdf').then((pdf) => {
+        const pages = pdf.internal.getNumberOfPages();
+        for (let page = 1; page <= pages; page += 1) {
+          pdf.setPage(page);
+          pdf.setFontSize(8);
+          pdf.setTextColor(100);
+          pdf.text(`Page ${page} of ${pages}`, pdf.internal.pageSize.getWidth() - 0.65, pdf.internal.pageSize.getHeight() - 0.2, { align: 'right' });
+        }
+      }).save()
+    : worker.save();
+  save.finally(() => {
     document.body.removeChild(wrapper);
   });
 }

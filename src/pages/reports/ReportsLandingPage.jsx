@@ -43,6 +43,22 @@ const reportCategories = [
     ],
   },
   {
+    key: 'vendor',
+    title: 'Vendor Reports',
+    icon: Database,
+    reports: [
+      { name: 'Complete Vendor Reports Suite', path: '/reports/vendors' },
+    ],
+  },
+  {
+    key: 'reps',
+    title: 'Rep & Commission Reports',
+    icon: TrendingUp,
+    reports: [
+      { name: 'Complete Rep & Commission Reports Suite', path: '/reports/reps' },
+    ],
+  },
+  {
     key: 'customer',
     title: 'Customer Reports',
     icon: Users,

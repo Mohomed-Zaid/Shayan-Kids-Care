@@ -39,6 +39,7 @@ const navItems = [
     icon: Boxes,
     children: [
       { to: '/inventory/purchase', label: 'New Purchase', icon: ShoppingCart },
+      { to: '/inventory/purchases', label: 'Purchase History', icon: FileText },
       { to: '/inventory/beginning-stock', label: 'Beginning Stock', icon: Package },
       { to: '/inventory/backorder-report', label: 'Backorder Report', icon: AlertTriangle },
     ],
@@ -93,6 +94,12 @@ const navItems = [
       { key: 'purchase-reports', label: 'Purchase Reports', icon: HandCoins, nested: true, children: [
         { to: '/reports/purchases', label: 'Purchase Reports Suite' },
       ]},
+      { key: 'vendor-reports', label: 'Vendor Reports', icon: Truck, nested: true, children: [
+        { to: '/reports/vendors', label: 'Vendor Reports Suite' },
+      ]},
+      { key: 'rep-reports', label: 'Rep & Commission Reports', icon: UserCheck, nested: true, children: [
+        { to: '/reports/reps', label: 'Rep Reports Suite' },
+      ]},
       { to: '/reports/finance', label: 'Finance Reports', icon: Wallet },
     ],
   },
@@ -121,6 +128,7 @@ function usePageTitle() {
     if (path.startsWith('/journals')) return 'Journals'
     if (path.startsWith('/commission')) return 'Commission'
     if (path.startsWith('/sms-service')) return 'SMS Service'
+    if (path.startsWith('/inventory/purchases')) return 'Purchase History'
     if (path.startsWith('/inventory/purchase')) return 'New Purchase'
     if (path.startsWith('/inventory/beginning-stock')) return 'Beginning Stock'
     if (path.startsWith('/inventory/backorder-report')) return 'Backorder Report'
@@ -151,6 +159,8 @@ function usePageTitle() {
     if (path.startsWith('/reports/customer/statement')) return 'Customer Statement'
     if (path.startsWith('/reports/customer/ledger')) return 'Customer Ledger'
     if (path.startsWith('/reports/purchases')) return 'Purchase Reports'
+    if (path.startsWith('/reports/vendors')) return 'Vendor Reports'
+    if (path.startsWith('/reports/reps')) return 'Rep & Commission Reports'
     if (path.startsWith('/reports/finance')) return 'Finance Reports'
     if (path.startsWith('/reports')) return 'Reports'
     if (path === '/orders/new') return 'Create Order'
