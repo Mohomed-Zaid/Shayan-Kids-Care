@@ -5,6 +5,7 @@ import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import PermissionGate from '../components/PermissionGate'
 import { pressDateISO, formatLocalDate } from '../lib/localDate'
+import { convertOrderToInvoice } from '../lib/orderConversion'
 import { Plus, Eye, ShoppingCart, CheckCircle, XCircle, ArrowRightLeft, Trash2, FileText, Filter, Pencil, Search, ArrowUpDown, Truck } from 'lucide-react'
 
 const statusConfig = {
@@ -49,7 +50,7 @@ export default function OrdersPage() {
     const [ordRes, invRes] = await Promise.all([
       supabase
         .from('orders')
-        .select('id, order_number, total, status, created_at, customer_id, rep_id, payment_type, invoice_id, delivered_at, invoices(created_at), customers(name), employees(name)')
+        .select('id, order_number, total, status, created_at, customer_id, rep_id, payment_type, invoice_id, delivered_at, customers(name), employees(name)')
         .order('created_at', { ascending: false }),
       supabase
         .from('invoices')
@@ -61,7 +62,11 @@ export default function OrdersPage() {
       toast.error('Failed to load orders')
       setOrders([])
     } else {
-      setOrders(ordRes.data ?? [])
+      const invoiceById = new Map((invRes.data ?? []).map((invoice) => [String(invoice.id), invoice]))
+      setOrders((ordRes.data ?? []).map((order) => ({
+        ...order,
+        invoices: invoiceById.get(String(order.invoice_id)) ?? null,
+      })))
     }
 
     if (invRes.error) {
@@ -121,79 +126,14 @@ export default function OrdersPage() {
       return
     }
 
-    // Fetch order items
-    const { data: items, error: itemsErr } = await supabase
-      .from('order_items')
-      .select('product_id, quantity, price, total')
-      .eq('order_id', order.id)
-
-    if (itemsErr || !items || items.length === 0) {
-      toast.error('No items found in this order')
-      return
+    try {
+      const invoice = await convertOrderToInvoice(supabase, order.id)
+      toast.success('Order invoiced successfully')
+      logAction({ action: 'invoice_order', targetType: 'order', targetId: order.id, targetLabel: `ORD-${String(order.order_number ?? '').padStart(4, '0')}`, details: `Invoice INV-${String(invoice.invoice_number ?? invoice.invoice_id).padStart(4, '0')}` })
+      await load()
+    } catch (error) {
+      toast.error(error?.message || 'Order conversion failed')
     }
-
-    // Check stock availability
-    const { data: products } = await supabase.from('products').select('id, name, stock')
-    const productMap = new Map((products ?? []).map(p => [p.id, p]))
-
-    const stockErrors = []
-    for (const it of items) {
-      const p = productMap.get(it.product_id)
-      if (!p || it.quantity > (p.stock ?? 0)) {
-        stockErrors.push(`${p?.name ?? 'Product'}: requested ${it.quantity}, only ${p?.stock ?? 0} in stock`)
-      }
-    }
-
-    if (stockErrors.length > 0) {
-      toast.error('Insufficient stock: ' + stockErrors.join('; '))
-      return
-    }
-
-    // Create invoice — carry VAT from order
-    const orderVatRate = Number(order.vat_rate ?? 0)
-    const orderVatAmount = Number(order.vat_amount ?? 0)
-    const { data: invoice, error: invErr } = await supabase
-      .from('invoices')
-      .insert({
-        customer_id: order.customer_id,
-        rep_id: order.rep_id || null,
-        total_amount: order.total,
-        vat_rate: orderVatRate,
-        vat_amount: orderVatAmount,
-        payment_type: order.payment_type ?? 'credit',
-      })
-      .select('id')
-      .single()
-
-    if (invErr) { toast.error(invErr.message); return }
-
-    // Copy items to invoice_items
-    const invoiceItems = items.map(it => ({
-      invoice_id: invoice.id,
-      product_id: it.product_id,
-      quantity: it.quantity,
-      price: it.price,
-      total: it.total,
-    }))
-
-    const { error: iiErr } = await supabase.from('invoice_items').insert(invoiceItems)
-    if (iiErr) { toast.error(iiErr.message); return }
-
-    // Deduct stock
-    const stockUpdates = items.map(it => {
-      const p = productMap.get(it.product_id)
-      const newStock = Math.max(0, (p?.stock ?? 0) - it.quantity)
-      return supabase.from('products').update({ stock: newStock }).eq('id', it.product_id)
-    })
-    await Promise.all(stockUpdates)
-
-    // Mark order as invoiced and link to invoice
-    const { error: updErr } = await supabase.from('orders').update({ status: 'invoiced', invoice_id: invoice.id, delivered_at: null }).eq('id', order.id)
-    if (updErr) { toast.error(updErr.message); return }
-
-    toast.success('Order invoiced successfully')
-    logAction({ action: 'invoice_order', targetType: 'order', targetId: order.id, targetLabel: `ORD-${String(order.order_number ?? '').padStart(4, '0')}`, details: `Invoice INV-${String(invoice.id ?? '').padStart(4, '0')}` })
-    await load()
   }
 
   const onDeleteInvoice = async (inv) => {

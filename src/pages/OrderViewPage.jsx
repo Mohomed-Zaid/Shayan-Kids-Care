@@ -10,6 +10,7 @@ import logo from '../pictures/logo.jpeg'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
 import { COMPANY_EMAIL } from '../lib/companyContact'
 import PermissionGate from '../components/PermissionGate'
+import { convertOrderToInvoice } from '../lib/orderConversion'
 
 const statusConfig = {
   pending: { label: 'Pending', bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-700' },
@@ -42,7 +43,7 @@ export default function OrderViewPage() {
       const [ordRes, itemsRes] = await Promise.all([
         supabase
           .from('orders')
-          .select('id, order_number, total, status, created_at, customer_id, rep_id, payment_type, invoice_id, delivered_at, invoices(created_at), customers(name, address, phone), employees(name, is_rep)')
+          .select('id, order_number, total, status, created_at, customer_id, rep_id, payment_type, invoice_id, delivered_at, customers(name, address, phone), employees(name, is_rep)')
           .eq('id', id)
           .single(),
         supabase
@@ -60,7 +61,18 @@ export default function OrderViewPage() {
         return
       }
 
-      setOrder(ordRes.data)
+      let linkedInvoice = null
+      if (ordRes.data.invoice_id) {
+        const { data } = await supabase
+          .from('invoices')
+          .select('created_at')
+          .eq('id', ordRes.data.invoice_id)
+          .maybeSingle()
+        linkedInvoice = data ?? null
+      }
+
+      if (!mounted) return
+      setOrder({ ...ordRes.data, invoices: linkedInvoice })
       setItems(itemsRes.data ?? [])
       setLoading(false)
     }
@@ -140,58 +152,12 @@ export default function OrderViewPage() {
     setConverting(true)
 
     try {
-      // Get current products for stock update
-      const { data: products } = await supabase.from('products').select('id, name, stock')
-      const productMap = new Map((products ?? []).map(p => [p.id, p]))
-
-      // Create invoice — carry VAT from order
-      const orderVatRate = Number(order.vat_rate ?? 0)
-      const orderVatAmount = Number(order.vat_amount ?? 0)
-      const { data: invoice, error: invErr } = await supabase
-        .from('invoices')
-        .insert({
-          customer_id: order.customer_id,
-          rep_id: order.rep_id || null,
-          total_amount: order.total,
-          vat_rate: orderVatRate,
-          vat_amount: orderVatAmount,
-          payment_type: order.payment_type ?? 'credit',
-        })
-        .select('id')
-        .single()
-
-      if (invErr) { toast.error(invErr.message); setConverting(false); return }
-
-      // Copy items
-      const invoiceItems = items.map(it => ({
-        invoice_id: invoice.id,
-        product_id: it.product_id,
-        quantity: it.quantity,
-        price: it.price,
-        discount: it.discount ?? 0,
-        total: it.total,
-      }))
-
-      const { error: iiErr } = await supabase.from('invoice_items').insert(invoiceItems)
-      if (iiErr) { toast.error(iiErr.message); setConverting(false); return }
-
-      // Deduct stock (allow negative)
-      const stockUpdates = items.map(it => {
-        const p = productMap.get(it.product_id)
-        const newStock = (p?.stock ?? 0) - it.quantity
-        return supabase.from('products').update({ stock: newStock }).eq('id', it.product_id)
-      })
-      await Promise.all(stockUpdates)
-
-      // Mark order as invoiced and link to invoice
-      const { error: updErr } = await supabase.from('orders').update({ status: 'invoiced', invoice_id: invoice.id, delivered_at: null }).eq('id', id)
-      if (updErr) { toast.error(updErr.message); setConverting(false); return }
-
+      const invoice = await convertOrderToInvoice(supabase, id)
       toast.success('Order invoiced successfully')
-      logAction({ action: 'invoice_order', targetType: 'order', targetId: id, details: `Invoice INV-${String(invoice.id ?? '').padStart(4, '0')}` })
-      setOrder({ ...order, status: 'invoiced', invoice_id: invoice.id, delivered_at: null })
+      logAction({ action: 'invoice_order', targetType: 'order', targetId: id, details: `Invoice INV-${String(invoice.invoice_number ?? invoice.invoice_id).padStart(4, '0')}` })
+      setOrder({ ...order, status: 'invoiced', invoice_id: invoice.invoice_id, delivered_at: null })
     } catch (e) {
-      toast.error(e?.message ?? 'Conversion failed')
+      toast.error(e?.message ?? 'Order conversion failed')
     } finally {
       setConverting(false)
     }
