@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import PermissionGate from '../components/PermissionGate'
+import { usePermissions } from '../contexts/PermissionsContext'
+import { buildConsistencyRows } from '../lib/orderConsistency'
 import { pressDateISO, formatLocalDate } from '../lib/localDate'
 import { convertOrderToInvoice } from '../lib/orderConversion'
 import { Plus, Eye, ShoppingCart, CheckCircle, XCircle, ArrowRightLeft, Trash2, FileText, Filter, Pencil, Search, ArrowUpDown, Truck } from 'lucide-react'
@@ -44,6 +46,11 @@ export default function OrdersPage() {
   const [invSort, setInvSort] = useState('newest')
   const navigate = useNavigate()
   const toast = useToast()
+  const { isSuperAdmin } = usePermissions()
+  const [consistencyOpen, setConsistencyOpen] = useState(false)
+  const [checkingConsistency, setCheckingConsistency] = useState(false)
+  const [consistencyRows, setConsistencyRows] = useState([])
+  const [syncingOrderId, setSyncingOrderId] = useState('')
 
   const load = async () => {
     setLoading(true)
@@ -213,6 +220,65 @@ export default function OrdersPage() {
     }
   }
 
+  const checkConsistency = async () => {
+    setConsistencyOpen(true)
+    setCheckingConsistency(true)
+    try {
+      const { data: linkedOrders, error: orderError } = await supabase
+        .from('orders')
+        .select('id, order_number, total, invoice_id, status')
+        .in('status', ['invoiced', 'converted', 'delivered'])
+        .not('invoice_id', 'is', null)
+      if (orderError) throw orderError
+
+      const orderIds = (linkedOrders ?? []).map((row) => row.id)
+      const invoiceIds = (linkedOrders ?? []).map((row) => row.invoice_id)
+      if (orderIds.length === 0) {
+        setConsistencyRows([])
+        return
+      }
+
+      const [orderItemsRes, invoicesRes, invoiceItemsRes, productsRes] = await Promise.all([
+        supabase.from('order_items').select('order_id, product_id, quantity, price, discount, total').in('order_id', orderIds),
+        supabase.from('invoices').select('id, invoice_number, total_amount').in('id', invoiceIds),
+        supabase.from('invoice_items').select('invoice_id, product_id, quantity, price, discount, total').in('invoice_id', invoiceIds),
+        supabase.from('products').select('id, code, name'),
+      ])
+      const failure = [orderItemsRes, invoicesRes, invoiceItemsRes, productsRes].find((result) => result.error)
+      if (failure) throw failure.error
+
+      setConsistencyRows(buildConsistencyRows({
+        orders: linkedOrders ?? [],
+        invoices: invoicesRes.data ?? [],
+        orderItems: orderItemsRes.data ?? [],
+        invoiceItems: invoiceItemsRes.data ?? [],
+        products: productsRes.data ?? [],
+      }))
+    } catch (error) {
+      toast.error(error?.message || 'Failed to check order/invoice consistency')
+    } finally {
+      setCheckingConsistency(false)
+    }
+  }
+
+  const syncOrderFromInvoice = async (row) => {
+    const orderLabel = `ORD-${String(row.order_number ?? '').padStart(4, '0')}`
+    const invoiceLabel = `INV-${String(row.invoice_number ?? '').padStart(4, '0')}`
+    if (!confirm(`Sync ${orderLabel} from ${invoiceLabel}? This will replace the historical order items and total with the invoice snapshot. An audit log will be saved.`)) return
+
+    setSyncingOrderId(row.order_id)
+    try {
+      const { error } = await supabase.rpc('sync_order_from_invoice', { p_order_id: row.order_id })
+      if (error) throw error
+      toast.success(`${orderLabel} synced from ${invoiceLabel}`)
+      await Promise.all([checkConsistency(), load()])
+    } catch (error) {
+      toast.error(error?.message || 'Failed to sync order from invoice')
+    } finally {
+      setSyncingOrderId('')
+    }
+  }
+
   const fmt = (val) => `Rs. ${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
   const filteredOrders = activeTab === 'all' ? orders.filter((o) => o.status !== 'delivered') : orders.filter((o) => {
@@ -278,6 +344,11 @@ export default function OrdersPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {isSuperAdmin && (
+            <button onClick={checkConsistency} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200">
+              Check Order/Invoice Consistency
+            </button>
+          )}
           <PermissionGate module="orders" action="create">
             <Link to="/orders/new" className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm">
               <Plus size={16} />
@@ -286,6 +357,59 @@ export default function OrdersPage() {
           </PermissionGate>
         </div>
       </div>
+
+      {isSuperAdmin && consistencyOpen && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 dark:border-amber-700 dark:bg-amber-950/30">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-bold text-slate-900 dark:text-white">Order / Invoice Consistency</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Super Admin utility. No records are changed until you choose Sync Order From Invoice.</p>
+            </div>
+            <button onClick={() => setConsistencyOpen(false)} className="text-sm text-slate-500 hover:text-slate-900">Close</button>
+          </div>
+          {checkingConsistency ? (
+            <div className="py-8 text-center text-sm text-slate-500">Checking converted orders...</div>
+          ) : consistencyRows.length === 0 ? (
+            <div className="mt-4 rounded-lg bg-emerald-100 px-4 py-3 text-sm font-semibold text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200">All linked orders and invoices match.</div>
+          ) : (
+            <div className="mt-4 space-y-3">
+              {consistencyRows.map((row) => (
+                <div key={row.order_id} className="rounded-lg border border-red-200 bg-white p-4 dark:border-red-800 dark:bg-slate-900">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <div className="font-bold text-red-700 dark:text-red-300">DATA MISMATCH</div>
+                      <div className="text-sm font-semibold text-slate-900 dark:text-white">ORD-{String(row.order_number ?? '').padStart(4, '0')} / INV-{String(row.invoice_number ?? '').padStart(4, '0')}</div>
+                      <div className="text-xs text-slate-500">Items: {row.order_item_count} vs {row.invoice_item_count} � Totals: {fmt(row.order_total)} vs {fmt(row.invoice_total)}</div>
+                    </div>
+                    <button
+                      onClick={() => syncOrderFromInvoice(row)}
+                      disabled={syncingOrderId === row.order_id}
+                      className="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white hover:bg-red-700 disabled:opacity-50"
+                    >
+                      {syncingOrderId === row.order_id ? 'Syncing...' : 'Sync Order From Invoice'}
+                    </button>
+                  </div>
+                  <div className="mt-3 overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead><tr className="text-left text-slate-500"><th className="py-1">Product</th><th>Change</th><th>Order Qty</th><th>Invoice Qty</th><th>Order Price</th><th>Invoice Price</th></tr></thead>
+                      <tbody>{row.differences.map((difference) => (
+                        <tr key={difference.product_id} className="border-t border-slate-100 dark:border-slate-800">
+                          <td className="py-1.5 font-semibold">{difference.product_code} {difference.product_name}</td>
+                          <td>{difference.type}</td>
+                          <td>{difference.order_quantity ?? 'Missing'}</td>
+                          <td>{difference.invoice_quantity ?? 'Missing'}</td>
+                          <td>{difference.order_price == null ? 'Missing' : fmt(difference.order_price)}</td>
+                          <td>{difference.invoice_price == null ? 'Missing' : fmt(difference.invoice_price)}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {showInvoices && (
         <div className="flex flex-wrap items-center gap-3">

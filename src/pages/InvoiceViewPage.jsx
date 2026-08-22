@@ -9,6 +9,7 @@ import PermissionGate from '../components/PermissionGate'
 import logo from '../pictures/logo.jpeg'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
 import { COMPANY_EMAIL } from '../lib/companyContact'
+import { paginateInvoiceItems } from '../lib/invoicePagination'
 
 export default function InvoiceViewPage() {
   const { id } = useParams()
@@ -38,7 +39,7 @@ export default function InvoiceViewPage() {
 
       const invRes = await supabase
         .from('invoices')
-        .select('id, invoice_number, total_amount, vat_rate, vat_amount, created_at, payment_type, customer_id, customers(name, address, phone), employees(id, name, is_rep)')
+        .select('id, order_id, invoice_number, total_amount, vat_rate, vat_amount, created_at, payment_type, customer_id, customers(name, address, phone), employees(id, name, is_rep)')
         .eq('id', id)
         .single()
 
@@ -164,6 +165,7 @@ export default function InvoiceViewPage() {
   const vatRate = Number(invoice?.vat_rate ?? 0.18)
   const vatAmount = Number(invoice?.vat_amount ?? subtotal * vatRate)
   const totalAmount = Number(invoice?.total_amount ?? subtotal + vatAmount)
+  const invoicePages = useMemo(() => paginateInvoiceItems(items), [items])
 
   const onDelete = async () => {
     if (!confirm('Delete this invoice and all its items?')) return
@@ -243,7 +245,7 @@ export default function InvoiceViewPage() {
     if (!printRef.current) return
 
     const wrapper = document.createElement('div')
-    wrapper.className = 'pdf-export-wrapper'
+    wrapper.className = 'pdf-export-wrapper invoice-pdf-export-wrapper'
     const cloned = printRef.current.cloneNode(true)
     wrapper.appendChild(cloned)
     document.body.appendChild(wrapper)
@@ -274,6 +276,7 @@ export default function InvoiceViewPage() {
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'legacy'], before: '.invoice-continuation-page', avoid: ['.invoice-item-row', '.invoice-closing-section'] },
     }
 
     try {
@@ -339,12 +342,14 @@ export default function InvoiceViewPage() {
               Download PDF
             </button>
           </PermissionGate>
-          <PermissionGate module="invoices" action="edit">
-            <Link to={`/invoices/${id}/edit`} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
-              <Pencil size={15} />
-              Edit
-            </Link>
-          </PermissionGate>
+          {!invoice.order_id && (
+            <PermissionGate module="invoices" action="edit">
+              <Link to={`/invoices/${id}/edit`} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
+                <Pencil size={15} />
+                Edit
+              </Link>
+            </PermissionGate>
+          )}
           <PermissionGate module="invoices" action="delete">
             <button onClick={onDelete} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">
               <Trash2 size={15} />
@@ -357,7 +362,7 @@ export default function InvoiceViewPage() {
       <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
         <div
           ref={printRef}
-          className="bg-white dark:bg-slate-900 print-area min-h-[297mm] flex flex-col"
+          className="bg-white dark:bg-slate-900 print-area invoice-print-document"
         >
           {/* Header */}
           <div className="px-8 pt-3 pb-2 flex items-start justify-between border-b-2 border-slate-800 dark:border-slate-600">
@@ -427,49 +432,45 @@ export default function InvoiceViewPage() {
             </div>
           </div>
 
-          {/* Items Table */}
-          <div className="px-8 py-2 flex-1 flex flex-col">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-white text-black border-b-2 border-black">
-                  <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Item Code</th>
-                  <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Description</th>
-                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Qty</th>
-                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Unit Price</th>
-                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Disc %</th>
-                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Disc. Amount</th>
-                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((it, idx) => (
-                  <tr key={it.id} className={`border-b border-slate-100 dark:border-slate-700 ${idx % 2 !== 0 ? 'bg-slate-50 dark:bg-slate-800/50' : ''}`}>
-                    <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{it.products?.code ?? '-'}</td>
-                    <td className="px-3 py-1.5 text-slate-900 dark:text-white font-medium">{it.products?.name ?? '-'}</td>
-                    <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{it.quantity}</td>
-                    <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">Rs. {Number(it.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                    <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{Number(it.discount ?? 0) > 0 ? `${Number(it.discount).toLocaleString(undefined, { minimumFractionDigits: 2 })}%` : '-'}</td>
-                    <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{Number(it.discount ?? 0) > 0 ? `Rs. ${(Number(it.quantity ?? 0) * Number(it.price ?? 0) * Number(it.discount ?? 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}</td>
-                    <td className="px-3 py-1.5 text-right text-slate-900 dark:text-white font-semibold">Rs. {Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                  </tr>
-                ))}
-                {Array.from({ length: Math.max(0, 6 - items.length) }).map((_, i) => (
-                  <tr key={`empty-${i}`} className="border-b border-slate-100 dark:border-slate-700">
-                    <td className="px-3 py-0.5">&nbsp;</td>
-                    <td className="px-3 py-0.5"></td>
-                    <td className="px-3 py-0.5"></td>
-                    <td className="px-3 py-0.5"></td>
-                    <td className="px-3 py-0.5"></td>
-                    <td className="px-3 py-0.5"></td>
-                    <td className="px-3 py-0.5"></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {/* Explicit product pages. Every continued page repeats the table header. */}
+          <div className="invoice-items-pages">
+            {invoicePages.map((page, pageIndex) => (
+              <div key={pageIndex} className={`invoice-items-page px-8 py-2 ${pageIndex > 0 ? 'invoice-continuation-page' : ''}`}>
+                <table className="w-full text-sm invoice-items-table">
+                  <thead><tr className="bg-white text-black border-b-2 border-black">
+                    <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Item Code</th>
+                    <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Description</th>
+                    <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Qty</th>
+                    <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Unit Price</th>
+                    <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Disc %</th>
+                    <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Disc. Amount</th>
+                    <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Amount</th>
+                  </tr></thead>
+                  <tbody>
+                    {page.items.map((it, idx) => (
+                      <tr key={it.id} className={`invoice-item-row border-b border-slate-100 dark:border-slate-700 ${(idx + pageIndex) % 2 !== 0 ? 'bg-slate-50 dark:bg-slate-800/50' : ''}`}>
+                        <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{it.products?.code ?? '-'}</td>
+                        <td className="px-3 py-1.5 text-slate-900 dark:text-white font-medium">{it.products?.name ?? '-'}</td>
+                        <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{it.quantity}</td>
+                        <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">Rs. {Number(it.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{Number(it.discount ?? 0) > 0 ? `${Number(it.discount).toLocaleString(undefined, { minimumFractionDigits: 2 })}%` : '-'}</td>
+                        <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{Number(it.discount ?? 0) > 0 ? `Rs. ${(Number(it.quantity ?? 0) * Number(it.price ?? 0) * Number(it.discount ?? 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}</td>
+                        <td className="px-3 py-1.5 text-right text-slate-900 dark:text-white font-semibold">Rs. {Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    ))}
+                    {invoicePages.length === 1 && Array.from({ length: Math.max(0, 6 - page.items.length) }).map((_, i) => (
+                      <tr key={`empty-${i}`} className="invoice-item-row border-b border-slate-100 dark:border-slate-700">
+                        <td className="px-3 py-0.5">&nbsp;</td><td /><td /><td /><td /><td /><td />
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ))}
           </div>
 
           {/* Totals + Signature + Footer pushed to bottom */}
-          <div className="mt-auto">
+          <div className="invoice-closing-section">
             <div className="px-8 pb-2 flex justify-between items-start">
               {/* Bank Details */}
               <div className="text-xs text-slate-600 dark:text-slate-300">

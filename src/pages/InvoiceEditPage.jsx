@@ -41,12 +41,13 @@ export default function InvoiceEditPage() {
     const load = async () => {
       setLoading(true)
 
-      const [custRes, prodRes, repsRes, invRes, itemsRes] = await Promise.all([
+      const [custRes, prodRes, repsRes, invRes, itemsRes, linkedOrderRes] = await Promise.all([
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
         supabase.from('products').select('*').order('created_at', { ascending: false }),
         supabase.from('employees').select('*').order('created_at', { ascending: false }),
-        supabase.from('invoices').select('id, customer_id, rep_id, total_amount, vat_rate, payment_type').eq('id', id).single(),
-        supabase.from('invoice_items').select('id, product_id, quantity, price, total').eq('invoice_id', id),
+        supabase.from('invoices').select('id, order_id, customer_id, rep_id, total_amount, vat_rate, payment_type').eq('id', id).single(),
+        supabase.from('invoice_items').select('id, product_id, quantity, price, discount, total').eq('invoice_id', id),
+        supabase.from('orders').select('id').eq('invoice_id', id).maybeSingle(),
       ])
 
       if (!mounted) return
@@ -54,6 +55,12 @@ export default function InvoiceEditPage() {
       if (invRes.error || !invRes.data) {
         setError('Invoice not found')
         setLoading(false)
+        return
+      }
+
+      if (invRes.data.order_id || linkedOrderRes.data?.id) {
+        toast.error('Invoices generated from orders cannot be edited independently')
+        navigate(`/invoices/${id}`, { replace: true })
         return
       }
 

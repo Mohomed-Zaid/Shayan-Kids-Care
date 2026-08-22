@@ -821,3 +821,85 @@
   .vendor-export-document { left: auto !important; position: static !important; top: auto !important; width: auto !important; }
   @page { margin: 10mm; }
 }
+
+
+/* Explicit invoice pagination */
+.invoice-print-document {
+  width: 210mm;
+  background: #fff;
+}
+.invoice-item-row {
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+}
+.invoice-continuation-page {
+  break-before: page !important;
+  page-break-before: always !important;
+  padding-top: 8mm !important;
+  box-sizing: border-box;
+}
+.invoice-closing-section {
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+  min-height: 88mm;
+}
+.invoice-pdf-export-wrapper {
+  width: 210mm !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.invoice-pdf-export-wrapper .invoice-print-document {
+  position: static !important;
+  width: 210mm !important;
+  height: auto !important;
+  min-height: 297mm !important;
+  max-height: none !important;
+  overflow: visible !important;
+  break-inside: auto !important;
+  page-break-inside: auto !important;
+}
+.invoice-pdf-export-wrapper .invoice-print-document * {
+  page-break-inside: auto !important;
+  break-inside: auto !important;
+}
+.invoice-pdf-export-wrapper .invoice-item-row,
+.invoice-pdf-export-wrapper .invoice-closing-section {
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+}
+.invoice-pdf-export-wrapper .invoice-continuation-page {
+  break-before: page !important;
+  page-break-before: always !important;
+}
+
+@media print {
+  @page { size: A4 portrait; margin: 0; }
+  html, body {
+    width: 210mm !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .invoice-print-document {
+    position: static !important;
+    width: 210mm !important;
+    height: auto !important;
+    min-height: 297mm !important;
+    max-height: none !important;
+    overflow: visible !important;
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+  .invoice-print-document * {
+    visibility: visible !important;
+  }
+  .invoice-continuation-page {
+    break-before: page !important;
+    page-break-before: always !important;
+  }
+  .invoice-item-row,
+  .invoice-closing-section {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+}

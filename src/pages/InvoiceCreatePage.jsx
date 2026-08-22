@@ -6,6 +6,7 @@ import { logAction } from '../lib/auditLog'
 import { Plus, Trash2, ArrowLeft, AlertTriangle, X } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 import { companyPhonesHtml, COMPANY_EMAIL } from '../lib/companyInfo'
+import { paginateInvoiceItems } from '../lib/invoicePagination'
 
 const fmt = (val) => `Rs. ${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
@@ -18,23 +19,38 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
   const dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
   const payLabel = paymentType === 'cash' ? 'Cash Customer' : 'Credit Customer'
 
-  const itemRows = (lines ?? []).map((l, idx) => {
-    const prod = productById.get(l.product_id) ?? {}
-    const discAmt = l.quantity * l.price * (l.discount / 100)
-    return `<tr style="background:${idx % 2 !== 0 ? '#f8fafc' : '#ffffff'}">
-      <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;color:#475569">${prod.code ?? '-'}</td>
-      <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;color:#0f172a;font-weight:500">${prod.name ?? '-'}</td>
-      <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;text-align:right;color:#334155">${l.quantity}</td>
-      <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;text-align:right;color:#334155">${fmt(l.price)}</td>
-      <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;text-align:right;color:#334155">${Number(l.discount) > 0 ? Number(l.discount).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '%' : '-'}</td>
-      <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;text-align:right;color:#334155">${Number(l.discount) > 0 ? fmt(discAmt) : '-'}</td>
-      <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;text-align:right;color:#0f172a;font-weight:600">${fmt(l.total)}</td>
-    </tr>`
+  const invoicePages = paginateInvoiceItems(lines ?? [])
+  const itemPages = invoicePages.map((page, pageIndex) => {
+    const itemRows = page.items.map((l, idx) => {
+      const prod = productById.get(l.product_id) ?? {}
+      const discAmt = l.quantity * l.price * (l.discount / 100)
+      return `<tr class="invoice-item-row" style="background:${(idx + pageIndex) % 2 !== 0 ? '#f8fafc' : '#ffffff'}">
+        <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;color:#475569">${prod.code ?? '-'}</td>
+        <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;color:#0f172a;font-weight:500">${prod.name ?? '-'}</td>
+        <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;text-align:right;color:#334155">${l.quantity}</td>
+        <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;text-align:right;color:#334155">${fmt(l.price)}</td>
+        <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;text-align:right;color:#334155">${Number(l.discount) > 0 ? Number(l.discount).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '%' : '-'}</td>
+        <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;text-align:right;color:#334155">${Number(l.discount) > 0 ? fmt(discAmt) : '-'}</td>
+        <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;text-align:right;color:#0f172a;font-weight:600">${fmt(l.total)}</td>
+      </tr>`
+    }).join('')
+    const emptyRows = invoicePages.length === 1 ? Array.from({ length: Math.max(0, 6 - page.items.length) }).map(() =>
+      `<tr class="invoice-item-row"><td style="padding:2px 12px">&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`
+    ).join('') : ''
+    return `<div class="invoice-items-page ${pageIndex > 0 ? 'invoice-continuation-page' : ''}" style="padding:8px 32px">
+      <table style="width:100%;font-size:14px;border-collapse:collapse">
+        <thead><tr style="background:#fff;color:#000;border-bottom:2px solid #000">
+          <th style="text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase">Item Code</th>
+          <th style="text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase">Description</th>
+          <th style="text-align:right;padding:8px 12px;font-size:11px;text-transform:uppercase">Qty</th>
+          <th style="text-align:right;padding:8px 12px;font-size:11px;text-transform:uppercase">Unit Price</th>
+          <th style="text-align:right;padding:8px 12px;font-size:11px;text-transform:uppercase">Disc %</th>
+          <th style="text-align:right;padding:8px 12px;font-size:11px;text-transform:uppercase">Disc. Amount</th>
+          <th style="text-align:right;padding:8px 12px;font-size:11px;text-transform:uppercase">Amount</th>
+        </tr></thead><tbody>${itemRows}${emptyRows}</tbody>
+      </table>
+    </div>`
   }).join('')
-
-  const emptyRows = Array.from({ length: Math.max(0, 14 - (lines ?? []).length) }).map(() =>
-    `<tr><td style="padding:6px 12px">&nbsp;</td><td style="padding:6px 12px"></td><td style="padding:6px 12px"></td><td style="padding:6px 12px"></td><td style="padding:6px 12px"></td><td style="padding:6px 12px"></td><td style="padding:6px 12px"></td></tr>`
-  ).join('')
 
   return `<div style="background:#fff;color:#000;font-family:Helvetica,Arial,sans-serif;width:210mm;min-height:297mm;display:flex;flex-direction:column">
   <div style="padding:12px 32px 8px;display:flex;justify-content:space-between;border-bottom:3px solid #1e293b">
@@ -76,24 +92,9 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
     </div>
   </div>
 
-  <div style="padding:8px 32px;flex:1;display:flex;flex-direction:column">
-    <table style="width:100%;font-size:14px;border-collapse:collapse">
-      <thead>
-        <tr style="background:#ffffff;color:#000000;border-bottom:2px solid #000">
-          <th style="text-align:left;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Item Code</th>
-          <th style="text-align:left;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Description</th>
-          <th style="text-align:right;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Qty</th>
-          <th style="text-align:right;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Unit Price</th>
-          <th style="text-align:right;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Disc %</th>
-          <th style="text-align:right;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Disc. Amount</th>
-          <th style="text-align:right;font-weight:600;padding:8px 12px;font-size:11px;text-transform:uppercase;letter-spacing:1px">Amount</th>
-        </tr>
-      </thead>
-      <tbody>${itemRows}${emptyRows}</tbody>
-    </table>
-  </div>
+  ${itemPages}
 
-  <div style="margin-top:auto">
+  <div class="invoice-closing-section">
     <div style="padding:0 32px 8px;display:flex;justify-content:space-between;align-items:start">
       <div style="font-size:12px;color:#334155">
         <div style="font-weight:600;color:#334155">Bank Details</div>
@@ -132,7 +133,7 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
 
 const exportInvoicePdf = async (html, filename) => {
   const wrapper = document.createElement('div')
-  wrapper.className = 'pdf-export-wrapper'
+  wrapper.className = 'pdf-export-wrapper invoice-pdf-export-wrapper'
   wrapper.innerHTML = html
   document.body.appendChild(wrapper)
 
@@ -144,6 +145,7 @@ const exportInvoicePdf = async (html, filename) => {
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2, useCORS: true },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['css', 'legacy'], before: '.invoice-continuation-page', avoid: ['.invoice-item-row', '.invoice-closing-section'] },
   }
 
   try {

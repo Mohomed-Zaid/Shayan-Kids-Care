@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
+import { buildOrderSnapshot, calculateOrderLine, updateOrderSnapshot } from '../lib/orderSnapshot'
 import { Plus, Trash2, ArrowLeft, AlertTriangle, X } from 'lucide-react'
 
 function emptyLine() {
@@ -51,6 +52,11 @@ export default function OrderEditPage() {
       }
 
       const order = ordRes.data
+      if (!['pending', 'confirmed'].includes(order.status)) {
+        toast.error('Only pending or confirmed orders can be edited')
+        navigate(`/orders/${id}`, { replace: true })
+        return
+      }
       setCustomerId(order.customer_id ?? '')
       setRepId(order.rep_id ?? '')
       setPaymentType(order.payment_type ?? 'credit')
@@ -81,15 +87,7 @@ export default function OrderEditPage() {
     return () => { mounted = false }
   }, [id])
 
-  const linesWithTotals = useMemo(() => {
-    return lines.map((l) => {
-      const qty = Number(l.quantity || 0)
-      const price = Number(l.price || 0)
-      const discPct = Number(l.discount || 0)
-      const discAmt = qty * price * (discPct / 100)
-      return { ...l, total: qty * price - discAmt }
-    })
-  }, [lines])
+  const linesWithTotals = useMemo(() => lines.map(calculateOrderLine), [lines])
 
   const grandTotal = useMemo(() => {
     return linesWithTotals.reduce((sum, l) => sum + (l.total ?? 0), 0)
@@ -128,16 +126,8 @@ export default function OrderEditPage() {
   const onSave = async () => {
     setError(null)
 
-    const cleanedLines = linesWithTotals
-      .filter((l) => l.product_id)
-      .map((l) => ({
-        product_id: l.product_id,
-        quantity: Number(l.quantity || 0),
-        price: Number(l.price || 0),
-        discount: Number(l.discount || 0),
-        total: Number(l.total || 0),
-      }))
-      .filter((l) => l.quantity > 0)
+    const snapshot = buildOrderSnapshot(lines, vatEnabled, VAT_RATE)
+    const cleanedLines = snapshot.items
 
     if (!customerId) {
       setError('Select a customer')
@@ -151,36 +141,11 @@ export default function OrderEditPage() {
 
     setSaving(true)
     try {
-      // Update order header
-      const { error: ordErr } = await supabase
-        .from('orders')
-        .update({
-          customer_id: customerId,
-          rep_id: repId || null,
-          total: totalWithVat,
-          vat_rate: vatEnabled ? VAT_RATE : 0,
-          vat_amount: vatAmount,
-          payment_type: paymentType,
-        })
-        .eq('id', id)
-
-      if (ordErr) throw ordErr
-
-      // Delete old items and re-insert
-      const { error: delErr } = await supabase.from('order_items').delete().eq('order_id', id)
-      if (delErr) throw delErr
-
-      const itemsPayload = cleanedLines.map((l) => ({
-        order_id: id,
-        product_id: l.product_id,
-        quantity: l.quantity,
-        price: l.price,
-        discount: l.discount,
-        total: l.total,
-      }))
-
-      const { error: itemsErr } = await supabase.from('order_items').insert(itemsPayload)
-      if (itemsErr) throw itemsErr
+      await updateOrderSnapshot(supabase, id, {
+        customerId,
+        repId,
+        paymentType,
+      }, snapshot)
 
       toast.success('Order updated successfully')
       logAction({ action: 'edit_order', targetType: 'order', targetId: id, targetLabel: `ORD-${id}` })

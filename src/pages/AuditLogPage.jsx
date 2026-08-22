@@ -5,7 +5,7 @@ import { ScrollText, Search, Filter, Loader2, User, FileText, Trash2, Edit3, Plu
 
 const ACTION_ICONS = {
   login: LogIn, logout: LogOut,
-  create_order: ShoppingCart, confirm_order: CheckCircle, cancel_order: XCircle, delete_order: Trash2, edit_order: Edit3, deliver_order: Truck, invoice_order: ArrowRightLeft,
+  create_order: ShoppingCart, confirm_order: CheckCircle, cancel_order: XCircle, delete_order: Trash2, edit_order: Edit3, deliver_order: Truck, invoice_order: ArrowRightLeft, order_data_corrected: CheckCircle,
   create_invoice: FileText, delete_invoice: Trash2, edit_invoice: Edit3,
   create_product: PlusCircle, delete_product: Trash2, edit_product: Edit3,
   create_customer: PlusCircle, delete_customer: Trash2, edit_customer: Edit3,
@@ -33,6 +33,7 @@ const ACTION_COLORS = {
   edit_order: 'text-amber-600 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30',
   deliver_order: 'text-green-600 bg-green-50 dark:text-green-300 dark:bg-green-900/30',
   invoice_order: 'text-emerald-600 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-900/30',
+  order_data_corrected: 'text-amber-600 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30',
   create_invoice: 'text-emerald-600 bg-emerald-50 dark:text-emerald-300 dark:bg-emerald-900/30',
   delete_invoice: 'text-red-600 bg-red-50 dark:text-red-300 dark:bg-red-900/30',
   edit_invoice: 'text-amber-600 bg-amber-50 dark:text-amber-300 dark:bg-amber-900/30',
@@ -77,7 +78,7 @@ const ACTION_COLORS = {
 
 const ACTION_LABELS = {
   login: 'Login', logout: 'Logout',
-  create_order: 'Created Order', confirm_order: 'Confirmed Order', cancel_order: 'Cancelled Order', delete_order: 'Deleted Order', edit_order: 'Edited Order', deliver_order: 'Delivered Order', invoice_order: 'Invoiced Order',
+  create_order: 'Created Order', confirm_order: 'Confirmed Order', cancel_order: 'Cancelled Order', delete_order: 'Deleted Order', edit_order: 'Edited Order', deliver_order: 'Delivered Order', invoice_order: 'Invoiced Order', order_data_corrected: 'Order Data Corrected',
   create_invoice: 'Created Invoice', delete_invoice: 'Deleted Invoice', edit_invoice: 'Edited Invoice',
   create_product: 'Created Product', delete_product: 'Deleted Product', edit_product: 'Edited Product',
   create_customer: 'Created Customer', delete_customer: 'Deleted Customer', edit_customer: 'Edited Customer',

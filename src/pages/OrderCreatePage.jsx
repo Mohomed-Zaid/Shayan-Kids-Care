@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
+import { buildOrderSnapshot, calculateOrderLine, createOrderSnapshot } from '../lib/orderSnapshot'
 import { Plus, Trash2, ArrowLeft, AlertTriangle, X } from 'lucide-react'
 
 function emptyLine() {
@@ -131,15 +132,7 @@ export default function OrderCreatePage() {
     loadCustomerSummary()
   }, [customerId, customers])
 
-  const linesWithTotals = useMemo(() => {
-    return lines.map((l) => {
-      const qty = Number(l.quantity || 0)
-      const price = Number(l.price || 0)
-      const discPct = Number(l.discount || 0)
-      const discAmt = qty * price * (discPct / 100)
-      return { ...l, total: qty * price - discAmt }
-    })
-  }, [lines])
+  const linesWithTotals = useMemo(() => lines.map(calculateOrderLine), [lines])
 
   const grandTotal = useMemo(() => {
     return linesWithTotals.reduce((sum, l) => sum + (l.total ?? 0), 0)
@@ -178,16 +171,8 @@ export default function OrderCreatePage() {
   const onSave = async () => {
     setError(null)
 
-    const cleanedLines = linesWithTotals
-      .filter((l) => l.product_id)
-      .map((l) => ({
-        product_id: l.product_id,
-        quantity: Number(l.quantity || 0),
-        price: Number(l.price || 0),
-        discount: Number(l.discount || 0),
-        total: Number(l.total || 0),
-      }))
-      .filter((l) => l.quantity > 0)
+    const snapshot = buildOrderSnapshot(lines, vatEnabled, VAT_RATE)
+    const cleanedLines = snapshot.items
 
     if (!customerId) {
       setError('Select a customer')
@@ -226,29 +211,15 @@ export default function OrderCreatePage() {
 
     setSaving(true)
     try {
-      const { data: order, error: ordErr } = await supabase
-        .from('orders')
-        .insert({ customer_id: customerId, rep_id: repId || null, total: totalWithVat, vat_rate: vatEnabled ? VAT_RATE : 0, vat_amount: vatAmount, status: 'pending', payment_type: paymentType })
-        .select('id, order_number')
-        .single()
-
-      if (ordErr) throw ordErr
-
-      const itemsPayload = cleanedLines.map((l) => ({
-        order_id: order.id,
-        product_id: l.product_id,
-        quantity: l.quantity,
-        price: l.price,
-        discount: l.discount,
-        total: l.total,
-      }))
-
-      const { error: itemsErr } = await supabase.from('order_items').insert(itemsPayload)
-      if (itemsErr) throw itemsErr
+      const order = await createOrderSnapshot(supabase, {
+        customerId,
+        repId,
+        paymentType,
+      }, snapshot)
 
       toast.success('Order created successfully')
-      logAction({ action: 'create_order', targetType: 'order', targetId: order.id, targetLabel: `ORD-${String(order.order_number ?? '').padStart(4, '0')}` })
-      navigate(`/orders/${order.id}`, { replace: true })
+      logAction({ action: 'create_order', targetType: 'order', targetId: order.created_order_id, targetLabel: `ORD-${String(order.created_order_number ?? '').padStart(4, '0')}` })
+      navigate(`/orders/${order.created_order_id}`, { replace: true })
     } catch (e) {
       console.error(e)
       setError(e?.message ?? 'Failed to save order')
