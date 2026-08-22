@@ -342,14 +342,12 @@ export default function InvoiceViewPage() {
               Download PDF
             </button>
           </PermissionGate>
-          {!invoice.order_id && (
-            <PermissionGate module="invoices" action="edit">
-              <Link to={`/invoices/${id}/edit`} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
-                <Pencil size={15} />
-                Edit
-              </Link>
-            </PermissionGate>
-          )}
+          <PermissionGate module="invoices" action="edit">
+            <Link to={`/invoices/${id}/edit`} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
+              <Pencil size={15} />
+              Edit
+            </Link>
+          </PermissionGate>
           <PermissionGate module="invoices" action="delete">
             <button onClick={onDelete} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-red-600 text-white hover:bg-red-700 transition-colors shadow-sm">
               <Trash2 size={15} />

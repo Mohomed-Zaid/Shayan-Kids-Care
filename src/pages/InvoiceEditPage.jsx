@@ -31,6 +31,7 @@ export default function InvoiceEditPage() {
   const [lines, setLines] = useState([emptyLine()])
 
   const [originalItems, setOriginalItems] = useState([])
+  const [linkedOrderId, setLinkedOrderId] = useState(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
@@ -58,11 +59,7 @@ export default function InvoiceEditPage() {
         return
       }
 
-      if (invRes.data.order_id || linkedOrderRes.data?.id) {
-        toast.error('Invoices generated from orders cannot be edited independently')
-        navigate(`/invoices/${id}`, { replace: true })
-        return
-      }
+      setLinkedOrderId(invRes.data.order_id || linkedOrderRes.data?.id || null)
 
       setCustomers(custRes.data ?? [])
       setProducts(prodRes.data ?? [])
@@ -188,6 +185,29 @@ export default function InvoiceEditPage() {
 
     setSaving(true)
     try {
+      if (linkedOrderId) {
+        const snapshotItems = cleanedLines.map((line) => ({
+          ...line,
+          discount_amount: Number(line.quantity * line.price * line.discount / 100),
+        }))
+        const { error: linkedEditError } = await supabase.rpc('update_linked_invoice_snapshot', {
+          p_invoice_id: id,
+          p_customer_id: customerId,
+          p_rep_id: repId || null,
+          p_payment_type: paymentType,
+          p_vat_rate: vatEnabled ? VAT_RATE : 0,
+          p_vat_amount: vatAmount,
+          p_total: totalWithVat,
+          p_items: snapshotItems,
+        })
+        if (linkedEditError) throw linkedEditError
+
+        toast.success('Invoice and linked order updated successfully')
+        logAction({ action: 'edit_linked_invoice', targetType: 'invoice', targetId: id })
+        navigate(`/invoices/${id}`, { replace: true })
+        return
+      }
+
       // Restore stock from original items
       const restoreStocks = originalItems.map((oi) => {
         const product = productById.get(oi.product_id)

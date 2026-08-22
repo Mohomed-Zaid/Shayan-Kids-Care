@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import PermissionGate from '../components/PermissionGate'
-import { usePermissions } from '../contexts/PermissionsContext'
+import { useAuth } from '../contexts/AuthContext'
 import { buildConsistencyRows } from '../lib/orderConsistency'
 import { pressDateISO, formatLocalDate } from '../lib/localDate'
 import { convertOrderToInvoice } from '../lib/orderConversion'
@@ -46,7 +46,8 @@ export default function OrdersPage() {
   const [invSort, setInvSort] = useState('newest')
   const navigate = useNavigate()
   const toast = useToast()
-  const { isSuperAdmin } = usePermissions()
+  const { user } = useAuth()
+  const canUseConsistencyCheck = user?.email?.trim().toLowerCase() === 'zaidn2848@gmail.com'
   const [consistencyOpen, setConsistencyOpen] = useState(false)
   const [checkingConsistency, setCheckingConsistency] = useState(false)
   const [consistencyRows, setConsistencyRows] = useState([])
@@ -344,7 +345,7 @@ export default function OrdersPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {isSuperAdmin && (
+          {canUseConsistencyCheck && (
             <button onClick={checkConsistency} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-200">
               Check Order/Invoice Consistency
             </button>
@@ -358,7 +359,7 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {isSuperAdmin && consistencyOpen && (
+      {canUseConsistencyCheck && consistencyOpen && (
         <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 dark:border-amber-700 dark:bg-amber-950/30">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -598,11 +599,18 @@ export default function OrdersPage() {
                             </PermissionGate>
                           )}
                           {((o.status === 'invoiced' || o.status === 'converted' || o.status === 'delivered') && o.invoice_id) && (
+                            <>
                             <PermissionGate module="invoices" action="view">
                               <Link to={`/invoices/${o.invoice_id}`} className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors" title="View Invoice">
                                 <FileText size={15} />
                               </Link>
                             </PermissionGate>
+                            <PermissionGate module="invoices" action="edit">
+                              <Link to={`/invoices/${o.invoice_id}/edit`} className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors" title="Edit Invoice">
+                                <Pencil size={15} />
+                              </Link>
+                            </PermissionGate>
+                            </>
                           )}
                           {(o.status === 'pending' || o.status === 'confirmed') && (
                             <PermissionGate module="orders" action="delete">

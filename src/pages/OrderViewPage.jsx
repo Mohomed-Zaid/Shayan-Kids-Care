@@ -274,6 +274,12 @@ export default function OrderViewPage() {
                   View Invoice
                 </Link>
               </PermissionGate>
+              <PermissionGate module="invoices" action="edit">
+                <Link to={`/invoices/${order.invoice_id}/edit`} className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm">
+                  <Pencil size={15} />
+                  Edit Invoice
+                </Link>
+              </PermissionGate>
             </>
           )}
           {(order.status === 'pending' || order.status === 'confirmed') && (
