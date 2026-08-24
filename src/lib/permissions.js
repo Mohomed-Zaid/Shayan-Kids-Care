@@ -274,6 +274,28 @@ export const PERMISSION_CATALOG = [
     ],
   },
   {
+    id: 'reports_admin_system',
+    label: 'Admin, Audit & System Reports',
+    group: 'Reports',
+    route: '/reports/admin-system',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'print', label: 'Print' },
+      { id: 'export', label: 'Export' },
+    ],
+  },
+  {
+    id: 'reports_returns_delivery',
+    label: 'Returns & Delivery Reports',
+    group: 'Reports',
+    route: '/reports/returns-delivery',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'print', label: 'Print' },
+      { id: 'export', label: 'Export' },
+    ],
+  },
+  {
     id: 'reports_finance',
     label: 'Finance Reports',
     group: 'Reports',
@@ -463,6 +485,8 @@ export const NAV_PERMISSION_MAP = {
   '/reports/purchases': 'reports_purchase',
   '/reports/vendors': 'reports_vendors',
   '/reports/reps': 'reports_reps',
+  '/reports/returns-delivery': 'reports_returns_delivery',
+  '/reports/admin-system': 'reports_admin_system',
   '/reports/inventory/detailed': 'reports_inventory',
   '/reports/finance': 'reports_finance',
 }
@@ -471,6 +495,8 @@ export function moduleForPath(pathname) {
   const path = pathname.split('?')[0]
   if (path.startsWith('/reports/vendors')) return 'reports_vendors'
   if (path.startsWith('/reports/reps')) return 'reports_reps'
+  if (path.startsWith('/reports/returns-delivery')) return 'reports_returns_delivery'
+  if (path.startsWith('/reports/admin-system')) return 'reports_admin_system'
   if (path.startsWith('/reports/purchases')) return 'reports_purchase'
   if (path.startsWith('/reports/inventory/detailed')) return 'reports_inventory'
   if (path.startsWith('/reports/finance')) return 'reports_finance'

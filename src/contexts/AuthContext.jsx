@@ -102,9 +102,7 @@ export function AuthProvider({ children }) {
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       if (_event === 'SIGNED_IN' && newSession) {
-        logAction({ action: 'login' })
-      } else if (_event === 'SIGNED_OUT') {
-        logAction({ action: 'logout' })
+        logAction({ action: 'login_successful', targetType: 'security_event', module: 'Security', status: 'successful', metadata: { device: navigator.userAgent } })
       }
       setSession(newSession)
       setInitializing(false)
@@ -129,6 +127,7 @@ export function AuthProvider({ children }) {
         return data
       },
       signOut: async () => {
+        await logAction({ action: 'logout', targetType: 'security_event', module: 'Security', status: 'successful', metadata: { device: navigator.userAgent } })
         const { error } = await supabase.auth.signOut()
         if (error) throw error
       },

@@ -172,16 +172,8 @@ export default function AuditLogPage() {
   const [page, setPage] = useState(0)
   const PAGE_SIZE = 50
 
-  const RETENTION_DAYS = 90
-
-  const cleanupOldLogs = async () => {
-    const cutoff = new Date(Date.now() - RETENTION_DAYS * 86400000).toISOString()
-    await supabase.from('audit_logs').delete().lt('created_at', cutoff)
-  }
-
   const load = async () => {
     setLoading(true)
-    await cleanupOldLogs()
     let query = supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
     const { data, error } = await query
     if (error) { toast.error(error.message); setLogs([]) }
@@ -195,7 +187,8 @@ export default function AuditLogPage() {
 
   const filtered = useMemo(() => {
     return logs.filter((l) => {
-      if (search && !l.action.toLowerCase().includes(search.toLowerCase()) && !(l.target_label ?? '').toLowerCase().includes(search.toLowerCase()) && !(l.details ?? '').toLowerCase().includes(search.toLowerCase()) && !l.user_name.toLowerCase().includes(search.toLowerCase())) return false
+      const detailText = typeof l.details === 'string' ? l.details : JSON.stringify(l.details ?? {})
+      if (search && !l.action.toLowerCase().includes(search.toLowerCase()) && !(l.target_label ?? '').toLowerCase().includes(search.toLowerCase()) && !detailText.toLowerCase().includes(search.toLowerCase()) && !l.user_name.toLowerCase().includes(search.toLowerCase())) return false
       if (actionFilter) {
         if (actionFilter === 'login') return l.action === 'login' || l.action === 'logout'
         if (actionFilter === 'delete') return l.action.includes('delete')

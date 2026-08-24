@@ -276,7 +276,7 @@ export default function InvoiceViewPage() {
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['css', 'legacy'], before: '.invoice-continuation-page', avoid: ['.invoice-item-row', '.invoice-closing-section'] },
+      pagebreak: { mode: ['css', 'legacy'], before: '.invoice-continuation-page', avoid: ['.invoice-item-row', '.invoice-closing-section', '.document-settlement-section', '.signature-section'] },
     }
 
     try {
@@ -434,11 +434,13 @@ export default function InvoiceViewPage() {
           <div className="invoice-items-pages">
             {invoicePages.map((page, pageIndex) => (
               <div key={pageIndex} className={`invoice-items-page px-8 py-2 ${pageIndex > 0 ? 'invoice-continuation-page' : ''}`}>
-                <table className="w-full text-sm invoice-items-table">
+                <table className="w-full text-sm invoice-items-table sales-line-table">
+                  <colgroup><col/><col/><col/><col/><col/><col/><col/><col/></colgroup>
                   <thead><tr className="bg-white text-black border-b-2 border-black">
-                    <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Item Code</th>
+                    <th className="text-center font-semibold px-2 py-2 text-xs uppercase tracking-wider">No.</th>
+                    <th className="text-left font-semibold px-2 py-2 text-xs uppercase tracking-wider">Item Code</th>
                     <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Description</th>
-                    <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Qty</th>
+                    <th className="text-center font-semibold px-2 py-2 text-xs uppercase tracking-wider">Qty</th>
                     <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Unit Price</th>
                     <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Disc %</th>
                     <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Disc. Amount</th>
@@ -446,19 +448,20 @@ export default function InvoiceViewPage() {
                   </tr></thead>
                   <tbody>
                     {page.items.map((it, idx) => (
-                      <tr key={it.id} className={`invoice-item-row border-b border-slate-100 dark:border-slate-700 ${(idx + pageIndex) % 2 !== 0 ? 'bg-slate-50 dark:bg-slate-800/50' : ''}`}>
-                        <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{it.products?.code ?? '-'}</td>
+                      <tr key={it.id} className={`invoice-item-row border-b border-slate-100 dark:border-slate-700 ${(page.startIndex + idx) % 2 !== 0 ? 'bg-slate-50 dark:bg-slate-800/50' : ''}`}>
+                        <td className="px-2 py-1.5 text-center text-slate-600 dark:text-slate-300">{page.startIndex + idx + 1}</td>
+                        <td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">{it.products?.code ?? '-'}</td>
                         <td className="px-3 py-1.5 text-slate-900 dark:text-white font-medium">{it.products?.name ?? '-'}</td>
-                        <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{it.quantity}</td>
-                        <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">Rs. {Number(it.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                        <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{Number(it.discount ?? 0) > 0 ? `${Number(it.discount).toLocaleString(undefined, { minimumFractionDigits: 2 })}%` : '-'}</td>
-                        <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{Number(it.discount ?? 0) > 0 ? `Rs. ${(Number(it.quantity ?? 0) * Number(it.price ?? 0) * Number(it.discount ?? 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}</td>
-                        <td className="px-3 py-1.5 text-right text-slate-900 dark:text-white font-semibold">Rs. {Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="px-2 py-1.5 text-center text-slate-700 dark:text-slate-300">{it.quantity}</td>
+                        <td className="money-cell px-2 py-1.5 text-right text-slate-700 dark:text-slate-300">Rs. {Number(it.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td className="px-2 py-1.5 text-center text-slate-700 dark:text-slate-300">{Number(it.discount ?? 0) > 0 ? `${Number(it.discount).toLocaleString(undefined, { minimumFractionDigits: 2 })}%` : '-'}</td>
+                        <td className="money-cell px-2 py-1.5 text-right text-slate-700 dark:text-slate-300">{Number(it.discount ?? 0) > 0 ? `Rs. ${(Number(it.quantity ?? 0) * Number(it.price ?? 0) * Number(it.discount ?? 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}</td>
+                        <td className="money-cell px-2 py-1.5 text-right text-slate-900 dark:text-white font-semibold">Rs. {Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       </tr>
                     ))}
-                    {invoicePages.length === 1 && Array.from({ length: Math.max(0, 6 - page.items.length) }).map((_, i) => (
-                      <tr key={`empty-${i}`} className="invoice-item-row border-b border-slate-100 dark:border-slate-700">
-                        <td className="px-3 py-0.5">&nbsp;</td><td /><td /><td /><td /><td /><td />
+                    {Array.from({ length: page.blankRows }).map((_, i) => (
+                      <tr key={`writing-${i}`} className="invoice-item-row writing-row border-b border-slate-200 dark:border-slate-700">
+                        <td className="px-2 text-center text-slate-600 dark:text-slate-300">{items.length + i + 1}</td><td /><td /><td /><td /><td /><td /><td />
                       </tr>
                     ))}
                   </tbody>
@@ -469,7 +472,7 @@ export default function InvoiceViewPage() {
 
           {/* Totals + Signature + Footer pushed to bottom */}
           <div className="invoice-closing-section">
-            <div className="px-8 pb-2 flex justify-between items-start">
+            <div className="document-settlement-section px-8 pb-2 flex justify-between items-start">
               {/* Bank Details */}
               <div className="text-xs text-slate-600 dark:text-slate-300">
                 <div className="font-semibold text-slate-700 dark:text-slate-200">Bank Details</div>
@@ -505,16 +508,8 @@ export default function InvoiceViewPage() {
                 </div>
               </div>
             </div>
-            <div className="px-8 py-2 grid grid-cols-3 gap-8 border-t border-slate-200 dark:border-slate-700">
-              <div>
-                <div className="border-b border-slate-300 dark:border-slate-600 pb-2 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-medium">Checking</div>
-              </div>
-              <div>
-                <div className="border-b border-slate-300 dark:border-slate-600 pb-2 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-medium">Received</div>
-              </div>
-              <div>
-                <div className="border-b border-slate-300 dark:border-slate-600 pb-2 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-medium">Customer Signature</div>
-              </div>
+            <div className="signature-section px-8 py-3 grid grid-cols-3 gap-8 border-t border-slate-200 dark:border-slate-700">
+              {['Checking','Received','Customer Signature'].map(label=><div key={label} className="signature-block text-center"><div className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">{label}</div><div className="signature-space"/><div className="signature-line border-t border-slate-500 dark:border-slate-500"/><div className="pt-1 text-[10px] text-slate-500 dark:text-slate-400">Signature</div></div>)}
             </div>
 
             <div className="px-8 py-2 border-t-2 border-slate-800 dark:border-slate-600 text-center text-xs text-slate-500 dark:text-slate-400">

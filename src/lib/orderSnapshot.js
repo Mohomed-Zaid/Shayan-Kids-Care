@@ -42,6 +42,14 @@ function rpcRow(data) {
   return Array.isArray(data) ? data[0] : data
 }
 
+function orderRpcError(error) {
+  const message = error?.message || ''
+  if (/relation\s+["']?orders["']?\s+does not exist/i.test(message)) {
+    return new Error('The order database functions need the latest search-path migration. Apply supabase/migrations/20260824010000_order_rpc_search_path_fix.sql, then try again.')
+  }
+  return new Error(message || ORDER_DATA_VALIDATION_MESSAGE)
+}
+
 export async function createOrderSnapshot(supabase, header, snapshot) {
   const { data, error } = await supabase.rpc('create_order_from_snapshot', {
     p_customer_id: header.customerId,
@@ -52,7 +60,7 @@ export async function createOrderSnapshot(supabase, header, snapshot) {
     p_total: snapshot.total,
     p_items: snapshot.items,
   })
-  if (error) throw new Error(error.message || ORDER_DATA_VALIDATION_MESSAGE)
+  if (error) throw orderRpcError(error)
   const row = rpcRow(data)
   if (!row?.created_order_id) throw new Error(ORDER_DATA_VALIDATION_MESSAGE)
   return row
@@ -69,5 +77,5 @@ export async function updateOrderSnapshot(supabase, orderId, header, snapshot) {
     p_total: snapshot.total,
     p_items: snapshot.items,
   })
-  if (error) throw new Error(error.message || ORDER_DATA_VALIDATION_MESSAGE)
+  if (error) throw orderRpcError(error)
 }

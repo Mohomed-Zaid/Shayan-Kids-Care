@@ -24,25 +24,27 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
     const itemRows = page.items.map((l, idx) => {
       const prod = productById.get(l.product_id) ?? {}
       const discAmt = l.quantity * l.price * (l.discount / 100)
-      return `<tr class="invoice-item-row" style="background:${(idx + pageIndex) % 2 !== 0 ? '#f8fafc' : '#ffffff'}">
-        <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;color:#475569">${prod.code ?? '-'}</td>
+      return `<tr class="invoice-item-row" style="background:${(page.startIndex + idx) % 2 !== 0 ? '#f8fafc' : '#ffffff'}">
+        <td style="border-bottom:1px solid #f1f5f9;padding:6px 4px;text-align:center;color:#475569">${page.startIndex + idx + 1}</td>
+        <td style="border-bottom:1px solid #f1f5f9;padding:6px 6px;color:#475569">${prod.code ?? '-'}</td>
         <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;color:#0f172a;font-weight:500">${prod.name ?? '-'}</td>
-        <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;text-align:right;color:#334155">${l.quantity}</td>
-        <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;text-align:right;color:#334155">${fmt(l.price)}</td>
-        <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;text-align:right;color:#334155">${Number(l.discount) > 0 ? Number(l.discount).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '%' : '-'}</td>
-        <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;text-align:right;color:#334155">${Number(l.discount) > 0 ? fmt(discAmt) : '-'}</td>
-        <td style="border-bottom:1px solid #f1f5f9;padding:6px 12px;text-align:right;color:#0f172a;font-weight:600">${fmt(l.total)}</td>
+        <td style="border-bottom:1px solid #f1f5f9;padding:6px 4px;text-align:center;color:#334155">${l.quantity}</td>
+        <td style="border-bottom:1px solid #f1f5f9;padding:6px;text-align:right;white-space:nowrap;color:#334155">${fmt(l.price)}</td>
+        <td style="border-bottom:1px solid #f1f5f9;padding:6px 4px;text-align:center;color:#334155">${Number(l.discount) > 0 ? Number(l.discount).toLocaleString(undefined, { minimumFractionDigits: 2 }) + '%' : '-'}</td>
+        <td style="border-bottom:1px solid #f1f5f9;padding:6px;text-align:right;white-space:nowrap;color:#334155">${Number(l.discount) > 0 ? fmt(discAmt) : '-'}</td>
+        <td style="border-bottom:1px solid #f1f5f9;padding:6px;text-align:right;white-space:nowrap;color:#0f172a;font-weight:600">${fmt(l.total)}</td>
       </tr>`
     }).join('')
-    const emptyRows = invoicePages.length === 1 ? Array.from({ length: Math.max(0, 6 - page.items.length) }).map(() =>
-      `<tr class="invoice-item-row"><td style="padding:2px 12px">&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`
-    ).join('') : ''
+    const emptyRows = Array.from({ length: page.blankRows }).map((_, index) =>
+      `<tr class="invoice-item-row writing-row" style="height:9mm"><td style="padding:2px 4px;text-align:center">${lines.length + index + 1}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`
+    ).join('')
     return `<div class="invoice-items-page ${pageIndex > 0 ? 'invoice-continuation-page' : ''}" style="padding:8px 32px">
-      <table style="width:100%;font-size:14px;border-collapse:collapse">
+      <table class="sales-line-table" style="width:100%;font-size:14px;border-collapse:collapse;table-layout:fixed"><colgroup><col style="width:4%"><col style="width:8%"><col style="width:27%"><col style="width:7%"><col style="width:13%"><col style="width:7%"><col style="width:15%"><col style="width:19%"></colgroup>
         <thead><tr style="background:#fff;color:#000;border-bottom:2px solid #000">
-          <th style="text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase">Item Code</th>
+          <th style="text-align:center;padding:8px 4px;font-size:11px;text-transform:uppercase">No.</th>
+          <th style="text-align:left;padding:8px 6px;font-size:11px;text-transform:uppercase">Item Code</th>
           <th style="text-align:left;padding:8px 12px;font-size:11px;text-transform:uppercase">Description</th>
-          <th style="text-align:right;padding:8px 12px;font-size:11px;text-transform:uppercase">Qty</th>
+          <th style="text-align:center;padding:8px 4px;font-size:11px;text-transform:uppercase">Qty</th>
           <th style="text-align:right;padding:8px 12px;font-size:11px;text-transform:uppercase">Unit Price</th>
           <th style="text-align:right;padding:8px 12px;font-size:11px;text-transform:uppercase">Disc %</th>
           <th style="text-align:right;padding:8px 12px;font-size:11px;text-transform:uppercase">Disc. Amount</th>
@@ -52,7 +54,7 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
     </div>`
   }).join('')
 
-  return `<div style="background:#fff;color:#000;font-family:Helvetica,Arial,sans-serif;width:210mm;min-height:297mm;display:flex;flex-direction:column">
+  return `<div class="invoice-print-document" style="background:#fff;color:#000;font-family:Helvetica,Arial,sans-serif;width:210mm;min-height:297mm;display:flex;flex-direction:column">
   <div style="padding:12px 32px 8px;display:flex;justify-content:space-between;border-bottom:3px solid #1e293b">
     <div style="display:flex;align-items:center;gap:16px">
       <div>
@@ -95,7 +97,7 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
   ${itemPages}
 
   <div class="invoice-closing-section">
-    <div style="padding:0 32px 8px;display:flex;justify-content:space-between;align-items:start">
+    <div class="document-settlement-section" style="padding:0 32px 8px;display:flex;justify-content:space-between;align-items:start">
       <div style="font-size:12px;color:#334155">
         <div style="font-weight:600;color:#334155">Bank Details</div>
         <div style="margin-top:4px;line-height:1.6">
@@ -118,10 +120,8 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
         </div>
       </div>
     </div>
-    <div style="padding:8px 32px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px;border-top:1px solid #e2e8f0">
-      <div style="border-bottom:1px solid #cbd5e1;padding-bottom:8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:500">Checking</div>
-      <div style="border-bottom:1px solid #cbd5e1;padding-bottom:8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:500">Received</div>
-      <div style="border-bottom:1px solid #cbd5e1;padding-bottom:8px;font-size:11px;color:#64748b;text-transform:uppercase;letter-spacing:1px;font-weight:500">Customer Signature</div>
+    <div class="signature-section" style="padding:10px 32px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:32px;border-top:1px solid #e2e8f0;break-inside:avoid;page-break-inside:avoid">
+      ${['Checking','Received','Customer Signature'].map(label=>`<div style="text-align:center"><div style="font-size:11px;color:#475569;text-transform:uppercase;letter-spacing:1px;font-weight:700">${label}</div><div style="height:60px"></div><div style="border-top:1px solid #64748b"></div><div style="padding-top:4px;font-size:10px;color:#64748b">Signature</div></div>`).join('')}
     </div>
     <div style="padding:4px 32px;border-top:3px solid #1e293b;text-align:center;font-size:12px;color:#64748b">
       <div style="font-weight:600;color:#334155">Shayan's Kids &amp; Toys Store</div>
@@ -145,7 +145,7 @@ const exportInvoicePdf = async (html, filename) => {
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { scale: 2, useCORS: true },
     jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-    pagebreak: { mode: ['css', 'legacy'], before: '.invoice-continuation-page', avoid: ['.invoice-item-row', '.invoice-closing-section'] },
+    pagebreak: { mode: ['css', 'legacy'], before: '.invoice-continuation-page', avoid: ['.invoice-item-row', '.invoice-closing-section', '.document-settlement-section', '.signature-section'] },
   }
 
   try {

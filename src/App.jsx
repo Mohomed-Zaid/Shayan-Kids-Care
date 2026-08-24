@@ -59,6 +59,8 @@ import InventoryReportsPage from './pages/reports/InventoryReportsPage'
 import FinanceReportsPage from './pages/reports/FinanceReportsPage'
 import VendorReportsPage from './pages/reports/VendorReportsPage'
 import RepCommissionReportsPage from './pages/reports/RepCommissionReportsPage'
+import ReturnsDeliveryReportsPage from './pages/reports/ReturnsDeliveryReportsPage'
+import AdminSystemReportsPage from './pages/reports/AdminSystemReportsPage'
 import SalaryTransferRequestPage from './pages/SalaryTransferRequestPage'
 
 function P({ module, action = 'view', children }) {
@@ -121,6 +123,8 @@ export default function App() {
                   <Route path="/reports/finance" element={<P module="reports_finance"><FinanceReportsPage /></P>} />
                   <Route path="/reports/vendors" element={<P module="reports_vendors"><VendorReportsPage /></P>} />
                   <Route path="/reports/reps" element={<P module="reports_reps"><RepCommissionReportsPage /></P>} />
+                  <Route path="/reports/returns-delivery" element={<P module="reports_returns_delivery"><ReturnsDeliveryReportsPage /></P>} />
+                  <Route path="/reports/admin-system" element={<P module="reports_admin_system"><AdminSystemReportsPage /></P>} />
                   
                   <Route path="/finance/journal-entry" element={<P module="finance_journal_entry"><JournalEntryPage /></P>} />
                   <Route path="/finance/rep-payments" element={<P module="finance_rep_payments"><RepPaymentsPage /></P>} />

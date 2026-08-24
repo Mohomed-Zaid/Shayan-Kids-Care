@@ -231,6 +231,10 @@ export default function UserPrivilegePage() {
       action: form.id ? 'update_user_privilege' : 'create_user_privilege',
       targetType: 'user_privilege',
       targetLabel: email,
+      module: 'User Privileges',
+      oldValues: form.id ? users.find((row) => row.id === form.id) : null,
+      newValues: { ...payload, permissions: payload.permissions },
+      metadata: { status: 'completed', password_updated: passwordUpdated },
     })
     setForm(null)
     await load()
@@ -249,7 +253,7 @@ export default function UserPrivilegePage() {
       return
     }
     toast.success('User privileges deleted')
-    logAction({ action: 'delete_user_privilege', targetType: 'user_privilege', targetLabel: row.email })
+    logAction({ action: 'delete_user_privilege', targetType: 'user_privilege', targetLabel: row.email, module: 'User Privileges', oldValues: row, metadata: { status: 'completed' } })
     await load()
   }
 

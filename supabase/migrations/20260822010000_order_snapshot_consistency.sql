@@ -74,7 +74,7 @@ create or replace function public.create_order_from_snapshot(
 returns table(created_order_id uuid, created_order_number bigint)
 language plpgsql
 security invoker
-set search_path = ''
+set search_path = public, pg_temp
 as $$
 declare
   v_order_id uuid;
@@ -131,7 +131,7 @@ create or replace function public.update_order_from_snapshot(
 returns void
 language plpgsql
 security invoker
-set search_path = ''
+set search_path = public, pg_temp
 as $$
 declare
   v_status text;
@@ -187,7 +187,7 @@ create or replace function public.sync_order_from_invoice(p_order_id uuid)
 returns jsonb
 language plpgsql
 security definer
-set search_path = ''
+set search_path = public, pg_temp
 as $$
 declare
   v_order public.orders%rowtype;

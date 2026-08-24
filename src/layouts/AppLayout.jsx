@@ -100,6 +100,8 @@ const navItems = [
       { key: 'rep-reports', label: 'Rep & Commission Reports', icon: UserCheck, nested: true, children: [
         { to: '/reports/reps', label: 'Rep Reports Suite' },
       ]},
+      { to: '/reports/returns-delivery', label: 'Returns & Delivery Reports', icon: Truck },
+      { to: '/reports/admin-system', label: 'Admin, Audit & System Reports', icon: Shield },
       { to: '/reports/finance', label: 'Finance Reports', icon: Wallet },
     ],
   },
@@ -161,6 +163,8 @@ function usePageTitle() {
     if (path.startsWith('/reports/purchases')) return 'Purchase Reports'
     if (path.startsWith('/reports/vendors')) return 'Vendor Reports'
     if (path.startsWith('/reports/reps')) return 'Rep & Commission Reports'
+    if (path.startsWith('/reports/returns-delivery')) return 'Returns & Delivery Reports'
+    if (path.startsWith('/reports/admin-system')) return 'Admin, Audit & System Reports'
     if (path.startsWith('/reports/finance')) return 'Finance Reports'
     if (path.startsWith('/reports')) return 'Reports'
     if (path === '/orders/new') return 'Create Order'

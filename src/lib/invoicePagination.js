@@ -1,6 +1,7 @@
 export const INVOICE_PAGINATION = Object.freeze({
   itemRowHeightMm: 9,
-  closingSectionHeightMm: 88,
+  blankWritingRows: 3,
+  closingSectionHeightMm: 115,
   firstPageRowsHeightMm: 180,
   continuedPageRowsHeightMm: 268,
 })
@@ -37,6 +38,8 @@ export function paginateInvoiceItems(items, metrics = INVOICE_PAGINATION) {
 
     pages.push({
       items: source.slice(offset, offset + take),
+      startIndex: offset,
+      blankRows: isFinalPage ? metrics.blankWritingRows : 0,
       isFirstPage,
       isFinalPage,
     })

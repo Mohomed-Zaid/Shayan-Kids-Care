@@ -205,7 +205,7 @@ export default function DashboardPage() {
           .eq('status', 'deposited'),
         supabase
           .from('returns')
-          .select('total_amount, status'),
+          .select('total_amount'),
         supabase
           .from('purchases')
           .select('total_amount'),

@@ -822,6 +822,39 @@
   @page { margin: 10mm; }
 }
 
+.pdf-export-document.returns-delivery-export { left: auto !important; position: static !important; top: auto !important; }
+.pdf-export-document.admin-system-export { left: auto !important; position: static !important; top: auto !important; }
+
+/* Admin reports use an explicit high-contrast palette in dark mode. */
+.dark .admin-system-screen table {
+  color: #ecfdf5;
+}
+
+.dark .admin-system-screen table thead th {
+  color: #f0fdf4;
+}
+
+.dark .admin-system-screen table tbody td {
+  color: #d1fae5;
+}
+
+.dark .admin-system-screen table tbody td span {
+  color: #ecfdf5;
+  background-color: rgba(6, 95, 70, 0.9);
+}
+
+.dark .admin-system-screen table tbody tr:hover td {
+  color: #ffffff;
+}
+
+@media print {
+  .returns-delivery-screen { display: none !important; }
+  .returns-delivery-export { left: auto !important; position: static !important; top: auto !important; width: auto !important; }
+  .admin-system-screen { display: none !important; }
+  .admin-system-export { left: auto !important; position: static !important; top: auto !important; width: auto !important; }
+  @page { size: A4 landscape; margin: 8mm; }
+}
+
 
 /* Explicit invoice pagination */
 .invoice-print-document {
@@ -832,6 +865,28 @@
   break-inside: avoid !important;
   page-break-inside: avoid !important;
 }
+.sales-line-table {
+  table-layout: fixed;
+  width: 100%;
+}
+.sales-line-table col:nth-child(1) { width: 4%; }
+.sales-line-table col:nth-child(2) { width: 8%; }
+.sales-line-table col:nth-child(3) { width: 27%; }
+.sales-line-table col:nth-child(4) { width: 7%; }
+.sales-line-table col:nth-child(5) { width: 13%; }
+.sales-line-table col:nth-child(6) { width: 7%; }
+.sales-line-table col:nth-child(7) { width: 15%; }
+.sales-line-table col:nth-child(8) { width: 19%; }
+.sales-line-table .money-cell { white-space: nowrap; }
+.sales-line-table .writing-row { height: 9mm; }
+.document-settlement-section,
+.signature-section {
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+}
+.signature-section { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.signature-space { height: 60px; }
+.signature-line { width: 100%; }
 .invoice-continuation-page {
   break-before: page !important;
   page-break-before: always !important;
@@ -864,7 +919,9 @@
   break-inside: auto !important;
 }
 .invoice-pdf-export-wrapper .invoice-item-row,
-.invoice-pdf-export-wrapper .invoice-closing-section {
+.invoice-pdf-export-wrapper .invoice-closing-section,
+.invoice-pdf-export-wrapper .document-settlement-section,
+.invoice-pdf-export-wrapper .signature-section {
   break-inside: avoid !important;
   page-break-inside: avoid !important;
 }
@@ -898,7 +955,9 @@
     page-break-before: always !important;
   }
   .invoice-item-row,
-  .invoice-closing-section {
+  .invoice-closing-section,
+  .document-settlement-section,
+  .signature-section {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
   }

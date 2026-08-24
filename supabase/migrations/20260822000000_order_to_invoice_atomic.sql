@@ -34,7 +34,7 @@ returns table (
 )
 language plpgsql
 security invoker
-set search_path = ''
+set search_path = public, pg_temp
 as $$
 declare
   v_order public.orders%rowtype;

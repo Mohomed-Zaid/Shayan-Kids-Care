@@ -113,8 +113,8 @@ export default function BackupPage() {
       const a = document.createElement('a'); a.href = url; a.download = `shayan-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click()
       URL.revokeObjectURL(url)
       toast.success(`Backup exported (${backup._meta.total_records} records)`)
-      logAction({ action: 'backup_export', targetType: 'backup', details: `${backup._meta.total_records} records` })
-    } catch (e) { toast.error(e?.message ?? 'Export failed') }
+      await logAction({ action: 'backup_exported', targetType: 'backup', module: 'Backup', details: `${backup._meta.total_records} records exported to this device`, status: 'completed', metadata: { backup_type: 'Application JSON export', scope: backup._meta.tables, file_name: a.download, total_records: backup._meta.total_records } })
+    } catch (e) { toast.error(e?.message ?? 'Export failed'); await logAction({ action: 'backup_export_failed', targetType: 'backup', module: 'Backup', status: 'failed', details: e?.message ?? 'Export failed' }) }
     finally { setExporting(false) }
   }
 
@@ -135,7 +135,7 @@ export default function BackupPage() {
     const file = e.target.files?.[0]; if (!file) return
     const reader = new FileReader()
     reader.onload = (ev) => {
-      try { const b = JSON.parse(ev.target.result); if (!b._meta || !b.data) { toast.error('Invalid backup file'); return }; setImportPreview(b) }
+      try { const b = JSON.parse(ev.target.result); if (!b._meta || !b.data) { toast.error('Invalid backup file'); return }; setImportPreview({ ...b, _selected_file_name: file.name }) }
       catch { toast.error('Failed to parse backup file') }
     }
     reader.readAsText(file)
@@ -147,6 +147,7 @@ export default function BackupPage() {
     if (!confirm('FINAL WARNING: All current data will be overwritten!')) return
     setImporting(true)
     try {
+      await logAction({ action: 'restore_started', targetType: 'backup', module: 'Backup', status: 'started', metadata: { backup_type: 'Application JSON restore', scope: Object.keys(importPreview.data || {}), file_name: importPreview._selected_file_name || null } })
       const data = importPreview.data
       for (const t of [...TABLES].reverse()) { if (data[t.name]) await supabase.from(t.name).delete().neq('id', 0) }
       const results = []
@@ -159,9 +160,9 @@ export default function BackupPage() {
       }
       const failed = results.filter((r) => r.includes('error') || r.includes('failed'))
       failed.length > 0 ? toast.error(`Restore with ${failed.length} errors`) : toast.success('Data restored successfully')
-      logAction({ action: 'backup_restore', targetType: 'backup', details: `Restored from ${importPreview._meta.exported_at}` })
+      await logAction({ action: failed.length ? 'restore_failed' : 'restore_completed', targetType: 'backup', module: 'Backup', details: `Restore from export dated ${importPreview._meta.exported_at}`, status: failed.length ? 'failed' : 'completed', metadata: { backup_type: 'Application JSON restore', scope: Object.keys(data), file_name: importPreview._selected_file_name || null, results } })
       setImportPreview(null)
-    } catch (e) { toast.error(e?.message ?? 'Import failed') }
+    } catch (e) { toast.error(e?.message ?? 'Import failed'); await logAction({ action: 'restore_failed', targetType: 'backup', module: 'Backup', status: 'failed', details: e?.message ?? 'Import failed', metadata: { file_name: importPreview?._selected_file_name || null } }) }
     finally { setImporting(false) }
   }
 

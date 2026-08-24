@@ -5,7 +5,7 @@ create or replace function public.update_linked_invoice_snapshot(
   p_invoice_id uuid, p_customer_id uuid, p_rep_id uuid, p_payment_type text,
   p_vat_rate numeric, p_vat_amount numeric, p_total numeric, p_items jsonb
 )
-returns void language plpgsql security invoker set search_path = '' as $$
+returns void language plpgsql security invoker set search_path = public, pg_temp as $$
 declare
   v_order_id uuid;
   v_inserted_count integer;

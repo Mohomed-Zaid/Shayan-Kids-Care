@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 
 import { buildOrderSnapshot, createOrderSnapshot } from '../src/lib/orderSnapshot.js'
 import { buildConsistencyRows } from '../src/lib/orderConsistency.js'
@@ -40,6 +41,20 @@ test('create sends one immutable snapshot RPC without product lookups', async ()
   assert.equal(calls.length, 1)
   assert.equal(calls[0][0], 'create_order_from_snapshot')
   assert.deepEqual(calls[0][1].p_items, snapshot.items)
+})
+
+test('order relation errors explain the required database repair migration', async () => {
+  const client = { rpc: async () => ({ data: null, error: { message: 'relation "orders" does not exist' } }) }
+  await assert.rejects(
+    () => createOrderSnapshot(client, { customerId: 'customer-1' }, { items: [{ product_id: 'p1', quantity: 1, price: 10, discount: 0, discount_amount: 0, total: 10 }], vat_rate: 0, vat_amount: 0, total: 10 }),
+    /20260824010000_order_rpc_search_path_fix\.sql/,
+  )
+})
+
+test('order RPC migrations preserve a trigger-compatible public search path', async () => {
+  const sql = await readFile(new URL('../supabase/migrations/20260824010000_order_rpc_search_path_fix.sql', import.meta.url), 'utf8')
+  assert.match(sql, /create_order_from_snapshot[\s\S]*set search_path = public, pg_temp/i)
+  assert.match(sql, /convert_order_to_invoice[\s\S]*set search_path = public, pg_temp/i)
 })
 
 test('consistency check reports missing products, quantity changes, and price changes', () => {

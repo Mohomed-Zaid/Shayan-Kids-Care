@@ -11,6 +11,7 @@ import CompanyPhoneLines from '../components/CompanyPhoneLines'
 import { COMPANY_EMAIL } from '../lib/companyContact'
 import PermissionGate from '../components/PermissionGate'
 import { convertOrderToInvoice } from '../lib/orderConversion'
+import { paginateInvoiceItems } from '../lib/invoicePagination'
 
 const statusConfig = {
   pending: { label: 'Pending', bg: 'bg-slate-100 dark:bg-slate-800', text: 'text-slate-700 dark:text-slate-300', border: 'border-slate-200 dark:border-slate-700' },
@@ -104,6 +105,7 @@ export default function OrderViewPage() {
   const subtotal = useMemo(() => {
     return items.reduce((s, it) => s + Number(it.total ?? 0), 0)
   }, [items])
+  const orderPages = useMemo(() => paginateInvoiceItems(items), [items])
 
   const fmt = (val) => `Rs. ${Number(val).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
@@ -167,7 +169,7 @@ export default function OrderViewPage() {
     if (!printRef.current) return
 
     const wrapper = document.createElement('div')
-    wrapper.className = 'pdf-export-wrapper'
+    wrapper.className = 'pdf-export-wrapper invoice-pdf-export-wrapper'
     const cloned = printRef.current.cloneNode(true)
     wrapper.appendChild(cloned)
     document.body.appendChild(wrapper)
@@ -203,6 +205,7 @@ export default function OrderViewPage() {
       image: { type: 'jpeg', quality: 0.98 },
       html2canvas: { scale: 2, useCORS: true },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+      pagebreak: { mode: ['css', 'legacy'], before: '.invoice-continuation-page', avoid: ['.invoice-item-row', '.invoice-closing-section', '.document-settlement-section', '.signature-section'] },
     }
 
     try {
@@ -302,7 +305,7 @@ export default function OrderViewPage() {
       <div className="bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
         <div
           ref={printRef}
-          className="bg-white dark:bg-slate-900 print-area min-h-[297mm] flex flex-col"
+          className="bg-white dark:bg-slate-900 print-area invoice-print-document order-print-document"
         >
           {/* Header */}
           <div className="px-8 pt-3 pb-2 flex items-start justify-between border-b-2 border-slate-800 dark:border-slate-600">
@@ -356,49 +359,13 @@ export default function OrderViewPage() {
           </div>
 
           {/* Items Table */}
-          <div className="px-8 py-2 flex-1 flex flex-col">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-800 text-white">
-                  <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Item #</th>
-                  <th className="text-left font-semibold px-3 py-2 text-xs uppercase tracking-wider">Description</th>
-                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Qty</th>
-                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Unit Price</th>
-                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Disc %</th>
-                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Disc. Amount</th>
-                  <th className="text-right font-semibold px-3 py-2 text-xs uppercase tracking-wider">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((it, idx) => (
-                  <tr key={it.id} className={`border-b border-slate-100 dark:border-slate-700 ${idx % 2 !== 0 ? 'bg-slate-50 dark:bg-slate-800/50' : ''}`}>
-                    <td className="px-3 py-1.5 text-slate-600 dark:text-slate-400">{it.products?.code ?? '-'}</td>
-                    <td className="px-3 py-1.5 text-slate-900 dark:text-white font-medium">{it.products?.name ?? '-'}</td>
-                    <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{it.quantity}</td>
-                    <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">Rs. {Number(it.price ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                    <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{Number(it.discount ?? 0) > 0 ? `${Number(it.discount).toLocaleString(undefined, { minimumFractionDigits: 2 })}%` : '-'}</td>
-                    <td className="px-3 py-1.5 text-right text-slate-700 dark:text-slate-300">{Number(it.discount ?? 0) > 0 ? `Rs. ${(Number(it.quantity ?? 0) * Number(it.price ?? 0) * Number(it.discount ?? 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '-'}</td>
-                    <td className="px-3 py-1.5 text-right text-slate-900 dark:text-white font-semibold">Rs. {Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                  </tr>
-                ))}
-                {Array.from({ length: Math.max(0, 6 - items.length) }).map((_, i) => (
-                  <tr key={`empty-${i}`} className="border-b border-slate-100 dark:border-slate-700">
-                    <td className="px-3 py-0.5">&nbsp;</td>
-                    <td className="px-3 py-0.5"></td>
-                    <td className="px-3 py-0.5"></td>
-                    <td className="px-3 py-0.5"></td>
-                    <td className="px-3 py-0.5"></td>
-                    <td className="px-3 py-0.5"></td>
-                    <td className="px-3 py-0.5"></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="invoice-items-pages">
+            {orderPages.map((page,pageIndex)=><div key={pageIndex} className={`invoice-items-page px-8 py-2 ${pageIndex>0?'invoice-continuation-page':''}`}><table className="w-full text-sm invoice-items-table sales-line-table"><colgroup><col/><col/><col/><col/><col/><col/><col/><col/></colgroup><thead><tr className="bg-slate-800 text-white"><th className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wider">No.</th><th className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-wider">Item Code</th><th className="px-3 py-2 text-left text-xs font-semibold uppercase tracking-wider">Description</th><th className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wider">Qty</th><th className="px-2 py-2 text-right text-xs font-semibold uppercase tracking-wider">Unit Price</th><th className="px-2 py-2 text-center text-xs font-semibold uppercase tracking-wider">Disc %</th><th className="px-2 py-2 text-right text-xs font-semibold uppercase tracking-wider">Disc. Amount</th><th className="px-2 py-2 text-right text-xs font-semibold uppercase tracking-wider">Amount</th></tr></thead><tbody>{page.items.map((it,idx)=><tr key={it.id} className={`invoice-item-row border-b border-slate-100 dark:border-slate-700 ${(page.startIndex+idx)%2!==0?'bg-slate-50 dark:bg-slate-800/50':''}`}><td className="px-2 py-1.5 text-center text-slate-600 dark:text-slate-300">{page.startIndex+idx+1}</td><td className="px-2 py-1.5 text-slate-600 dark:text-slate-400">{it.products?.code??'-'}</td><td className="px-3 py-1.5 font-medium text-slate-900 dark:text-white">{it.products?.name??'-'}</td><td className="px-2 py-1.5 text-center text-slate-700 dark:text-slate-300">{it.quantity}</td><td className="money-cell px-2 py-1.5 text-right text-slate-700 dark:text-slate-300">Rs. {Number(it.price??0).toLocaleString(undefined,{minimumFractionDigits:2})}</td><td className="px-2 py-1.5 text-center text-slate-700 dark:text-slate-300">{Number(it.discount??0)>0?`${Number(it.discount).toLocaleString(undefined,{minimumFractionDigits:2})}%`:'-'}</td><td className="money-cell px-2 py-1.5 text-right text-slate-700 dark:text-slate-300">{Number(it.discount??0)>0?`Rs. ${(Number(it.quantity??0)*Number(it.price??0)*Number(it.discount??0)/100).toLocaleString(undefined,{minimumFractionDigits:2})}`:'-'}</td><td className="money-cell px-2 py-1.5 text-right font-semibold text-slate-900 dark:text-white">Rs. {Number(it.total??0).toLocaleString(undefined,{minimumFractionDigits:2})}</td></tr>)}{Array.from({length:page.blankRows}).map((_,i)=><tr key={`writing-${i}`} className="invoice-item-row writing-row border-b border-slate-200 dark:border-slate-700"><td className="px-2 text-center text-slate-600 dark:text-slate-300">{items.length+i+1}</td><td/><td/><td/><td/><td/><td/><td/></tr>)}</tbody></table></div>)}
           </div>
 
           {/* Totals + Signature + Footer pushed to bottom */}
-          <div className="mt-auto">
-            <div className="px-8 pb-2 flex justify-between items-start">
+          <div className="invoice-closing-section mt-auto">
+            <div className="document-settlement-section px-8 pb-2 flex justify-between items-start">
               {/* Bank Details */}
               <div className="text-xs text-slate-600 dark:text-slate-300">
                 <div className="font-semibold text-slate-700 dark:text-slate-200">Bank Details</div>
@@ -430,16 +397,8 @@ export default function OrderViewPage() {
                 </div>
               </div>
             </div>
-            <div className="px-8 py-2 grid grid-cols-3 gap-8 border-t border-slate-200 dark:border-slate-700">
-              <div>
-                <div className="border-b border-slate-300 dark:border-slate-600 pb-2 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-medium">Checking</div>
-              </div>
-              <div>
-                <div className="border-b border-slate-300 dark:border-slate-600 pb-2 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-medium">Received</div>
-              </div>
-              <div>
-                <div className="border-b border-slate-300 dark:border-slate-600 pb-2 text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wider font-medium">Customer Signature</div>
-              </div>
+            <div className="signature-section px-8 py-3 grid grid-cols-3 gap-8 border-t border-slate-200 dark:border-slate-700">
+              {['Checking','Received','Customer Signature'].map(label=><div key={label} className="signature-block text-center"><div className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-300">{label}</div><div className="signature-space"/><div className="signature-line border-t border-slate-500 dark:border-slate-500"/><div className="pt-1 text-[10px] text-slate-500 dark:text-slate-400">Signature</div></div>)}
             </div>
 
             <div className="px-8 py-2 border-t-2 border-slate-800 dark:border-slate-600 text-center text-xs text-slate-500 dark:text-slate-400">

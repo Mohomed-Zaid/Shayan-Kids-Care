@@ -1,4 +1,4 @@
-import { getCommissionRate } from './repCommission'
+import { getCommissionRate } from './repCommission.js'
 
 const n = (value) => Number(value ?? 0) || 0
 const dateOnly = (value) => value ? String(value).slice(0, 10) : ''

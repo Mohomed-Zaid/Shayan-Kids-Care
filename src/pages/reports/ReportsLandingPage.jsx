@@ -59,6 +59,22 @@ const reportCategories = [
     ],
   },
   {
+    key: 'returns-delivery',
+    title: 'Returns & Delivery Reports',
+    icon: Package,
+    reports: [
+      { name: 'Complete Returns & Delivery Reports Suite', path: '/reports/returns-delivery' },
+    ],
+  },
+  {
+    key: 'admin-system',
+    title: 'Admin, Audit & System Reports',
+    icon: BarChart3,
+    reports: [
+      { name: 'Administrative Control & Audit Reports', path: '/reports/admin-system' },
+    ],
+  },
+  {
     key: 'customer',
     title: 'Customer Reports',
     icon: Users,

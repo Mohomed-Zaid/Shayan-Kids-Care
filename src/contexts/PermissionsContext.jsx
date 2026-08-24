@@ -12,7 +12,12 @@ import {
 } from '../lib/permissions'
 import { defaultDashboardVisibility, extractDashboardWidgets } from '../lib/dashboardLayout'
 
-const PermissionsContext = createContext(null)
+// Keep the context identity stable across Vite hot updates. Without this,
+// providers and consumers can briefly reference different context objects,
+// which crashes the whole protected route tree during development.
+const permissionsContextKey = Symbol.for('shayan-kids.permissions-context')
+const PermissionsContext = globalThis[permissionsContextKey] || createContext(null)
+globalThis[permissionsContextKey] = PermissionsContext
 
 export function PermissionsProvider() {
   const { user } = useAuth()
