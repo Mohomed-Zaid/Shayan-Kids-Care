@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
 import { buildOrderSnapshot, calculateOrderLine, createOrderSnapshot } from '../lib/orderSnapshot'
+import { customerOutstanding } from '../lib/receivables'
 import { Plus, Trash2, ArrowLeft, AlertTriangle, X } from 'lucide-react'
 
 function emptyLine() {
@@ -75,9 +76,9 @@ export default function OrderCreatePage() {
         const customer = customers.find(c => c.id === customerId)
         
         const [invoicesRes, paymentsRes, returnsRes, chequesRes] = await Promise.all([
-          supabase.from('invoices').select('id, invoice_number, total_amount, created_at').eq('customer_id', customerId).order('created_at', { ascending: false }),
+          supabase.from('invoices').select('id, invoice_number, customer_id, total_amount, created_at, payment_type').eq('customer_id', customerId).eq('payment_type', 'credit').order('created_at', { ascending: false }),
           supabase.from('invoice_payments').select('invoice_id, amount'),
-          supabase.from('returns').select('invoice_id, total_amount').eq('customer_id', customerId),
+          supabase.from('returns').select('invoice_id, customer_id, total_amount, created_at').eq('customer_id', customerId),
           supabase.from('customer_cheques').select('amount, status').eq('customer_id', customerId),
         ])
 
@@ -87,26 +88,7 @@ export default function OrderCreatePage() {
         const returns = returnsRes.data ?? []
         const cheques = chequesRes.data ?? []
 
-        let totalOutstanding = 0
-
-        const paymentSumByInvoice = new Map()
-        for (const p of payments) {
-          paymentSumByInvoice.set(p.invoice_id, (paymentSumByInvoice.get(p.invoice_id) ?? 0) + Number(p.amount ?? 0))
-        }
-
-        const returnsSumByInvoice = new Map()
-        for (const r of returns) {
-          returnsSumByInvoice.set(r.invoice_id, (returnsSumByInvoice.get(r.invoice_id) ?? 0) + Number(r.total_amount ?? 0))
-        }
-
-        for (const inv of invoices) {
-          const paid = paymentSumByInvoice.get(inv.id) ?? 0
-          const returned = returnsSumByInvoice.get(inv.id) ?? 0
-          const balance = Number(inv.total_amount ?? 0) - paid - returned
-          if (balance > 0) {
-            totalOutstanding += balance
-          }
-        }
+        const totalOutstanding = customerOutstanding(invoices, payments, returns)
 
         // Calculate cheques
         const chequeInHand = cheques.filter(c => c.status === 'in_hand').reduce((sum, c) => sum + Number(c.amount ?? 0), 0)

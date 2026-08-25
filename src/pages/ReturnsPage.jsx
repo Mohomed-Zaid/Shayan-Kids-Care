@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
-import { logAction } from '../lib/auditLog'
 import { Eye, Trash2, FileText, Search, Plus, RotateCcw } from 'lucide-react'
 
 export default function ReturnsPage() {
@@ -48,37 +47,14 @@ export default function ReturnsPage() {
   })()
 
   const onDelete = async (ret) => {
-    if (!confirm('Delete this return and all its items? Stock will NOT be reduced back.')) return
-
-    // Get items to restore stock
-    const { data: items } = await supabase.from('return_items').select('product_id, quantity').eq('return_id', ret.id)
-
-    // Reduce stock back (since return added stock, deleting return should remove it)
-    if (items && items.length > 0) {
-      const [prodRes] = await Promise.all([
-        supabase.from('products').select('id, stock').in('id', items.map((i) => i.product_id).filter(Boolean)),
-      ])
-      const prodMap = new Map((prodRes.data ?? []).map((p) => [p.id, p.stock ?? 0]))
-
-      await Promise.all(
-        items
-          .filter((i) => i.product_id)
-          .map((i) => {
-            const current = prodMap.get(i.product_id) ?? 0
-            const newStock = Math.max(0, current - (i.quantity ?? 0))
-            return supabase.from('products').update({ stock: newStock }).eq('id', i.product_id)
-          })
-      )
-    }
-
-    await supabase.from('return_items').delete().eq('return_id', ret.id)
-    const { error: err } = await supabase.from('returns').delete().eq('id', ret.id)
+    if (!confirm('Reverse this return? Stock, receivable credit and customer credit will all be restored.')) return
+    const { error: err } = await supabase.rpc('reverse_customer_return', { p_return_id: ret.id })
     if (err) {
       toast.error(err.message)
       return
     }
-    toast.success('Return deleted')
-    logAction({ action: 'delete_return', targetType: 'return', targetId: row.id })
+    toast.success('Return reversed')
+    await load()
   }
 
   return (

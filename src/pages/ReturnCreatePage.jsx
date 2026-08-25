@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
-import { logAction } from '../lib/auditLog'
 import { Plus, ArrowLeft, AlertTriangle, X, RotateCcw } from 'lucide-react'
 
 function emptyLine() {
@@ -38,7 +37,7 @@ export default function ReturnCreatePage() {
       const [custRes, prodRes, invRes] = await Promise.all([
         supabase.from('customers').select('*').order('created_at', { ascending: false }),
         supabase.from('products').select('*').order('created_at', { ascending: false }),
-        supabase.from('invoices').select('id, invoice_number, customer_id, created_at').order('created_at', { ascending: false }),
+        supabase.from('invoices').select('id, invoice_number, customer_id, created_at, vat_rate, payment_type').eq('payment_type', 'credit').order('created_at', { ascending: false }),
       ])
 
       if (!mounted) return
@@ -93,8 +92,8 @@ export default function ReturnCreatePage() {
   }
 
   const onSelectProduct = (idx, product_id) => {
-    const p = productById.get(product_id)
-    updateLine(idx, { product_id, price: p ? Number(p.price ?? 0) : 0 })
+    const item = invoiceItems.find((row) => String(row.product_id) === String(product_id))
+    updateLine(idx, { product_id, price: Number(item?.price ?? 0) * (1 - Number(item?.discount ?? 0) / 100), quantity: 1 })
   }
 
   const onSelectInvoice = async (invId) => {
@@ -106,7 +105,7 @@ export default function ReturnCreatePage() {
 
     const { data: items } = await supabase
       .from('invoice_items')
-      .select('product_id, quantity, price, total')
+      .select('product_id, quantity, price, discount, total')
       .eq('invoice_id', invId)
 
     setInvoiceItems(items ?? [])
@@ -115,13 +114,14 @@ export default function ReturnCreatePage() {
       const newLines = items.map((it) => ({
         product_id: it.product_id,
         quantity: it.quantity,
-        price: Number(it.price ?? 0),
+        price: Number(it.price ?? 0) * (1 - Number(it.discount ?? 0) / 100),
       }))
       setLines(newLines)
     }
 
     // Auto-set customer from invoice
     const inv = invoices.find((i) => String(i.id) === String(invId))
+    setVatEnabled(Number(inv?.vat_rate ?? 0) > 0)
     if (inv?.customer_id) {
       setCustomerId(inv.customer_id)
     }
@@ -146,8 +146,8 @@ export default function ReturnCreatePage() {
       }))
       .filter((l) => l.quantity > 0)
 
-    if (!customerId) {
-      setError('Select a customer')
+    if (!invoiceId) {
+      setError('Select the original invoice')
       return
     }
 
@@ -161,45 +161,24 @@ export default function ReturnCreatePage() {
       return
     }
 
+    for (const line of cleanedLines) {
+      const sold = invoiceItems.find((item) => String(item.product_id) === String(line.product_id))
+      if (!sold || line.quantity > Number(sold.quantity ?? 0)) {
+        setError('A return quantity cannot exceed the quantity sold on the original invoice')
+        return
+      }
+    }
+
     setSaving(true)
     try {
-      const { data: ret, error: retErr } = await supabase
-        .from('returns')
-        .insert({
-          customer_id: customerId,
-          invoice_id: invoiceId || null,
-          total_amount: totalWithVat,
-          vat_rate: vatEnabled ? VAT_RATE : 0,
-          vat_amount: vatAmount,
-          reason: reason.trim(),
-        })
-        .select('id, return_number')
-        .single()
-
+      const { data: ret, error: retErr } = await supabase.rpc('create_customer_return', {
+        p_invoice_id: invoiceId,
+        p_reason: reason.trim(),
+        p_items: cleanedLines.map(({ product_id, quantity }) => ({ product_id, quantity })),
+      })
       if (retErr) throw retErr
 
-      const itemsPayload = cleanedLines.map((l) => ({
-        return_id: ret.id,
-        product_id: l.product_id,
-        quantity: l.quantity,
-        price: l.price,
-        total: l.total,
-      }))
-
-      const { error: itemsErr } = await supabase.from('return_items').insert(itemsPayload)
-      if (itemsErr) throw itemsErr
-
-      // Increase stock for each returned product
-      const stockUpdates = cleanedLines.map((l) => {
-        const product = productById.get(l.product_id)
-        const currentStock = product?.stock ?? 0
-        const newStock = currentStock + l.quantity
-        return supabase.from('products').update({ stock: newStock }).eq('id', l.product_id)
-      })
-      await Promise.all(stockUpdates)
-
       toast.success('Return note created successfully')
-      logAction({ action: 'create_return', targetType: 'return', targetId: ret.id })
       navigate(`/returns/${ret.id}`, { replace: true })
     } catch (e) {
       console.error(e)
@@ -236,13 +215,13 @@ export default function ReturnCreatePage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Invoice (optional)</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-200">Original Invoice *</label>
             <select
               value={invoiceId}
               onChange={(e) => onSelectInvoice(e.target.value)}
               className="mt-1.5 w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
             >
-              <option value="">Select invoice (optional)...</option>
+              <option value="">Select original invoice...</option>
               {invoices
                 .filter((inv) => !customerId || String(inv.customer_id) === String(customerId))
                 .map((inv) => {
@@ -309,7 +288,7 @@ export default function ReturnCreatePage() {
                     className="w-full rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
                   >
                     <option value="">Select product...</option>
-                    {products.map((p) => (
+                    {invoiceItems.map((item) => productById.get(item.product_id)).filter(Boolean).map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.name} ({p.code})
                       </option>
@@ -331,8 +310,9 @@ export default function ReturnCreatePage() {
                     type="number"
                     step="0.01"
                     value={l.price}
-                    onChange={(e) => updateLine(idx, { price: e.target.value })}
-                    className="w-32 rounded-lg border border-slate-300 dark:border-slate-600 dark:bg-slate-800 dark:text-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-shadow"
+                    readOnly
+                    title="Original invoice selling price"
+                    className="w-32 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-700 dark:text-white px-3 py-2.5 text-sm"
                   />
                 </td>
                 <td className="px-5 py-3 font-medium text-slate-900 dark:text-white">Rs. {Number(l.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
@@ -363,10 +343,10 @@ export default function ReturnCreatePage() {
               <input
                 type="checkbox"
                 checked={vatEnabled}
-                onChange={(e) => setVatEnabled(e.target.checked)}
+                disabled
                 className="rounded border-slate-300 dark:border-slate-600 text-slate-900 focus:ring-slate-900/20"
               />
-              <span className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide font-medium">VAT (18%)</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-wide font-medium">Original Invoice VAT (18%)</span>
             </label>
             <span className="text-sm text-slate-700 dark:text-slate-300">Rs. {vatAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
           </div>

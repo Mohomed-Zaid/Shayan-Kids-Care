@@ -20,6 +20,7 @@ import { Search, Eye, FileText, Filter, Plus } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 import { sendSingleSMS } from '../lib/sms'
 import { calculateAgingDays, getAgingBucket, getAgingColorClasses, calculateAgingSummary } from '../lib/agingCalculations'
+import { buildInvoiceBalanceRows } from '../lib/receivables'
 
 const fmt = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
@@ -75,7 +76,7 @@ export default function ReceivablesPage() {
       supabase
         .from('invoices')
         .select('id, invoice_number, customer_id, total_amount, created_at, payment_type, customers(name, phone)')
-        .in('payment_type', ['credit', 'cash'])
+        .eq('payment_type', 'credit')
         .order('created_at', { ascending: false }),
       supabase
         .from('invoice_payments')
@@ -83,7 +84,7 @@ export default function ReceivablesPage() {
         .order('paid_at', { ascending: false }),
       supabase
         .from('returns')
-        .select('id, customer_id, total_amount')
+        .select('id, invoice_id, customer_id, total_amount, created_at')
         .order('created_at', { ascending: false }),
       supabase.from('banks').select('id, code, name, bank_code, branch').order('code'),
       supabase.from('customers').select('id, name, phone').order('name'),
@@ -142,28 +143,20 @@ export default function ReceivablesPage() {
     return map
   }, [payments])
 
-  const returnsByCustomer = useMemo(() => {
-    const map = new Map()
-    for (const r of returns) {
-      const cid = r.customer_id
-      if (!cid) continue
-      const prev = map.get(cid) ?? 0
-      map.set(cid, prev + Number(r.total_amount ?? 0))
-    }
-    return map
-  }, [returns])
+  const invoiceRows = useMemo(() => buildInvoiceBalanceRows(invoices, payments, returns), [invoices, payments, returns])
+  const returnsByInvoice = useMemo(() => new Map(invoiceRows.map((row) => [row.id, row.returned])), [invoiceRows])
 
   const customersRows = useMemo(() => {
     const byCustomer = new Map()
 
-    for (const inv of invoices) {
+    for (const inv of invoiceRows) {
       const cid = inv.customer_id
       if (!cid) continue
 
-      const paid = paymentSumByInvoice.get(inv.id) ?? 0
+      const paid = inv.paid
       const total = Number(inv.total_amount ?? 0)
-      const retAmount = returnsByCustomer.get(cid) ?? 0
-      const balance = total - paid - retAmount
+      const retAmount = inv.returned
+      const balance = inv.balance
 
       const payStatus = paid === 0 && retAmount === 0 ? 'unpaid' : balance > 0 ? 'partial' : 'paid'
       const daysOutstanding = calculateAgingDays(inv.created_at)
@@ -186,9 +179,9 @@ export default function ReceivablesPage() {
         })
       } else {
         existing.invoiced += total
-        existing.returned = retAmount
+        existing.returned += retAmount
         existing.paid += paid
-        existing.balance = existing.invoiced - existing.paid - existing.returned
+        existing.balance += balance
         existing.invoicesCount += 1
         // roll up: if any invoice is unpaid/partial, customer is worst status
         if (payStatus === 'unpaid') existing.status = 'unpaid'
@@ -223,12 +216,12 @@ export default function ReceivablesPage() {
 
     rows.sort((a, b) => (b.balance ?? 0) - (a.balance ?? 0))
     return rows
-  }, [invoices, paymentSumByInvoice, returnsByCustomer, search, statusFilter])
+  }, [invoiceRows, search, statusFilter])
 
   // Calculate aging summary for all outstanding invoices
   const agingSummary = useMemo(() => {
-    return calculateAgingSummary(invoices, paymentSumByInvoice)
-  }, [invoices, paymentSumByInvoice])
+    return calculateAgingSummary(invoices, paymentSumByInvoice, returnsByInvoice)
+  }, [invoices, paymentSumByInvoice, returnsByInvoice])
 
   const totals = useMemo(() => {
     const invoiced = customersRows.reduce((s, r) => s + Number(r.invoiced ?? 0), 0)
@@ -247,17 +240,10 @@ export default function ReceivablesPage() {
 
   const invoicesForPayCustomer = useMemo(() => {
     if (!payForm.customer_id) return []
-    return invoices
+    return invoiceRows
       .filter((inv) => inv.customer_id === payForm.customer_id)
-      .map((inv) => {
-        const paid = paymentSumByInvoice.get(inv.id) ?? 0
-        const retAmount = returnsByCustomer.get(inv.customer_id) ?? 0
-        const total = Number(inv.total_amount ?? 0)
-        const balance = total - paid
-        return { ...inv, paid, balance }
-      })
       .filter((inv) => inv.balance > 0)
-  }, [invoices, paymentSumByInvoice, returnsByCustomer, payForm.customer_id])
+  }, [invoiceRows, payForm.customer_id])
 
   const totalOutstanding = useMemo(() => {
     return invoicesForPayCustomer.reduce((s, inv) => s + inv.balance, 0)
@@ -275,11 +261,8 @@ export default function ReceivablesPage() {
   }, [payForm.method, cheques])
 
   const openPay = (customerId) => {
-    const custInvs = invoices.filter((inv) => inv.customer_id === customerId)
-    const outstanding = custInvs.reduce((s, inv) => {
-      const paid = paymentSumByInvoice.get(inv.id) ?? 0
-      return s + Math.max(0, Number(inv.total_amount ?? 0) - paid)
-    }, 0)
+    const custInvs = invoiceRows.filter((inv) => inv.customer_id === customerId)
+    const outstanding = custInvs.reduce((sum, inv) => sum + inv.balance, 0)
     const customer = customers.find((c) => c.id === customerId)
     setPayForm({
       customer_id: customerId,

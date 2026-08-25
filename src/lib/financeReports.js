@@ -1,4 +1,5 @@
 import { getCommissionRate } from './repCommission.js'
+import { buildInvoiceBalanceRows } from './receivables.js'
 
 const n = (value) => Number(value ?? 0) || 0
 const dateOnly = (value) => value ? String(value).slice(0, 10) : ''
@@ -67,27 +68,6 @@ export const REPORT_COLUMNS = {
   'cash-flow': [['section', 'Cash Flow'], ['description', 'Description'], ['amount', 'Amount', 'money']],
 }
 
-function allocateReturnCredits(invoices, returns) {
-  const linked = new Map()
-  const unlinked = new Map()
-  returns.forEach((row) => {
-    if (row.invoice_id) linked.set(String(row.invoice_id), (linked.get(String(row.invoice_id)) ?? 0) + n(row.total_amount))
-    else if (row.customer_id) unlinked.set(String(row.customer_id), (unlinked.get(String(row.customer_id)) ?? 0) + n(row.total_amount))
-  })
-  const allocated = new Map(linked)
-  const oldest = [...invoices].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-  oldest.forEach((inv) => {
-    const customerId = String(inv.customer_id ?? '')
-    const available = unlinked.get(customerId) ?? 0
-    if (available <= 0) return
-    const already = allocated.get(String(inv.id)) ?? 0
-    const credit = Math.min(available, Math.max(0, n(inv.total_amount) - already))
-    allocated.set(String(inv.id), already + credit)
-    unlinked.set(customerId, available - credit)
-  })
-  return allocated
-}
-
 export function buildFinanceReports(raw) {
   const customers = keyBy(raw.customers)
   const vendors = keyBy(raw.vendors)
@@ -104,14 +84,14 @@ export function buildFinanceReports(raw) {
   const paymentsByInvoice = groupBy(invoicePayments, 'invoice_id')
   const paymentsByPurchase = groupBy(purchasePayments, 'purchase_id')
   const chequesByCustomer = groupBy(cheques, 'customer_id')
-  const creditsByInvoice = allocateReturnCredits(invoices, returns)
+  const receivableBalanceRows = buildInvoiceBalanceRows(invoices, invoicePayments, returns)
 
-  const receivables = invoices.filter((inv) => inv.payment_type === 'credit').map((inv) => {
+  const receivables = receivableBalanceRows.filter((inv) => inv.payment_type === 'credit').map((inv) => {
     const customer = customers.get(String(inv.customer_id)) ?? {}
     const rep = employees.get(String(inv.rep_id)) ?? {}
     const payments = paymentsByInvoice.get(String(inv.id)) ?? []
     const paid = sum(payments, 'amount')
-    const outstanding = Math.max(0, n(inv.total_amount) - paid - (creditsByInvoice.get(String(inv.id)) ?? 0))
+    const outstanding = inv.balance
     const last = [...payments].sort((a, b) => new Date(b.paid_at) - new Date(a.paid_at))[0]
     const customerCheques = chequesByCustomer.get(String(inv.customer_id)) ?? []
     const days = daysSince(inv.created_at)

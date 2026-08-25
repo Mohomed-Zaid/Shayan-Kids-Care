@@ -6,6 +6,7 @@ import { Package, Users, DollarSign, Plus, Eye, TrendingUp, ArrowUpRight, Shoppi
 import { usePermissions } from '../contexts/PermissionsContext'
 import PermissionGate from '../components/PermissionGate'
 import Chart from 'react-apexcharts'
+import { buildInvoiceBalanceRows } from '../lib/receivables'
 
 const statConfig = [
   { key: 'todaySales', label: 'Today Sales', icon: DollarSign, gradient: 'from-amber-500 to-orange-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-amber-100', isCurrency: true },
@@ -152,8 +153,8 @@ export default function DashboardPage() {
         supabase
           .from('journals')
           .select('budget, s_balance, h_balance'),
-        supabase.from('invoices').select('total_amount'),
-        supabase.from('invoice_payments').select('amount, method'),
+        supabase.from('invoices').select('id, customer_id, total_amount, created_at, payment_type'),
+        supabase.from('invoice_payments').select('invoice_id, amount, method'),
         supabase
           .from('customer_cheques')
           .select('id, customer_id, cheque_date, cheque_number, amount, bank_name, status, customers(name)')
@@ -205,7 +206,7 @@ export default function DashboardPage() {
           .eq('status', 'deposited'),
         supabase
           .from('returns')
-          .select('total_amount'),
+          .select('invoice_id, customer_id, total_amount, created_at'),
         supabase
           .from('purchases')
           .select('total_amount'),
@@ -333,7 +334,9 @@ export default function DashboardPage() {
       setMonthSeries({ labels, sales, purchase, profit })
 
       // Receivable summary
-      const due = Math.max(0, totalSales - returnAmount - receivedPayments)
+      const due = buildInvoiceBalanceRows(totalSalesRes.data ?? [], totalPaymentsRes.data ?? [], returnsRes.data ?? [])
+        .filter((invoice) => String(invoice.payment_type).toLowerCase() === 'credit')
+        .reduce((sum, invoice) => sum + invoice.balance, 0) + returnCheque
       const currentMonthSales = (invForChartsRes.data ?? [])
         .filter((inv) => new Date(inv.created_at) >= monthStart)
         .reduce((s, inv) => s + Number(inv.total_amount ?? 0), 0)

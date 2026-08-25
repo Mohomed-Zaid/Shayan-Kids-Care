@@ -6,20 +6,22 @@ import { logAction } from '../lib/auditLog'
 import { Plus, Trash2, ArrowLeft, AlertTriangle, X } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 import { companyPhonesHtml, COMPANY_EMAIL } from '../lib/companyInfo'
-import { paginateInvoiceItems } from '../lib/invoicePagination'
+import { INVOICE_PAGINATION, paginateInvoiceItems } from '../lib/invoicePagination'
+import { customerOutstanding } from '../lib/receivables'
 
 const fmt = (val) => `Rs. ${Number(val || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
 const safeFilename = (name) => String(name || '').replace(/[\\/:*?"<>|]+/g, '-').trim()
 
-const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, grandTotal, vatAmount, totalWithVat, vatEnabled, vatRate, paymentType }) => {
+const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, grandTotal, vatAmount, totalWithVat, vatEnabled, vatRate, paymentType, rowHeightsMm = [] }) => {
   const companyEmail = COMPANY_EMAIL
   const c = customer ?? {}
   const r = rep ?? {}
   const dateStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
   const payLabel = paymentType === 'cash' ? 'Cash Customer' : 'Credit Customer'
 
-  const invoicePages = paginateInvoiceItems(lines ?? [])
+  const invoicePages = paginateInvoiceItems(lines ?? [], { ...INVOICE_PAGINATION, rowHeightsMm })
+  const writingSpaceHeightMm = invoicePages.at(-1)?.writingSpaceHeightMm ?? 18.52
   const itemPages = invoicePages.map((page, pageIndex) => {
     const itemRows = page.items.map((l, idx) => {
       const prod = productById.get(l.product_id) ?? {}
@@ -35,9 +37,6 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
         <td style="border-bottom:1px solid #f1f5f9;padding:6px;text-align:right;white-space:nowrap;color:#0f172a;font-weight:600">${fmt(l.total)}</td>
       </tr>`
     }).join('')
-    const emptyRows = Array.from({ length: page.blankRows }).map((_, index) =>
-      `<tr class="invoice-item-row writing-row" style="height:9mm"><td style="padding:2px 4px;text-align:center">${lines.length + index + 1}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>`
-    ).join('')
     return `<div class="invoice-items-page ${pageIndex > 0 ? 'invoice-continuation-page' : ''}" style="padding:8px 32px">
       <table class="sales-line-table" style="width:100%;font-size:14px;border-collapse:collapse;table-layout:fixed"><colgroup><col style="width:4%"><col style="width:8%"><col style="width:27%"><col style="width:7%"><col style="width:13%"><col style="width:7%"><col style="width:15%"><col style="width:19%"></colgroup>
         <thead><tr style="background:#fff;color:#000;border-bottom:2px solid #000">
@@ -49,7 +48,7 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
           <th style="text-align:right;padding:8px 12px;font-size:11px;text-transform:uppercase">Disc %</th>
           <th style="text-align:right;padding:8px 12px;font-size:11px;text-transform:uppercase">Disc. Amount</th>
           <th style="text-align:right;padding:8px 12px;font-size:11px;text-transform:uppercase">Amount</th>
-        </tr></thead><tbody>${itemRows}${emptyRows}</tbody>
+        </tr></thead><tbody>${itemRows}</tbody>
       </table>
     </div>`
   }).join('')
@@ -96,7 +95,7 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
 
   ${itemPages}
 
-  <div class="invoice-closing-section">
+  <div class="invoice-closing-section" style="--writing-space-height:${writingSpaceHeightMm}mm">
     <div class="document-settlement-section" style="padding:0 32px 8px;display:flex;justify-content:space-between;align-items:start">
       <div style="font-size:12px;color:#334155">
         <div style="font-weight:600;color:#334155">Bank Details</div>
@@ -131,13 +130,20 @@ const buildInvoiceHtml = ({ invoiceNumber, customer, rep, lines, productById, gr
 </div>`
 }
 
-const exportInvoicePdf = async (html, filename) => {
+const exportInvoicePdf = async (html, filename, rebuildHtml) => {
   const wrapper = document.createElement('div')
   wrapper.className = 'pdf-export-wrapper invoice-pdf-export-wrapper'
   wrapper.innerHTML = html
   document.body.appendChild(wrapper)
 
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+  const rowHeightsMm = Array.from(wrapper.querySelectorAll('.invoice-item-row'))
+    .map((row) => row.getBoundingClientRect().height * 25.4 / 96)
+  if (typeof rebuildHtml === 'function' && rowHeightsMm.length > 0) {
+    wrapper.innerHTML = rebuildHtml(rowHeightsMm)
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  }
 
   const opt = {
     margin: 0,
@@ -178,6 +184,7 @@ export default function InvoiceCreatePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [previousOutstanding, setPreviousOutstanding] = useState(0)
 
   useEffect(() => {
     let mounted = true
@@ -211,6 +218,30 @@ export default function InvoiceCreatePage() {
       mounted = false
     }
   }, [])
+
+  useEffect(() => {
+    let active = true
+    const loadOutstanding = async () => {
+      if (!customerId) {
+        setPreviousOutstanding(0)
+        return
+      }
+      const [invoiceRes, returnRes] = await Promise.all([
+        supabase.from('invoices').select('id, customer_id, total_amount, created_at, payment_type').eq('customer_id', customerId).eq('payment_type', 'credit'),
+        supabase.from('returns').select('invoice_id, customer_id, total_amount, created_at').eq('customer_id', customerId),
+      ])
+      if (!active || invoiceRes.error || returnRes.error) return
+      const invoiceIds = (invoiceRes.data ?? []).map((row) => row.id)
+      const paymentRes = invoiceIds.length
+        ? await supabase.from('invoice_payments').select('invoice_id, amount').in('invoice_id', invoiceIds)
+        : { data: [], error: null }
+      if (active && !paymentRes.error) {
+        setPreviousOutstanding(customerOutstanding(invoiceRes.data ?? [], paymentRes.data ?? [], returnRes.data ?? []))
+      }
+    }
+    loadOutstanding().catch(() => { if (active) setPreviousOutstanding(0) })
+    return () => { active = false }
+  }, [customerId])
 
   const linesWithTotals = useMemo(() => {
     return lines.map((l) => {
@@ -336,7 +367,7 @@ export default function InvoiceCreatePage() {
 
       const customerObj = customers.find((c) => c.id === customerId)
       const repObj = reps.find((r) => r.id === repId)
-      const invoiceHtml = buildInvoiceHtml({
+      const invoiceDocument = {
         invoiceNumber: invoice.invoice_number,
         customer: customerObj,
         rep: repObj,
@@ -348,9 +379,11 @@ export default function InvoiceCreatePage() {
         vatEnabled,
         vatRate: VAT_RATE,
         paymentType,
-      })
+      }
+      const renderInvoiceHtml = (rowHeightsMm = []) => buildInvoiceHtml({ ...invoiceDocument, rowHeightsMm })
+      const invoiceHtml = renderInvoiceHtml()
       const fname = safeFilename(`${invoice.invoice_number || 'INV'}-${customerObj?.name || 'Customer'}`)
-      await exportInvoicePdf(invoiceHtml, `${fname}.pdf`)
+      await exportInvoicePdf(invoiceHtml, `${fname}.pdf`, renderInvoiceHtml)
 
       navigate(`/invoices/${invoice.id}`, { replace: true })
     } catch (e) {
@@ -419,6 +452,17 @@ export default function InvoiceCreatePage() {
             </div>
           </div>
         </div>
+
+        {customerId ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-800 dark:bg-amber-900/20">
+            <div className="text-xs font-bold uppercase tracking-wider text-amber-800 dark:text-amber-200">Customer Account Summary</div>
+            <div className="mt-3 grid gap-2 text-sm sm:grid-cols-3">
+              <div><span className="text-slate-600 dark:text-slate-300">Previous Outstanding</span><div className="font-bold">Rs. {previousOutstanding.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div></div>
+              <div><span className="text-slate-600 dark:text-slate-300">Current Invoice Total</span><div className="font-bold">Rs. {totalWithVat.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div></div>
+              <div><span className="text-amber-800 dark:text-amber-200">Total Amount Due</span><div className="text-lg font-extrabold">Rs. {(previousOutstanding + totalWithVat).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div></div>
+            </div>
+          </div>
+        ) : null}
 
         {error ? (
           <div className="flex items-start gap-2 text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">

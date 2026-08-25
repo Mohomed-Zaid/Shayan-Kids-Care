@@ -9,7 +9,8 @@ import PermissionGate from '../components/PermissionGate'
 import logo from '../pictures/logo.jpeg'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
 import { COMPANY_EMAIL } from '../lib/companyContact'
-import { paginateInvoiceItems } from '../lib/invoicePagination'
+import { useMeasuredInvoicePagination } from '../hooks/useMeasuredInvoicePagination'
+import { buildInvoiceBalanceRows } from '../lib/receivables'
 
 export default function InvoiceViewPage() {
   const { id } = useParams()
@@ -65,7 +66,7 @@ export default function InvoiceViewPage() {
           const [custInvRes, custPayRes, custRetRes] = await Promise.all([
             supabase
               .from('invoices')
-              .select('id, total_amount, created_at, payment_type')
+              .select('id, customer_id, total_amount, created_at, payment_type')
               .eq('customer_id', customerId)
               .in('payment_type', ['credit', 'cash'])
               .order('created_at', { ascending: false }),
@@ -74,7 +75,7 @@ export default function InvoiceViewPage() {
               .select('id, invoice_id, amount, paid_at'),
             supabase
               .from('returns')
-              .select('id, invoice_id, total_amount')
+              .select('id, invoice_id, customer_id, total_amount, created_at')
               .eq('customer_id', customerId)
           ])
 
@@ -116,31 +117,10 @@ export default function InvoiceViewPage() {
     })
     const thisCustomerReturns = customerReturns
 
-    // Calculate payment sum per invoice
-    const paymentSumByInvoice = new Map()
-    for (const p of thisCustomerPayments) {
-      const prev = paymentSumByInvoice.get(p.invoice_id) ?? 0
-      paymentSumByInvoice.set(p.invoice_id, prev + Number(p.amount ?? 0))
-    }
-
-    // Calculate returns sum per invoice
-    const returnsByInvoice = new Map()
-    for (const r of thisCustomerReturns) {
-      const iid = r.invoice_id
-      if (!iid) continue
-      const prev = returnsByInvoice.get(iid) ?? 0
-      returnsByInvoice.set(iid, prev + Number(r.total_amount ?? 0))
-    }
-
-    // Calculate previous outstanding (excluding current invoice)
-    let previousOutstanding = 0
-    for (const inv of thisCustomerInvoices) {
-      if (inv.id === invoice.id) continue
-      const paid = paymentSumByInvoice.get(inv.id) ?? 0
-      const returned = returnsByInvoice.get(inv.id) ?? 0
-      const balance = Number(inv.total_amount ?? 0) - paid - returned
-      previousOutstanding += balance
-    }
+    const balanceRows = buildInvoiceBalanceRows(thisCustomerInvoices, thisCustomerPayments, thisCustomerReturns)
+    const previousOutstanding = balanceRows
+      .filter((row) => row.id !== invoice.id)
+      .reduce((sum, row) => sum + row.balance, 0)
 
     const currentInvoiceTotal = Number(invoice.total_amount ?? 0)
     const totalAmountDue = previousOutstanding + currentInvoiceTotal
@@ -165,7 +145,7 @@ export default function InvoiceViewPage() {
   const vatRate = Number(invoice?.vat_rate ?? 0.18)
   const vatAmount = Number(invoice?.vat_amount ?? subtotal * vatRate)
   const totalAmount = Number(invoice?.total_amount ?? subtotal + vatAmount)
-  const invoicePages = useMemo(() => paginateInvoiceItems(items), [items])
+  const invoicePages = useMeasuredInvoicePagination(items, printRef)
 
   const onDelete = async () => {
     if (!confirm('Delete this invoice and all its items?')) return
@@ -434,6 +414,7 @@ export default function InvoiceViewPage() {
           <div className="invoice-items-pages">
             {invoicePages.map((page, pageIndex) => (
               <div key={pageIndex} className={`invoice-items-page px-8 py-2 ${pageIndex > 0 ? 'invoice-continuation-page' : ''}`}>
+                {page.items.length > 0 && (
                 <table className="w-full text-sm invoice-items-table sales-line-table">
                   <colgroup><col/><col/><col/><col/><col/><col/><col/><col/></colgroup>
                   <thead><tr className="bg-white text-black border-b-2 border-black">
@@ -459,19 +440,15 @@ export default function InvoiceViewPage() {
                         <td className="money-cell px-2 py-1.5 text-right text-slate-900 dark:text-white font-semibold">Rs. {Number(it.total ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                       </tr>
                     ))}
-                    {Array.from({ length: page.blankRows }).map((_, i) => (
-                      <tr key={`writing-${i}`} className="invoice-item-row writing-row border-b border-slate-200 dark:border-slate-700">
-                        <td className="px-2 text-center text-slate-600 dark:text-slate-300">{items.length + i + 1}</td><td /><td /><td /><td /><td /><td /><td />
-                      </tr>
-                    ))}
                   </tbody>
                 </table>
+                )}
               </div>
             ))}
           </div>
 
           {/* Totals + Signature + Footer pushed to bottom */}
-          <div className="invoice-closing-section">
+          <div className="invoice-closing-section" style={{ '--writing-space-height': `${invoicePages.at(-1)?.writingSpaceHeightMm ?? 18.52}mm` }}>
             <div className="document-settlement-section px-8 pb-2 flex justify-between items-start">
               {/* Bank Details */}
               <div className="text-xs text-slate-600 dark:text-slate-300">

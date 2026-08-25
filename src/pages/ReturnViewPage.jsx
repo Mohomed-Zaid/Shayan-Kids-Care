@@ -3,11 +3,12 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import html2pdf from 'html2pdf.js'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
-import { logAction } from '../lib/auditLog'
 import { ArrowLeft, Printer, Download, Trash2, RotateCcw } from 'lucide-react'
 import logo from '../pictures/logo.jpeg'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
 import { COMPANY_EMAIL } from '../lib/companyContact'
+
+const fmt = (value) => `Rs. ${Number(value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
 export default function ReturnViewPage() {
   const { id } = useParams()
@@ -29,7 +30,7 @@ export default function ReturnViewPage() {
 
       const retRes = await supabase
         .from('returns')
-        .select('id, return_number, total_amount, vat_rate, vat_amount, reason, created_at, customers(name, address, phone)')
+        .select('id, return_number, invoice_id, total_amount, vat_rate, vat_amount, credit_applied, excess_credit, reason, created_at, customers(name, address, phone), invoices(invoice_number)')
         .eq('id', id)
         .single()
 
@@ -82,34 +83,14 @@ export default function ReturnViewPage() {
   }, [ret?.return_number])
 
   const onDelete = async () => {
-    if (!confirm('Delete this return? Stock will be reduced back.')) return
-
-    // Get items to reduce stock back
-    const { data: returnItems } = await supabase.from('return_items').select('product_id, quantity').eq('return_id', id)
-
-    if (returnItems && returnItems.length > 0) {
-      const prodRes = await supabase.from('products').select('id, stock').in('id', returnItems.map((i) => i.product_id).filter(Boolean))
-      const prodMap = new Map((prodRes.data ?? []).map((p) => [p.id, p.stock ?? 0]))
-
-      await Promise.all(
-        returnItems
-          .filter((i) => i.product_id)
-          .map((i) => {
-            const current = prodMap.get(i.product_id) ?? 0
-            const newStock = Math.max(0, current - (i.quantity ?? 0))
-            return supabase.from('products').update({ stock: newStock }).eq('id', i.product_id)
-          })
-      )
-    }
-
-    await supabase.from('return_items').delete().eq('return_id', id)
-    const { error: err } = await supabase.from('returns').delete().eq('id', id)
+    if (!confirm('Reverse this return? Stock, receivable credit and customer credit will all be restored.')) return
+    const { error: err } = await supabase.rpc('reverse_customer_return', { p_return_id: id })
     if (err) {
       toast.error(err.message)
       return
     }
-    toast.success('Return deleted')
-    logAction({ action: 'delete_return', targetType: 'return', targetId: id })
+    toast.success('Return reversed')
+    navigate('/returns', { replace: true })
   }
 
   const downloadPdf = async () => {
@@ -250,6 +231,7 @@ export default function ReturnViewPage() {
                 <div className="font-bold text-slate-900 dark:text-white">{customer?.name ?? '-'}</div>
                 <div>{customer?.address ?? '-'}</div>
                 <div>{customer?.phone ?? '-'}</div>
+                <div>Original Invoice: {ret.invoice_id ? <Link className="font-semibold underline" to={`/invoices/${ret.invoice_id}`}>INV-{String(ret.invoices?.invoice_number ?? '').padStart(4, '0')}</Link> : <span>Unlinked legacy return</span>}</div>
               </div>
               {ret.reason ? (
                 <div className="mt-3 pt-2 border-t border-slate-100 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
@@ -327,6 +309,10 @@ export default function ReturnViewPage() {
                 <div className="px-4 py-2 bg-red-700 flex justify-between items-center border-t-2 border-red-700">
                   <span className="text-white font-bold text-sm uppercase tracking-wider">Total Refund</span>
                   <span className="text-white font-extrabold text-lg">Rs. {Number(totalAmount ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 bg-slate-50 px-4 py-2 text-xs dark:bg-slate-800">
+                  <div>Applied to Receivable: <b>{fmt(ret.credit_applied)}</b></div>
+                  <div>Excess Customer Credit: <b>{fmt(ret.excess_credit)}</b></div>
                 </div>
               </div>
             </div>

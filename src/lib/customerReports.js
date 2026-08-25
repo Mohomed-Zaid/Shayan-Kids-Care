@@ -1,17 +1,16 @@
+import { buildInvoiceBalanceRows } from './receivables.js'
+
 export const amount = value => Number(value || 0)
 export const transactionDate = row => typeof row === 'string' || row instanceof Date ? row : row?.date || row?.invoice_date || row?.order_date || row?.return_date || row?.paid_at || row?.created_at || null
 export const valid = row => !['draft','cancelled','canceled','deleted','void'].includes(String(row?.status || '').toLowerCase()) && !row?.deleted_at
 
 export function buildCustomerReport(raw, from, to) {
   const start = new Date(`${from}T00:00:00`), end = new Date(`${to}T23:59:59.999`), today = new Date()
-  const paymentsByInvoice = new Map(), returnsByInvoice = new Map()
-  raw.payments.filter(valid).forEach(p => paymentsByInvoice.set(p.invoice_id,(paymentsByInvoice.get(p.invoice_id)||0)+amount(p.amount)))
-  raw.returns.filter(valid).forEach(r => r.invoice_id&&returnsByInvoice.set(r.invoice_id,(returnsByInvoice.get(r.invoice_id)||0)+amount(r.total_amount)))
   const rows=raw.customers.map(customer=>{
     const invoices=raw.invoices.filter(x=>x.customer_id===customer.id&&valid(x)), allOrders=raw.orders.filter(x=>x.customer_id===customer.id&&!x.deleted_at), orders=allOrders.filter(valid), returns=raw.returns.filter(x=>x.customer_id===customer.id&&valid(x)), cheques=raw.cheques.filter(x=>x.customer_id===customer.id&&valid(x))
     const periodInvoices=invoices.filter(x=>{const d=new Date(transactionDate(x));return d>=start&&d<=end}), periodOrders=orders.filter(x=>{const d=new Date(transactionDate(x));return d>=start&&d<=end}), periodReturns=returns.filter(x=>{const d=new Date(transactionDate(x));return d>=start&&d<=end})
     const invoiceIds=new Set(invoices.map(x=>x.id)), payments=raw.payments.filter(x=>invoiceIds.has(x.invoice_id)&&valid(x)), periodPayments=payments.filter(x=>{const d=new Date(transactionDate(x));return d>=start&&d<=end})
-    const outstandingInvoices=invoices.map(invoice=>{const paid=paymentsByInvoice.get(invoice.id)||0,credit=returnsByInvoice.get(invoice.id)||0,balance=Math.max(0,amount(invoice.total_amount)-paid-credit),date=transactionDate(invoice),days=Math.max(0,Math.floor((today-new Date(date))/86400000));return{...invoice,paid,credit,balance,date,days,bucket:days<=30?'Current':days<=60?'31-60':days<=90?'61-90':days<=120?'91-120':'Over 120'}}).filter(x=>x.balance>0)
+    const outstandingInvoices=buildInvoiceBalanceRows(invoices,payments,returns).map(invoice=>{const date=transactionDate(invoice),days=Math.max(0,Math.floor((today-new Date(date))/86400000));return{...invoice,credit:invoice.returned,date,days,bucket:days<=30?'Current':days<=60?'31-60':days<=90?'61-90':days<=120?'91-120':'Over 120'}}).filter(x=>x.balance>0)
     const gross=periodInvoices.reduce((s,x)=>s+amount(x.total_amount),0), returnValue=periodReturns.reduce((s,x)=>s+amount(x.total_amount),0), paid=periodPayments.reduce((s,x)=>s+amount(x.amount),0), outstanding=outstandingInvoices.reduce((s,x)=>s+x.balance,0), creditLimit=amount(customer.credit_limit), available=creditLimit-outstanding
     const itemQty=periodInvoices.flatMap(x=>raw.invoiceItems.filter(i=>i.invoice_id===x.id)).reduce((s,x)=>s+amount(x.quantity),0), last=(xs)=>[...xs].sort((a,b)=>new Date(transactionDate(b))-new Date(transactionDate(a)))[0]
     const rep=raw.employees.find(x=>x.id===(customer.rep_id||customer.sales_rep_id))

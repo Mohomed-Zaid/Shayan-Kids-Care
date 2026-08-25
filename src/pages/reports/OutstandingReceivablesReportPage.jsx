@@ -4,6 +4,7 @@ import { supabase } from '../../lib/supabaseClient'
 import { ReportHeader, SummaryCards, ReportActions, ReportPagination, LoadingSkeleton, EmptyState, exportToExcel, exportToPDF } from '../../components/reports'
 import { Search } from 'lucide-react'
 import { calculateAgingDays, getAgingBucket, getAgingColorClasses, calculateAgingSummary } from '../../lib/agingCalculations'
+import { buildInvoiceBalanceRows } from '../../lib/receivables'
 
 const fmt = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
 
@@ -30,9 +31,10 @@ function OutstandingReceivablesReportPage() {
         supabase
           .from('invoices')
           .select('id, invoice_number, customer_id, total_amount, created_at, payment_type, customers(name, phone, credit_limit)')
+          .eq('payment_type', 'credit')
           .order('created_at', { ascending: false }),
         supabase.from('invoice_payments').select('id, invoice_id, amount, paid_at, method'),
-        supabase.from('returns').select('id, customer_id, total_amount'),
+        supabase.from('returns').select('id, invoice_id, customer_id, total_amount, created_at'),
         supabase.from('customers').select('id, name, phone, credit_limit').order('name'),
       ]);
 
@@ -51,12 +53,8 @@ function OutstandingReceivablesReportPage() {
         return map;
       }, new Map());
 
-      const returnsByCustomer = returns.reduce((map, r) => {
-        if (r.customer_id) {
-          map.set(r.customer_id, (map.get(r.customer_id) ?? 0) + Number(r.total_amount ?? 0));
-        }
-        return map;
-      }, new Map());
+      const invoiceBalanceRows = buildInvoiceBalanceRows(invoices, payments, returns);
+      const returnsByInvoice = new Map(invoiceBalanceRows.map(invoice => [invoice.id, invoice.returned]));
 
       const lastPaymentByCustomer = payments.reduce((map, p) => {
         const inv = invoices.find(i => i.id === p.invoice_id);
@@ -71,14 +69,14 @@ function OutstandingReceivablesReportPage() {
 
       const customerBalances = new Map();
 
-      for (const inv of invoices) {
+      for (const inv of invoiceBalanceRows) {
         const customerId = inv.customer_id;
         if (!customerId) continue;
 
-        const paid = paymentSumByInvoice.get(inv.id) ?? 0;
+        const paid = inv.paid;
         const total = Number(inv.total_amount ?? 0);
-        const retAmt = returnsByCustomer.get(customerId) ?? 0;
-        const balance = total - paid - retAmt;
+        const retAmt = inv.returned;
+        const balance = inv.balance;
 
         if (!customerBalances.has(customerId)) {
           const customer = inv.customers ?? custList.find(c => c.id === customerId) ?? {};
@@ -98,9 +96,9 @@ function OutstandingReceivablesReportPage() {
         } else {
           const existing = customerBalances.get(customerId);
           existing.invoiced += total;
-          existing.returned = retAmt;
+          existing.returned += retAmt;
           existing.paid += paid;
-          existing.balance = existing.invoiced - existing.paid - existing.returned;
+          existing.balance += balance;
           existing.invoicesCount += 1;
           existing.invoices.push(inv);
         }
@@ -108,14 +106,12 @@ function OutstandingReceivablesReportPage() {
 
       const customersWithBalances = Array.from(customerBalances.values()).map(customer => {
         // Calculate aging for this customer
-        const customerInvoices = invoices.filter(inv => inv.customer_id === customer.customerId);
-        const aging = calculateAgingSummary(customerInvoices, paymentSumByInvoice);
+        const customerInvoices = invoiceBalanceRows.filter(inv => inv.customer_id === customer.customerId);
+        const aging = calculateAgingSummary(customerInvoices, paymentSumByInvoice, returnsByInvoice);
         
         // Find latest invoice
         const outstandingInvoices = customerInvoices.filter(inv => {
-          const paid = paymentSumByInvoice.get(inv.id) ?? 0;
-          const total = Number(inv.total_amount ?? 0);
-          return (total - paid) > 0;
+          return inv.balance > 0;
         });
         
         let latestInvoiceDate = null;

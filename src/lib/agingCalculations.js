@@ -37,7 +37,7 @@ export const getAgingColorClasses = (bucket) => {
 };
 
 // Calculate aging summary for a list of invoices
-export const calculateAgingSummary = (invoices, paymentSumByInvoice) => {
+export const calculateAgingSummary = (invoices, paymentSumByInvoice, returnSumByInvoice = new Map()) => {
   const summary = {
     total: 0,
     current: 0,
@@ -49,8 +49,9 @@ export const calculateAgingSummary = (invoices, paymentSumByInvoice) => {
 
   for (const inv of invoices) {
     const paid = paymentSumByInvoice?.get?.(inv.id) ?? 0
+    const returned = returnSumByInvoice?.get?.(inv.id) ?? 0
     const total = Number(inv.total_amount ?? 0)
-    const invoiceBalance = total - paid
+    const invoiceBalance = Math.max(0, total - paid - returned)
     if (invoiceBalance <= 0) continue
 
     const days = calculateAgingDays(inv.created_at)

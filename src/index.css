@@ -869,6 +869,9 @@
   table-layout: fixed;
   width: 100%;
 }
+.invoice-items-page:not(:has(.invoice-item-row)) .sales-line-table {
+  display: none;
+}
 .sales-line-table col:nth-child(1) { width: 4%; }
 .sales-line-table col:nth-child(2) { width: 8%; }
 .sales-line-table col:nth-child(3) { width: 27%; }
@@ -878,7 +881,6 @@
 .sales-line-table col:nth-child(7) { width: 15%; }
 .sales-line-table col:nth-child(8) { width: 19%; }
 .sales-line-table .money-cell { white-space: nowrap; }
-.sales-line-table .writing-row { height: 9mm; }
 .document-settlement-section,
 .signature-section {
   break-inside: avoid !important;
@@ -897,6 +899,14 @@
   break-inside: avoid !important;
   page-break-inside: avoid !important;
   min-height: 88mm;
+}
+.invoice-closing-section::before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: var(--writing-space-height, 26.46mm);
+  min-height: var(--writing-space-height, 26.46mm);
+  background: #fff;
 }
 .invoice-pdf-export-wrapper {
   width: 210mm !important;

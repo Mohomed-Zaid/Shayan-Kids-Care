@@ -1,4 +1,5 @@
 import { COMMISSION_MONTHS, getCommissionRate } from './repCommission.js'
+import { invoiceBalance } from './receivables.js'
 
 export const num = (value) => Number(value ?? 0) || 0
 export const day = (value) => value ? String(value).slice(0, 10) : ''
@@ -28,7 +29,7 @@ export function buildRepReportModel(raw) {
     const items = itemsByInvoice.get(String(invoice.id)) || [], invoicePayments = paymentsByInvoice.get(String(invoice.id)) || [], invoiceReturns = returnsByInvoice.get(String(invoice.id)) || []
     const total = num(invoice.total_amount), returned = sum(invoiceReturns, 'total_amount'), paid = sum(invoicePayments, 'amount')
     const hasMissingCost = items.some((item) => item.cost_price == null), cost = sum(items, (item) => item.cost_price == null ? 0 : num(item.cost_price) * num(item.quantity))
-    return { ...invoice, rep, customer, items, payments: invoicePayments, returns: invoiceReturns, order: (ordersByInvoice.get(String(invoice.id)) || [])[0], total, returned, netSales: total - returned, paid, outstanding: Math.max(0, total - paid - returned), cost: hasMissingCost ? null : cost, grossProfit: hasMissingCost ? null : total - cost, rate: getCommissionRate(rep.name), displayNumber: invoiceNo(invoice) }
+    return { ...invoice, rep, customer, items, payments: invoicePayments, returns: invoiceReturns, order: (ordersByInvoice.get(String(invoice.id)) || [])[0], total, returned, netSales: total - returned, paid, outstanding: invoiceBalance(total, paid, returned), cost: hasMissingCost ? null : cost, grossProfit: hasMissingCost ? null : total - cost, rate: getCommissionRate(rep.name), displayNumber: invoiceNo(invoice) }
   })
   const invoiceRecordMap = mapBy(invoiceRecords)
 

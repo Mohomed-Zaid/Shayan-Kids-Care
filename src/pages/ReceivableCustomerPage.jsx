@@ -19,6 +19,7 @@ import { ArrowLeft, Plus, FileText } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 import ControlledDateField from '../components/ControlledDateField'
 import { calculateAgingDays, getAgingBucket, getAgingColorClasses, calculateAgingSummary } from '../lib/agingCalculations'
+import { buildInvoiceBalanceRows } from '../lib/receivables'
 
 const fmt = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
@@ -38,6 +39,7 @@ export default function ReceivableCustomerPage() {
   const [payments, setPayments] = useState([])
   const [returns, setReturns] = useState([])
   const [banks, setBanks] = useState([])
+  const [customerCredit, setCustomerCredit] = useState(0)
 
   const [payOpen, setPayOpen] = useState(false)
   const [payForm, setPayForm] = useState({
@@ -121,13 +123,13 @@ export default function ReceivableCustomerPage() {
     setLoading(true)
     setError(null)
 
-    const [custRes, invRes, payRes, retRes, bankRes] = await Promise.all([
-      supabase.from('customers').select('id, name, phone, address').eq('id', customerId).single(),
+    const [custRes, invRes, payRes, retRes, bankRes, creditRes] = await Promise.all([
+      supabase.from('customers').select('id, name, phone, address, credit_limit').eq('id', customerId).single(),
       supabase
         .from('invoices')
-        .select('id, invoice_number, total_amount, created_at, payment_type')
+        .select('id, invoice_number, customer_id, total_amount, created_at, payment_type')
         .eq('customer_id', customerId)
-        .in('payment_type', ['credit', 'cash'])
+        .eq('payment_type', 'credit')
         .order('created_at', { ascending: false }),
       supabase
         .from('invoice_payments')
@@ -135,10 +137,11 @@ export default function ReceivableCustomerPage() {
         .order('paid_at', { ascending: false }),
       supabase
         .from('returns')
-        .select('id, invoice_id, total_amount, reason, return_number, created_at')
+        .select('id, invoice_id, customer_id, total_amount, reason, return_number, created_at')
         .eq('customer_id', customerId)
         .order('created_at', { ascending: false }),
       supabase.from('banks').select('id, code, name, bank_code, branch').order('code'),
+      supabase.from('customer_credits').select('balance').eq('customer_id', customerId).maybeSingle(),
     ])
 
     if (custRes.error) {
@@ -174,6 +177,8 @@ export default function ReceivableCustomerPage() {
       setBanks(bankRes.data ?? [])
     }
 
+    setCustomerCredit(creditRes.error ? 0 : Number(creditRes.data?.balance ?? 0))
+
     setLoading(false)
   }
 
@@ -200,52 +205,19 @@ export default function ReceivableCustomerPage() {
     return map
   }, [paymentsForCustomer])
 
-  const returnsByInvoice = useMemo(() => {
-    const map = new Map()
-    let unassignedTotal = 0
-    const unassignedItems = []
-    for (const r of returns) {
-      const iid = r.invoice_id
-      if (!iid) {
-        unassignedTotal += Number(r.total_amount ?? 0)
-        unassignedItems.push(r)
-        continue
-      }
-      const prev = map.get(iid) ?? { total: 0, items: [] }
-      prev.total += Number(r.total_amount ?? 0)
-      prev.items.push(r)
-      map.set(iid, prev)
-    }
-
-    // Older returns were saved without invoice_id. They are unambiguous when
-    // the customer has only one invoice, so apply them to that invoice.
-    if (invoices.length === 1 && unassignedTotal > 0) {
-      const iid = invoices[0].id
-      const prev = map.get(iid) ?? { total: 0, items: [] }
-      prev.total += unassignedTotal
-      prev.items.push(...unassignedItems)
-      map.set(iid, prev)
-    }
-    return map
-  }, [returns, invoices])
-
   const invRows = useMemo(() => {
-    return invoices.map((inv) => {
-      const paid = paymentSumByInvoice.get(inv.id) ?? 0
-      const total = Number(inv.total_amount ?? 0)
-      const retAmount = returnsByInvoice.get(inv.id)?.total ?? 0
-      const balance = total - paid - retAmount
-      const status = (paid === 0 && retAmount === 0) ? 'unpaid' : balance > 0 ? 'partial' : 'paid'
+    return buildInvoiceBalanceRows(invoices, paymentsForCustomer, returns).map((inv) => {
       const daysOutstanding = calculateAgingDays(inv.created_at)
       const agingBucket = getAgingBucket(daysOutstanding)
-      return { ...inv, paid, returned: retAmount, balance, status, daysOutstanding, agingBucket }
+      return { ...inv, daysOutstanding, agingBucket }
     })
-  }, [invoices, paymentSumByInvoice, returnsByInvoice])
+  }, [invoices, paymentsForCustomer, returns])
 
   // Aging summary for this customer
   const customerAgingSummary = useMemo(() => {
-    return calculateAgingSummary(invoices, paymentSumByInvoice)
-  }, [invoices, paymentSumByInvoice])
+    const returnTotals = new Map(invRows.map((row) => [row.id, row.returned]))
+    return calculateAgingSummary(invoices, paymentSumByInvoice, returnTotals)
+  }, [invoices, invRows, paymentSumByInvoice])
 
   // Latest (newest) outstanding invoice
   const latestInvoice = useMemo(() => {
@@ -699,7 +671,7 @@ export default function ReceivableCustomerPage() {
       </div>
 
       {/* Customer Info Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-4">
         <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-4 shadow-sm">
           <div className="text-xs text-slate-500 dark:text-slate-400">Customer Name</div>
           <div className="text-lg font-extrabold text-slate-900 dark:text-white">{customer?.name ?? '-'}</div>
@@ -707,6 +679,10 @@ export default function ReceivableCustomerPage() {
         <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-4 shadow-sm">
           <div className="text-xs text-slate-500 dark:text-slate-400">Outstanding Balance</div>
           <div className="text-lg font-extrabold text-slate-900 dark:text-white">{fmt(totals.balance)}</div>
+        </div>
+        <div className="bg-emerald-50 dark:bg-emerald-900/25 border border-emerald-200 dark:border-emerald-700 rounded-xl p-4 shadow-sm">
+          <div className="text-xs text-emerald-700 dark:text-emerald-300">Customer Credit</div>
+          <div className="text-lg font-extrabold text-emerald-700 dark:text-emerald-300">{fmt(customerCredit)}</div>
         </div>
         <div className="bg-white dark:bg-emerald-950/25 border border-slate-200/60 dark:border-emerald-400/20 rounded-xl p-4 shadow-sm">
           <div className="text-xs text-slate-500 dark:text-slate-400">Credit Limit</div>
