@@ -34,9 +34,9 @@ const emptyFilters = { customer: '', product: '', rep: '', invoice: '', payment:
 async function fetchReportData(start, end) {
   const [invoiceResult, paymentResult, productResult, purchaseResult, orderResult] = await Promise.all([
     supabase.from('invoices').select(`
-      id, invoice_number, created_at, customer_id, rep_id, payment_type, total_amount,
+      id, invoice_number, created_at, customer_id, rep_id, payment_type, total_amount, status,
       customers(id, name, phone, address), employees(id, name),
-      invoice_items(id, product_id, quantity, price, discount, total)
+      invoice_items(id, product_id, quantity, price, discount, total, cost_price)
     `).gte('created_at', startOfDay(start)).lte('created_at', endOfDay(end)).order('created_at', { ascending: false }),
     supabase.from('invoice_payments').select('id, invoice_id, amount, paid_at, method'),
     supabase.from('products').select('id, name, code, price, stock').order('name'),
@@ -317,13 +317,13 @@ export default function SalesReportsPage({ initialMode = 'daily' }) {
       const entries = purchaseCostsByProduct.get(String(productId))
       if (!entries?.length) return null
       const saleDate = new Date(saleDateValue)
-      let cost = entries[entries.length - 1].cost
+      let cost = null
       for (const entry of entries) {
         if (entry.date <= saleDate) cost = entry.cost
       }
       return cost
     }
-    let invoices = raw.invoices.map((inv) => {
+    let invoices = raw.invoices.filter((inv) => !['cancelled', 'canceled', 'deleted', 'reversed', 'void', 'draft'].includes(String(inv.status ?? '').toLowerCase())).map((inv) => {
       const normalizedItems = (inv.invoice_items || []).map((item) => {
         const report = reportByItem.get(String(item.id))
         const variant = variantsById.get(String(item.variant_id))

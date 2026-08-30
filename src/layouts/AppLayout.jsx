@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw, Shield, ScrollText, HandCoins, Landmark, Trash2, UserCog, AlertTriangle, MessageSquare, BarChart3, Database, Mail } from 'lucide-react'
+import { LayoutDashboard, Package, Users, UserCheck, LogOut, Menu, X, Calculator, ShoppingCart, Moon, Sun, Boxes, ChevronDown, FolderTree, Truck, FileText, BookOpen, Wallet, User, Building2, RotateCcw, Shield, ScrollText, HandCoins, Landmark, Trash2, UserCog, AlertTriangle, MessageSquare, BarChart3, Database, Mail, TrendingUp, Scale } from 'lucide-react'
 import { usePermissions } from '../contexts/PermissionsContext'
 import { NAV_PERMISSION_MAP } from '../lib/permissions'
 import logo from '../pictures/logo.jpeg'
@@ -103,6 +103,11 @@ const navItems = [
       { to: '/reports/returns-delivery', label: 'Returns & Delivery Reports', icon: Truck },
       { to: '/reports/admin-system', label: 'Admin, Audit & System Reports', icon: Shield },
       { to: '/reports/finance', label: 'Finance Reports', icon: Wallet },
+      { to: '/reports/cheques', label: 'Cheque Reports', icon: Landmark },
+      { to: '/reports/day-book', label: 'Day Book', icon: BookOpen },
+      { to: '/reports/expenses', label: 'Expense Reports', icon: Wallet },
+      { to: '/reports/profit-loss', label: 'Profit & Loss', icon: TrendingUp },
+      { to: '/reports/balance-sheet', label: 'Balance Sheet', icon: Scale },
     ],
   },
   {
@@ -166,6 +171,11 @@ function usePageTitle() {
     if (path.startsWith('/reports/returns-delivery')) return 'Returns & Delivery Reports'
     if (path.startsWith('/reports/admin-system')) return 'Admin, Audit & System Reports'
     if (path.startsWith('/reports/finance')) return 'Finance Reports'
+    if (path.startsWith('/reports/cheques')) return 'Cheque Reports'
+    if (path.startsWith('/reports/day-book')) return 'Day Book'
+    if (path.startsWith('/reports/expenses')) return 'Expense Reports'
+    if (path.startsWith('/reports/profit-loss')) return 'Profit & Loss Report'
+    if (path.startsWith('/reports/balance-sheet')) return 'Balance Sheet Report'
     if (path.startsWith('/reports')) return 'Reports'
     if (path === '/orders/new') return 'Create Order'
     if (path.startsWith('/orders/') && path.endsWith('/edit')) return 'Edit Order'

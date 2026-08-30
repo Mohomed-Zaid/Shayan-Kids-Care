@@ -9,7 +9,7 @@ import logo from '../../pictures/logo.jpeg'
 import { exportToPDF, LoadingSkeleton } from '../../components/reports'
 import { buildFinanceReports, financeDashboard, FINANCE_REPORTS, REPORT_COLUMNS, reportSummary } from '../../lib/financeReports'
 
-const TABLES = ['invoices', 'invoice_items', 'invoice_payments', 'purchases', 'purchase_payments', 'customers', 'vendors', 'banks', 'customer_cheques', 'bank_reconciliation_items', 'journals', 'journal_entries', 'journal_entry_lines', 'rep_commission_payments', 'rep_payments', 'returns', 'return_items', 'employees', 'audit_logs']
+const TABLES = ['invoices', 'invoice_items', 'invoice_payments', 'purchases', 'purchase_items', 'product_variants', 'products', 'purchase_payments', 'customers', 'vendors', 'banks', 'customer_cheques', 'bank_reconciliation_items', 'journals', 'journal_categories', 'journal_entries', 'journal_entry_lines', 'expenses', 'user_privileges', 'rep_commission_payments', 'rep_payments', 'returns', 'return_items', 'employees', 'audit_logs']
 const MONEY = new Intl.NumberFormat('en-LK', { style: 'currency', currency: 'LKR', minimumFractionDigits: 2 })
 const money = (value) => MONEY.format(Number(value ?? 0))
 const formatDate = (value) => value ? new Date(`${String(value).slice(0, 10)}T00:00:00`).toLocaleDateString() : '-'
@@ -31,22 +31,7 @@ function presetDates(preset) {
 const defaultFilters = () => ({ preset: 'this-month', ...presetDates('this-month'), customerId: '', vendorId: '', bank: '', method: '', status: '', repId: '', accountId: '', transactionType: '', minAmount: '', maxAmount: '', createdBy: '' })
 
 function profitLossPeriodRaw(raw, from, to) {
-  const within = (value) => { const date = dateKey(value); return !!date && (!from || date >= from) && (!to || date <= to) }
-  const invoices = (raw.invoices ?? []).filter((row) => within(row.created_at))
-  const invoiceIds = new Set(invoices.map((row) => String(row.id)))
-  const entries = (raw.journal_entries ?? []).filter((row) => within(row.date ?? row.created_at))
-  const entryIds = new Set(entries.map((row) => String(row.id)))
-  return {
-    ...raw,
-    invoices,
-    invoice_items: (raw.invoice_items ?? []).filter((row) => invoiceIds.has(String(row.invoice_id))),
-    invoice_payments: raw.invoice_payments ?? [],
-    returns: (raw.returns ?? []).filter((row) => within(row.created_at)),
-    journal_entries: entries,
-    journal_entry_lines: (raw.journal_entry_lines ?? []).filter((row) => entryIds.has(String(row.entry_id))),
-    rep_commission_payments: (raw.rep_commission_payments ?? []).filter((row) => within(row.paid_at)),
-    rep_payments: (raw.rep_payments ?? []).filter((row) => within(row.paid_at)),
-  }
+  return { ...raw, profitLossRange: { from, to } }
 }
 
 function SummaryGrid({ items, compact = false }) {
@@ -65,25 +50,25 @@ function FilterField({ label, children }) {
 const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-emerald-500 dark:border-emerald-400/20 dark:bg-slate-950 dark:text-white'
 
 function PrintDocument({ report, columns, rows, summary, filters, generatedBy }) {
-  const filterText = [filters.customerId && 'Customer selected', filters.vendorId && 'Vendor selected', filters.bank && `Bank: ${filters.bank}`, filters.method && `Method: ${filters.method}`, filters.status && `Status: ${filters.status}`, filters.repId && 'Rep selected', filters.accountId && 'Account selected'].filter(Boolean).join(' • ') || 'No additional filters'
+  const filterText = [filters.customerId && 'Customer selected', filters.vendorId && 'Vendor selected', filters.bank && `Bank: ${filters.bank}`, filters.method && `Method: ${filters.method}`, filters.status && `Status: ${filters.status}`, filters.repId && 'Rep selected', filters.accountId && 'Account selected'].filter(Boolean).join(' â€¢ ') || 'No additional filters'
   return <div id="finance-report-print" className="bg-white p-6 text-slate-900">
     <header className="mb-5 flex items-center justify-between border-b-2 border-emerald-700 pb-4">
-      <div className="flex items-center gap-4"><img src={logo} className="h-16 w-16 rounded object-cover" alt="Company logo"/><div><div className="text-2xl font-black">Shayan's Kids & Toys Store</div><div className="text-sm">Wholesale Management System • Sri Lanka</div></div></div>
-      <div className="text-right"><div className="text-xl font-black text-emerald-800">{report.title}</div><div className="text-xs">{formatDate(filters.from)} – {formatDate(filters.to)}</div></div>
+      <div className="flex items-center gap-4"><img src={logo} className="h-16 w-16 rounded object-cover" alt="Company logo"/><div><div className="text-2xl font-black">Shayan's Kids & Toys Store</div><div className="text-sm">Wholesale Management System â€¢ Sri Lanka</div></div></div>
+      <div className="text-right"><div className="text-xl font-black text-emerald-800">{report.title}</div><div className="text-xs">{formatDate(filters.from)} â€“ {formatDate(filters.to)}</div></div>
     </header>
     <div className="mb-4 grid grid-cols-2 gap-2 text-xs"><div><b>Applied filters:</b> {filterText}</div><div className="text-right"><b>Generated by:</b> {generatedBy}<br/><b>Generated:</b> {new Date().toLocaleString()}</div></div>
     <div className="mb-4 grid grid-cols-4 gap-2">{summary.map(([label, value]) => <div key={label} className="border border-slate-300 p-2"><div className="text-[10px] uppercase text-slate-500">{label}</div><div className="font-bold">{typeof value === 'number' ? money(value) : value}</div></div>)}</div>
     <table className="w-full border-collapse text-[9px]"><thead><tr>{columns.map(([key, label]) => <th key={key} className="border border-slate-300 bg-slate-100 p-1 text-left">{label}</th>)}</tr></thead><tbody>{rows.map((row, index) => <tr key={row.id ?? index}>{columns.map(([key, , type]) => <td key={key} className="border border-slate-200 p-1">{type === 'money' ? money(row[key]) : type === 'date' ? formatDate(row[key]) : String(row[key] ?? '-')}</td>)}</tr>)}</tbody></table>
-    <footer className="mt-4 border-t pt-2 text-center text-[10px] text-slate-500">Generated from live financial records • Shayan's Kids Finance Reports</footer>
+    <footer className="mt-4 border-t pt-2 text-center text-[10px] text-slate-500">Generated from live financial records â€¢ Shayan's Kids Finance Reports</footer>
   </div>
 }
 
-export default function FinanceReportsPage() {
+export default function FinanceReportsPage({ initialMode = '' }) {
   const toast = useToast()
   const { user } = useAuth()
   const { can, isSuperAdmin, record } = usePermissions()
   const allowedReports = useMemo(() => FINANCE_REPORTS.filter((report) => isSuperAdmin || can('reports_finance', report.permission)), [can, isSuperAdmin])
-  const [active, setActive] = useState(allowedReports[0]?.key ?? 'receivables')
+  const [active, setActive] = useState(() => allowedReports.some((report) => report.key === initialMode) ? initialMode : allowedReports[0]?.key ?? 'receivables')
   const [raw, setRaw] = useState(null)
   const [warnings, setWarnings] = useState([])
   const [loading, setLoading] = useState(true)
@@ -101,7 +86,7 @@ export default function FinanceReportsPage() {
     const results = await Promise.all(TABLES.map(async (table) => ({ table, ...(await supabase.from(table).select('*')) })))
     const next = {}
     const failed = []
-    results.forEach(({ table, data, error }) => { next[table] = data ?? []; if (error && !['rep_payments', 'rep_commission_payments'].includes(table)) failed.push(`${table}: ${error.message}`) })
+    results.forEach(({ table, data, error }) => { next[table] = data ?? []; if (error && !['rep_payments', 'rep_commission_payments', 'expenses', 'user_privileges', 'journal_categories', 'purchase_items', 'product_variants', 'products'].includes(table)) failed.push(`${table}: ${error.message}`) })
     setRaw(next)
     setWarnings(failed)
     setLoading(false)
@@ -212,8 +197,8 @@ export default function FinanceReportsPage() {
 
       <div className="mt-5 flex flex-wrap items-center gap-3"><div className="relative min-w-[240px] flex-1"><Search size={16} className="absolute left-3 top-3 text-slate-400"/><input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1) }} className={`${inputClass} pl-9`} placeholder="Search all report columns..."/></div><div className="relative"><button onClick={() => setShowColumns((v) => !v)} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-bold"><Settings2 size={15}/>Columns <ChevronDown size={14}/></button>{showColumns && <div className="absolute right-0 z-20 mt-2 max-h-80 w-64 overflow-y-auto rounded-xl border bg-white p-2 shadow-xl dark:border-emerald-400/20 dark:bg-slate-950">{columns.map(([key, label]) => <label key={key} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm"><input type="checkbox" checked={visible[key] !== false} onChange={(e) => setVisible((v) => ({ ...v, [key]: e.target.checked }))}/>{label}</label>)}</div>}</div></div>
 
-      <div className="mt-4 max-h-[68vh] overflow-auto rounded-lg border border-slate-200 dark:border-emerald-400/20"><table className="min-w-full whitespace-nowrap text-sm"><thead className="sticky top-0 z-20 bg-slate-50 dark:bg-emerald-950"><tr>{shownColumns.map(([key, label, type]) => <th key={key} onClick={() => toggleSort(key)} className={`cursor-pointer px-3 py-3 text-[11px] font-black uppercase tracking-wide text-slate-500 ${type === 'money' ? 'text-right' : 'text-left'}`}>{label}{sort.key === key ? (sort.direction === 'asc' ? ' ↑' : ' ↓') : ''}</th>)}</tr></thead><tbody className="divide-y divide-slate-100 dark:divide-emerald-400/10">{pageRows.map((row, index) => <tr key={row.id ?? index} className="hover:bg-slate-50 dark:hover:bg-emerald-500/5">{shownColumns.map(([key, , type]) => <td key={key} className={`px-3 py-2.5 tabular-nums text-slate-700 dark:text-emerald-50 ${type === 'money' ? 'text-right font-semibold' : ''}`}>{type === 'money' ? money(row[key]) : type === 'date' ? formatDate(row[key]) : String(row[key] ?? '-')}</td>)}</tr>)}{pageRows.length === 0 && <tr><td colSpan={shownColumns.length} className="p-10 text-center text-slate-500">No rows match the applied filters.</td></tr>}</tbody></table></div>
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600 dark:text-emerald-100/70"><div>Showing {filteredRows.length ? (page - 1) * pageSize + 1 : 0}–{Math.min(page * pageSize, filteredRows.length)} of {filteredRows.length}</div><div className="flex items-center gap-2"><select className={inputClass} value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1) }}><option>10</option><option>25</option><option>50</option><option>100</option></select><button className="rounded border px-3 py-2 disabled:opacity-40" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</button><span>{page} / {totalPages}</span><button className="rounded border px-3 py-2 disabled:opacity-40" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</button></div></div>
+      <div className="mt-4 max-h-[68vh] overflow-auto rounded-lg border border-slate-200 dark:border-emerald-400/20"><table className="min-w-full whitespace-nowrap text-sm"><thead className="sticky top-0 z-20 bg-slate-50 dark:bg-emerald-950"><tr>{shownColumns.map(([key, label, type]) => <th key={key} onClick={() => toggleSort(key)} className={`cursor-pointer px-3 py-3 text-[11px] font-black uppercase tracking-wide text-slate-500 ${type === 'money' ? 'text-right' : 'text-left'}`}>{label}{sort.key === key ? (sort.direction === 'asc' ? ' â†‘' : ' â†“') : ''}</th>)}</tr></thead><tbody className="divide-y divide-slate-100 dark:divide-emerald-400/10">{pageRows.map((row, index) => <tr key={row.id ?? index} className="hover:bg-slate-50 dark:hover:bg-emerald-500/5">{shownColumns.map(([key, , type]) => <td key={key} className={`px-3 py-2.5 tabular-nums text-slate-700 dark:text-emerald-50 ${type === 'money' ? 'text-right font-semibold' : ''}`}>{type === 'money' ? money(row[key]) : type === 'date' ? formatDate(row[key]) : String(row[key] ?? '-')}</td>)}</tr>)}{pageRows.length === 0 && <tr><td colSpan={shownColumns.length} className="p-10 text-center text-slate-500">No rows match the applied filters.</td></tr>}</tbody></table></div>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-600 dark:text-emerald-100/70"><div>Showing {filteredRows.length ? (page - 1) * pageSize + 1 : 0}â€“{Math.min(page * pageSize, filteredRows.length)} of {filteredRows.length}</div><div className="flex items-center gap-2"><select className={inputClass} value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1) }}><option>10</option><option>25</option><option>50</option><option>100</option></select><button className="rounded border px-3 py-2 disabled:opacity-40" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</button><span>{page} / {totalPages}</span><button className="rounded border px-3 py-2 disabled:opacity-40" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</button></div></div>
     </section>
     <div className="fixed left-[-10000px] top-0 w-[1500px]"><PrintDocument report={report} columns={shownColumns} rows={filteredRows} summary={summary.slice(0, 5)} filters={filters} generatedBy={generatedBy}/></div>
   </div>

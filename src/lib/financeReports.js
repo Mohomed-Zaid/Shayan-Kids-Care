@@ -1,4 +1,5 @@
 import { getCommissionRate } from './repCommission.js'
+import { buildProfitLoss, profitLossStatement } from './profitLoss.js'
 import { buildInvoiceBalanceRows } from './receivables.js'
 
 const n = (value) => Number(value ?? 0) || 0
@@ -12,8 +13,8 @@ const daysSince = (value) => {
 }
 const aging = (days) => days <= 30 ? 'Current' : days <= 60 ? '31-60' : days <= 90 ? '61-90' : days <= 120 ? '91-120' : '120+'
 const sum = (rows, field) => rows.reduce((total, row) => total + n(typeof field === 'function' ? field(row) : row[field]), 0)
-const keyBy = (rows, field = 'id') => new Map(rows.map((row) => [String(row[field]), row]))
-const groupBy = (rows, field) => {
+const keyBy = (rows = [], field = 'id') => new Map(rows.map((row) => [String(row[field]), row]))
+const groupBy = (rows = [], field) => {
   const result = new Map()
   rows.forEach((row) => {
     const key = String(typeof field === 'function' ? field(row) : row[field] ?? '')
@@ -197,7 +198,7 @@ export function buildFinanceReports(raw) {
   const commissions = [...salesByRepPeriod.entries()].map(([key, totalSales]) => {
     const [repId, year, monthIndex] = key.split('|')
     const rep = employees.get(String(repId)) ?? {}
-    const rate = rep.commission_rate != null ? n(rep.commission_rate) : getCommissionRate(rep.name)
+    const rate = getCommissionRate(rep.name)
     const earned = Math.max(0, totalSales) * rate
     const payments = paidByRepPeriod.get(key) ?? []
     const paid = sum(payments, 'amount')
@@ -212,20 +213,7 @@ export function buildFinanceReports(raw) {
     return { id: row.id, repId: row.rep_id, rep: employees.get(String(row.rep_id))?.name ?? '-', date: dateOnly(row.paid_at), commissionDue: n(commission.commissionEarned), amountPaid: n(row.amount), advanceAmount: n(row.advance_amount), advanceApplied: n(row.advance_applied), remainingDue: Math.max(0, n(commission.commissionEarned) - n(commission.amountPaid) - n(commission.advanceApplied)), method: row.method ?? '-', notes: row.note ?? '-', smsStatus: row.sms_sent ? 'Sent' : 'Not sent', createdBy: creator(row), amount: n(row.amount) }
   })
 
-  const grossSales = sum(invoices, 'total_amount')
-  const salesReturns = sum(returns, 'total_amount')
-  const netSales = grossSales - salesReturns
-  const cogs = sum(raw.invoice_items ?? [], (row) => n(row.cost_price) * n(row.quantity))
-  const grossProfit = netSales - cogs
-  const expenseAccounts = new Set((raw.journals ?? []).filter((row) => String(row.account_type ?? '').toLowerCase().includes('expense')).map((row) => String(row.id)))
-  const journalExpenses = sum(raw.journal_entry_lines ?? [], (row) => expenseAccounts.has(String(row.journal_id)) ? n(row.debit) - n(row.credit) : 0)
-  const commissionsEarned = sum(commissions, 'commissionEarned')
-  const expenses = journalExpenses + commissionsEarned
-  const netProfit = grossProfit - expenses
-  const profitLoss = [
-    ['Revenue', 'Gross Sales', grossSales], ['Revenue', 'Returns', -salesReturns], ['Revenue', 'Net Sales', netSales], ['Cost', 'Cost of Goods Sold (historical)', -cogs],
-    ['Gross Profit', 'Gross Profit', grossProfit], ['Other Expenses', 'Journal Expenses', -journalExpenses], ['Other Expenses', 'Rep Commissions', -commissionsEarned], ['Net Profit', 'Net Profit', netProfit],
-  ].map(([section, description, amount], id) => ({ id, section, description, amount, date: '' }))
+  const profitLoss = profitLossStatement(buildProfitLoss(raw, raw.profitLossRange ?? {}))
 
   const totalCashIn = sum(cashTransactions, 'cashIn')
   const totalCashOut = sum(cashTransactions, 'cashOut')

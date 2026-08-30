@@ -296,6 +296,61 @@ export const PERMISSION_CATALOG = [
     ],
   },
   {
+    id: 'reports_profit_loss',
+    label: 'Profit & Loss Report',
+    group: 'Reports',
+    route: '/reports/profit-loss',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'print', label: 'Print' },
+      { id: 'export', label: 'Export' },
+    ],
+  },
+  {
+    id: 'reports_balance_sheet',
+    label: 'Balance Sheet Report',
+    group: 'Reports',
+    route: '/reports/balance-sheet',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'print', label: 'Print' },
+      { id: 'export', label: 'Export' },
+    ],
+  },
+  {
+    id: 'reports_expenses',
+    label: 'Expense Reports',
+    group: 'Reports',
+    route: '/reports/expenses',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'print', label: 'Print' },
+      { id: 'export', label: 'Export' },
+    ],
+  },
+  {
+    id: 'reports_day_book',
+    label: 'Day Book',
+    group: 'Reports',
+    route: '/reports/day-book',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'print', label: 'Print' },
+      { id: 'export', label: 'Export' },
+    ],
+  },
+  {
+    id: 'reports_cheques',
+    label: 'Cheque Reports',
+    group: 'Reports',
+    route: '/reports/cheques',
+    actions: [
+      { id: 'view', label: 'View' },
+      { id: 'print', label: 'Print' },
+      { id: 'export', label: 'Export' },
+    ],
+  },
+  {
     id: 'reports_finance',
     label: 'Finance Reports',
     group: 'Reports',
@@ -489,6 +544,11 @@ export const NAV_PERMISSION_MAP = {
   '/reports/admin-system': 'reports_admin_system',
   '/reports/inventory/detailed': 'reports_inventory',
   '/reports/finance': 'reports_finance',
+  '/reports/cheques': 'reports_cheques',
+  '/reports/day-book': 'reports_day_book',
+  '/reports/expenses': 'reports_expenses',
+  '/reports/profit-loss': 'reports_profit_loss',
+  '/reports/balance-sheet': 'reports_balance_sheet',
 }
 
 export function moduleForPath(pathname) {
@@ -500,6 +560,11 @@ export function moduleForPath(pathname) {
   if (path.startsWith('/reports/purchases')) return 'reports_purchase'
   if (path.startsWith('/reports/inventory/detailed')) return 'reports_inventory'
   if (path.startsWith('/reports/finance')) return 'reports_finance'
+  if (path.startsWith('/reports/cheques')) return 'reports_cheques'
+  if (path.startsWith('/reports/day-book')) return 'reports_day_book'
+  if (path.startsWith('/reports/expenses')) return 'reports_expenses'
+  if (path.startsWith('/reports/profit-loss')) return 'reports_profit_loss'
+  if (path.startsWith('/reports/balance-sheet')) return 'reports_balance_sheet'
   if (path.startsWith('/sms-service')) return 'sms'
   if (path.startsWith('/finance/receivables')) return 'finance_receivables'
   if (path.startsWith('/finance/payables')) return 'finance_payables'

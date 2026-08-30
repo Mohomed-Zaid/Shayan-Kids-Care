@@ -4,7 +4,7 @@ import { invoiceBalance } from './receivables.js'
 export const num = (value) => Number(value ?? 0) || 0
 export const day = (value) => value ? String(value).slice(0, 10) : ''
 export const monthKey = (value) => day(value).slice(0, 7)
-const invalid = (row) => ['cancelled', 'canceled', 'deleted', 'void', 'draft'].includes(String(row?.status ?? '').toLowerCase())
+const invalid = (row) => ['cancelled', 'canceled', 'deleted', 'reversed', 'void', 'draft'].includes(String(row?.status ?? '').toLowerCase())
 const mapBy = (rows) => new Map(rows.map((row) => [String(row.id), row]))
 const groupBy = (rows, key) => { const out = new Map(); rows.forEach((row) => { const id = String(typeof key === 'function' ? key(row) : row[key] ?? ''); out.set(id, [...(out.get(id) || []), row]) }); return out }
 const sum = (rows, key) => rows.reduce((total, row) => total + num(typeof key === 'function' ? key(row) : row[key]), 0)
@@ -19,7 +19,7 @@ export function buildRepReportModel(raw) {
   const repMap = mapBy(reps), customerMap = mapBy(raw.customers || []), productMap = mapBy(raw.products || [])
   const invoices = (raw.invoices || []).filter((row) => row.rep_id && !invalid(row))
   const invoiceMap = mapBy(invoices), invoiceItems = raw.invoice_items || [], orders = (raw.orders || []).filter((row) => row.rep_id && !invalid(row))
-  const orderItems = raw.order_items || [], payments = raw.invoice_payments || [], returns = raw.returns || [], repPayments = raw.rep_commission_payments?.length ? raw.rep_commission_payments : (raw.rep_payments || [])
+  const orderItems = raw.order_items || [], payments = raw.invoice_payments || [], returns = (raw.returns || []).filter((row) => !invalid(row)), repPayments = raw.rep_commission_payments?.length ? raw.rep_commission_payments : (raw.rep_payments || [])
   const itemsByInvoice = groupBy(invoiceItems, 'invoice_id'), paymentsByInvoice = groupBy(payments, 'invoice_id'), ordersByInvoice = groupBy(orders.filter((row) => row.invoice_id), 'invoice_id')
   const returnsByInvoice = groupBy(returns.filter((row) => row.invoice_id), 'invoice_id'), ordersByRep = groupBy(orders, 'rep_id'), invoicesByRep = groupBy(invoices, 'rep_id')
   const repPaymentsByPeriod = groupBy(repPayments, (row) => `${row.rep_id}|${row.period_year}-${String(num(row.period_month) + 1).padStart(2, '0')}`)

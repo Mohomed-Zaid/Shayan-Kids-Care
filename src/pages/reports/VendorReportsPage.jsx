@@ -88,9 +88,9 @@ function ExportDocument({ mode, range, filters, user, vendor, columns, rows, car
   </div>
 }
 
-export default function VendorReportsPage() {
+export default function VendorReportsPage({ initialMode = 'overview' }) {
   const { user } = useAuth(), { can, isSuperAdmin } = usePermissions()
-  const [mode,setMode] = useState('overview'), [range,setRange] = useState(() => presetRange('year'))
+  const [mode,setMode] = useState(initialMode), [range,setRange] = useState(() => presetRange('year'))
   const [draft,setDraft] = useState(emptyFilters), [filters,setFilters] = useState(emptyFilters)
   const [raw,setRaw] = useState(null), [loading,setLoading] = useState(true), [error,setError] = useState('')
   const [page,setPage] = useState(1), [pageSize,setPageSize] = useState(25), [sort,setSort] = useState({key:'date',dir:'desc'})

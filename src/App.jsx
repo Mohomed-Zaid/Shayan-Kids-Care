@@ -54,6 +54,8 @@ import CustomerStatementPage from './pages/reports/CustomerStatementPage'
 import CustomerLedgerPage from './pages/reports/CustomerLedgerPage'
 import CustomerReportsPage from './pages/reports/CustomerReportsPage'
 import ReportsLandingPage from './pages/reports/ReportsLandingPage'
+import ReportDirectoryPage from './pages/reports/ReportDirectoryPage'
+import ReportRoutePage from './pages/reports/ReportRoutePage'
 import PurchaseReportsPage from './pages/reports/PurchaseReportsPage'
 import InventoryReportsPage from './pages/reports/InventoryReportsPage'
 import FinanceReportsPage from './pages/reports/FinanceReportsPage'
@@ -61,6 +63,11 @@ import VendorReportsPage from './pages/reports/VendorReportsPage'
 import RepCommissionReportsPage from './pages/reports/RepCommissionReportsPage'
 import ReturnsDeliveryReportsPage from './pages/reports/ReturnsDeliveryReportsPage'
 import AdminSystemReportsPage from './pages/reports/AdminSystemReportsPage'
+import ChequeReportsPage from './pages/reports/ChequeReportsPage'
+import DayBookReportPage from './pages/reports/DayBookReportPage'
+import ExpenseReportsPage from './pages/reports/ExpenseReportsPage'
+import ProfitLossReportPage from './pages/reports/ProfitLossReportPage'
+import BalanceSheetReportPage from './pages/reports/BalanceSheetReportPage'
 import SalaryTransferRequestPage from './pages/SalaryTransferRequestPage'
 
 function P({ module, action = 'view', children }) {
@@ -105,27 +112,18 @@ export default function App() {
                   <Route path="/inventory/beginning-stock" element={<P module="inventory_beginning_stock"><BeginningStockPage /></P>} />
                   
                   {/* Reports */}
-                  <Route path="/reports" element={<P module="invoices"><ReportsLandingPage /></P>} />
-                  <Route path="/reports/sales/daily" element={<P module="invoices"><SalesReportsPage initialMode="daily" /></P>} />
-                  <Route path="/reports/sales/monthly" element={<P module="invoices"><SalesReportsPage initialMode="monthly" /></P>} />
-                  <Route path="/reports/sales/by-customer" element={<P module="invoices"><SalesReportsPage initialMode="customer" /></P>} />
-                  <Route path="/reports/sales/by-product" element={<P module="invoices"><SalesReportsPage initialMode="product" /></P>} />
-                  <Route path="/reports/sales/by-sales-rep" element={<P module="invoices"><SalesReportsPage initialMode="rep" /></P>} />
-                  <Route path="/reports/inventory/current-stock" element={<P module="products"><CurrentStockReportPage /></P>} />
-                  <Route path="/reports/inventory/low-stock" element={<P module="products"><LowStockReportPage /></P>} />
-                  <Route path="/reports/inventory/backorder" element={<P module="products"><BackorderReportPage /></P>} />
-                  <Route path="/reports/customer/outstanding-receivables" element={<P module="finance_receivables"><OutstandingReceivablesReportPage /></P>} />
-                  <Route path="/reports/customer/statement" element={<P module="reports_customers"><CustomerStatementPage /></P>} />
-                  <Route path="/reports/customer/ledger" element={<P module="finance_receivables"><CustomerLedgerPage /></P>} />
-                  <Route path="/reports/customers" element={<P module="reports_customers"><CustomerReportsPage /></P>} />
-                  <Route path="/reports/purchases" element={<P module="reports_purchase"><PurchaseReportsPage /></P>} />
-                  <Route path="/reports/inventory/detailed" element={<P module="reports_inventory"><InventoryReportsPage /></P>} />
-                  <Route path="/reports/finance" element={<P module="reports_finance"><FinanceReportsPage /></P>} />
-                  <Route path="/reports/vendors" element={<P module="reports_vendors"><VendorReportsPage /></P>} />
-                  <Route path="/reports/reps" element={<P module="reports_reps"><RepCommissionReportsPage /></P>} />
-                  <Route path="/reports/returns-delivery" element={<P module="reports_returns_delivery"><ReturnsDeliveryReportsPage /></P>} />
-                  <Route path="/reports/admin-system" element={<P module="reports_admin_system"><AdminSystemReportsPage /></P>} />
-                  
+                  <Route path="/reports" element={<ReportsLandingPage />} />
+                  <Route path="/reports/customer/outstanding-receivables" element={<Navigate to="/reports/customers/outstanding-receivables" replace />} />
+                  <Route path="/reports/customer/statement" element={<Navigate to="/reports/customers/statement" replace />} />
+                  <Route path="/reports/customer/ledger" element={<Navigate to="/reports/customers/ledger" replace />} />
+                  <Route path="/reports/day-book" element={<P module="reports_day_book"><DayBookReportPage /></P>} />
+                  <Route path="/reports/expenses" element={<Navigate to="/reports/finance/expense-summary" replace />} />
+                  <Route path="/reports/profit-loss" element={<Navigate to="/reports/finance/profit-loss" replace />} />
+                  <Route path="/reports/balance-sheet" element={<Navigate to="/reports/finance/balance-sheet" replace />} />
+                  <Route path="/reports/returns-delivery" element={<Navigate to="/reports/returns" replace />} />
+                  <Route path="/reports/admin-system" element={<Navigate to="/reports/admin" replace />} />
+                  <Route path="/reports/:categoryKey/:reportSlug" element={<ReportRoutePage />} />
+                  <Route path="/reports/:categoryKey" element={<ReportDirectoryPage />} />
                   <Route path="/finance/journal-entry" element={<P module="finance_journal_entry"><JournalEntryPage /></P>} />
                   <Route path="/finance/rep-payments" element={<P module="finance_rep_payments"><RepPaymentsPage /></P>} />
                   <Route path="/finance/receivables" element={<P module="finance_receivables"><ReceivablesPage /></P>} />

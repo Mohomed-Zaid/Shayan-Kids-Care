@@ -1,140 +1,23 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
-import { BarChart3, Database, Users, FileText, TrendingUp, Package, Wallet } from 'lucide-react';
+import React,{useMemo,useState}from'react'
+import{ArrowRight,BarChart3,Clock,FileText,Search,Star}from'lucide-react'
+import{Link}from'react-router-dom'
+import{useAuth}from'../../contexts/AuthContext';import{usePermissions}from'../../contexts/PermissionsContext'
+import{REPORT_CATEGORIES,categoryPath,reportAction,reportPath,userStorageKey}from'./reportCatalog'
 
-const reportCategories = [
-  {
-    key: 'sales',
-    title: 'Sales Reports',
-    icon: TrendingUp,
-    reports: [
-      { name: 'Daily Sales Report', path: '/reports/sales/daily' },
-      { name: 'Monthly Sales Report', path: '/reports/sales/monthly' },
-      { name: 'Sales by Customer', path: '/reports/sales/by-customer' },
-      { name: 'Sales by Product', path: '/reports/sales/by-product' },
-      { name: 'Sales by Sales Rep', path: '/reports/sales/by-sales-rep' },
-    ],
-  },
-  {
-    key: 'inventory',
-    title: 'Inventory Reports',
-    icon: Package,
-    reports: [
-      { name: 'Detailed Inventory Report', path: '/reports/inventory/detailed' },
-      { name: 'Current Stock Report', path: '/reports/inventory/current-stock' },
-      { name: 'Low Stock Report', path: '/reports/inventory/low-stock' },
-      { name: 'Backorder Report', path: '/reports/inventory/backorder' },
-    ],
-  },
-  {
-    key: 'purchase',
-    title: 'Purchase Reports',
-    icon: Database,
-    reports: [
-      { name: 'Purchase Reports Suite', path: '/reports/purchases' },
-    ],
-  },
-  {
-    key: 'finance',
-    title: 'Finance Reports',
-    icon: Wallet,
-    reports: [
-      { name: 'Complete Finance Reports Suite', path: '/reports/finance' },
-    ],
-  },
-  {
-    key: 'vendor',
-    title: 'Vendor Reports',
-    icon: Database,
-    reports: [
-      { name: 'Complete Vendor Reports Suite', path: '/reports/vendors' },
-    ],
-  },
-  {
-    key: 'reps',
-    title: 'Rep & Commission Reports',
-    icon: TrendingUp,
-    reports: [
-      { name: 'Complete Rep & Commission Reports Suite', path: '/reports/reps' },
-    ],
-  },
-  {
-    key: 'returns-delivery',
-    title: 'Returns & Delivery Reports',
-    icon: Package,
-    reports: [
-      { name: 'Complete Returns & Delivery Reports Suite', path: '/reports/returns-delivery' },
-    ],
-  },
-  {
-    key: 'admin-system',
-    title: 'Admin, Audit & System Reports',
-    icon: BarChart3,
-    reports: [
-      { name: 'Administrative Control & Audit Reports', path: '/reports/admin-system' },
-    ],
-  },
-  {
-    key: 'customer',
-    title: 'Customer Reports',
-    icon: Users,
-    reports: [
-      { name: 'Detailed Customer Reports', path: '/reports/customers' },
-      { name: 'Outstanding Receivables', path: '/reports/customer/outstanding-receivables' },
-      { name: 'Customer Statement', path: '/reports/customer/statement' },
-      { name: 'Customer Ledger', path: '/reports/customer/ledger' },
-    ],
-  },
-];
-
-export default function ReportsLandingPage() {
-  return (
-    <div className="space-y-8">
-      <div className="bg-white dark:bg-emerald-950/25 border border-slate-200 dark:border-emerald-400/20 rounded-xl p-8 shadow-sm">
-        <div className="flex items-center gap-4">
-          <div className="bg-emerald-500/10 p-4 rounded-xl">
-            <BarChart3 size={40} className="text-emerald-600 dark:text-emerald-400" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Reports</h1>
-            <p className="text-slate-600 dark:text-emerald-100/70 mt-1">
-              Access all sales, inventory, and customer reports
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {reportCategories.map((category) => {
-          const Icon = category.icon;
-          return (
-            <div
-              key={category.key}
-              className="bg-white dark:bg-emerald-950/25 border border-slate-200 dark:border-emerald-400/20 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="bg-slate-50 dark:bg-emerald-900/30 p-3 rounded-lg">
-                  <Icon size={24} className="text-slate-700 dark:text-emerald-400" />
-                </div>
-                <h2 className="text-xl font-semibold text-slate-900 dark:text-white">{category.title}</h2>
-              </div>
-              <ul className="space-y-2">
-                {category.reports.map((report) => (
-                  <li key={report.path}>
-                    <Link
-                      to={report.path}
-                      className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 dark:text-emerald-100/80 hover:bg-slate-50 dark:hover:bg-emerald-500/10 transition-colors"
-                    >
-                      <FileText size={16} />
-                      {report.name}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
+export default function ReportsLandingPage(){const{user}=useAuth(),{can,isSuperAdmin}=usePermissions(),[query,setQuery]=useState('')
+ const read=kind=>{try{return JSON.parse(localStorage.getItem(userStorageKey(user,kind))||'[]')}catch{return[]}}
+ const[favorites,setFavorites]=useState(()=>read('favorites')),recent=read('recent')
+ const categories=useMemo(()=>REPORT_CATEGORIES.map(category=>({...category,reports:category.reports.filter(item=>isSuperAdmin||can(item.module,reportAction(item)))})).filter(category=>category.reports.length),[can,isSuperAdmin])
+ const all=categories.flatMap(category=>category.reports.map(report=>({category,report,path:reportPath(category,report)})))
+ const byPath=new Map(all.map(item=>[item.path,item])),favoriteItems=favorites.map(path=>byPath.get(path)).filter(Boolean),recentItems=recent.map(path=>byPath.get(path)).filter(Boolean).slice(0,5)
+ const results=query.trim()?all.filter(({category,report})=>`${category.title} ${report.name} ${report.keywords}`.toLowerCase().includes(query.trim().toLowerCase())):[]
+ const toggle=path=>{const next=favorites.includes(path)?favorites.filter(x=>x!==path):[...favorites,path];setFavorites(next);localStorage.setItem(userStorageKey(user,'favorites'),JSON.stringify(next))}
+ const ReportLink=({item})=><div className="report-home-link"><Link to={item.path}><FileText size={15}/>{item.report.name}</Link><button onClick={()=>toggle(item.path)} aria-label="Toggle favorite"><Star size={15} fill={favorites.includes(item.path)?'currentColor':'none'}/></button></div>
+ return <div className="space-y-5">
+  <header className="report-home-header"><div className="flex items-center gap-3"><div className="rounded-xl bg-emerald-500/10 p-3"><BarChart3 size={30} className="text-emerald-600"/></div><div><h1 className="text-2xl font-bold">Reports</h1><p className="text-sm text-slate-500">Find any business report in two or three clicks.</p></div></div><div className="relative mt-5"><Search className="absolute left-3 top-3 text-slate-400" size={18}/><input value={query} onChange={e=>setQuery(e.target.value)} className="field w-full pl-10" placeholder="Search Reports..." aria-label="Search reports"/></div></header>
+  {query.trim()&&<section className="report-directory-card"><div className="report-directory-label">Search results</div><div className="grid md:grid-cols-2">{results.length?results.map(item=><ReportLink key={item.path} item={item}/>):<p className="p-5 text-sm text-slate-500">No accessible reports match “{query}”.</p>}</div></section>}
+  {!query.trim()&&favoriteItems.length>0&&<section className="report-compact-section"><div className="report-directory-label"><Star size={14}/> Favorite reports</div><div className="grid md:grid-cols-2">{favoriteItems.map(item=><ReportLink key={item.path} item={item}/>)}</div></section>}
+  {!query.trim()&&recentItems.length>0&&<section className="report-compact-section"><div className="report-directory-label"><Clock size={14}/> Recently viewed</div><div className="flex flex-wrap gap-2 p-3">{recentItems.map(item=><Link key={item.path} to={item.path} className="recent-report-link">{item.report.name}</Link>)}</div></section>}
+  {!query.trim()&&<div className="grid grid-cols-1 gap-4 md:grid-cols-2">{categories.map(category=><article key={category.key} className="report-category-card"><div className="flex items-start gap-3"><div className="rounded-lg bg-emerald-500/10 p-2.5"><category.icon size={22} className="text-emerald-600"/></div><div><h2 className="font-bold">{category.title}</h2><p className="mt-1 text-sm text-slate-500">{category.description}</p></div></div><div className="mt-4 space-y-1">{category.reports.slice(0,5).map(report=><ReportLink key={report.slug} item={{category,report,path:reportPath(category,report)}}/>)}</div><Link to={categoryPath(category)} className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-emerald-700">View All {category.title.replace(' Reports','')} Reports <ArrowRight size={15}/></Link></article>)}</div>}
+ </div>
 }

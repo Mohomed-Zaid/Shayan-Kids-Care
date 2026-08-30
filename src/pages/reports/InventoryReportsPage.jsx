@@ -14,8 +14,8 @@ const money=v=>`Rs. ${Number(v||0).toLocaleString(undefined,{minimumFractionDigi
 const tabs=[['summary','Inventory Summary'],['detailed','Detailed Inventory'],['movement','Stock Movement'],['reconciliation','Inventory Reconciliation'],['low','Low Stock'],['out','Out of Stock'],['valuation','Inventory Valuation'],['slow','Slow-Moving Stock'],['fast','Fast-Moving Stock'],['dead','Dead Stock']]
 function quick(k){const x=new Date(),t=new Date(x.getFullYear(),x.getMonth(),x.getDate());let a=new Date(t),b=new Date(t);if(k==='week')a.setDate(a.getDate()-((a.getDay()+6)%7));if(k==='month')a=new Date(t.getFullYear(),t.getMonth(),1);if(k==='last')a=new Date(t.getFullYear(),t.getMonth()-1,1),b=new Date(t.getFullYear(),t.getMonth(),0);if(k==='year')a=new Date(t.getFullYear(),0,1);if(k==='all')a=new Date(2000,0,1);return{from:iso(a),to:iso(b)}}
 
-export default function InventoryReportsPage(){
- const {user}=useAuth(),{can,isSuperAdmin}=usePermissions(),toast=useToast(); const [tab,setTab]=useState('detailed'),[range,setRange]=useState(()=>quick('month')),[preset,setPreset]=useState('month'),[valuation,setValuation]=useState('weighted'),[days,setDays]=useState(90)
+export default function InventoryReportsPage({initialTab='detailed'}){
+ const {user}=useAuth(),{can,isSuperAdmin}=usePermissions(),toast=useToast(); const [tab,setTab]=useState(initialTab),[range,setRange]=useState(()=>quick('month')),[preset,setPreset]=useState('month'),[valuation,setValuation]=useState('weighted'),[days,setDays]=useState(90)
  const [columnView,setColumnView]=useState('overview')
  const [filters,setFilters]=useState({product:'',code:'',category:'',status:'',vendor:'',inactive:false,out:true,search:''}),[applied,setApplied]=useState({product:'',code:'',category:'',status:'',vendor:'',inactive:false,out:true,search:''})
  const [raw,setRaw]=useState({products:[],purchases:[],invoices:[],returns:[],purchaseReturns:[],opening:[],adjustments:[]}),[loading,setLoading]=useState(true),[error,setError]=useState(''),[expanded,setExpanded]=useState(null),[adjust,setAdjust]=useState(null)
