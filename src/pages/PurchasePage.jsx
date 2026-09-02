@@ -208,6 +208,16 @@ export default function PurchasePage() {
   const [newProdCategory, setNewProdCategory] = useState('General')
   const [newProdSaving, setNewProdSaving] = useState(false)
 
+  const selectProduct = (product) => {
+    const previousPurchase = prevCosts.find((item) => item.product_id === product.id)
+    const savedSellingPrice = Number(product.price) > 0 ? product.price : previousPurchase?.mrp
+
+    setSelectedProductId(product.id)
+    setDescription(product.name ?? '')
+    setCost(previousPurchase?.cost != null ? String(previousPurchase.cost) : '')
+    setMrp(savedSellingPrice != null && Number(savedSellingPrice) > 0 ? String(savedSellingPrice) : '')
+  }
+
   const load = async () => {
     setLoading(true)
     const [{ data: vData, error: vErr }, { data: pData, error: pErr }, { count, error: cErr }, { data: piData, error: piErr }] = await Promise.all([
@@ -263,7 +273,7 @@ export default function PurchasePage() {
       toast.success('Product added')
       logAction({ action: 'create_product', targetType: 'product', targetId: data.id, targetLabel: data.name })
       setProducts((prev) => [...prev, data])
-      setSelectedProductId(data.id)
+      selectProduct(data)
       setNewProdOpen(false)
       setNewProdName('')
       setNewProdCode('')
@@ -708,8 +718,7 @@ export default function PurchasePage() {
                           <div
                             key={p.id}
                             onClick={() => {
-                              setSelectedProductId(p.id)
-                              setDescription(p.name ?? '')
+                              selectProduct(p)
                               setProdDropdownOpen(false)
                               setProductSearch('')
                             }}
