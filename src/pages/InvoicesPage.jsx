@@ -9,7 +9,7 @@ export default function InvoicesPage() {
   const [rows, setRows] = useState([])
 
   useEffect(() => {
-    document.title = "Invoices | Shayan's Kids"
+    document.title = "Invoices | Tiny Bloom"
   }, [])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

@@ -32,7 +32,7 @@ export default function OrdersPage() {
   const VAT_RATE = 0.18
 
   useEffect(() => {
-    document.title = "Orders | Shayan's Kids"
+    document.title = "Orders | Tiny Bloom"
   }, [])
 
   const [orders, setOrders] = useState([])

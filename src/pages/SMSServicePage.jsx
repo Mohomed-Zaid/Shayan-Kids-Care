@@ -7,7 +7,7 @@ import PermissionGate from '../components/PermissionGate'
 
 // Pre-defined SMS templates
 const SMS_TEMPLATES = [
-  { name: "Order Confirmation", text: "Hi {customer_name}, your order has been confirmed! Thank you for shopping with Shayan Kids Care!" },
+  { name: "Order Confirmation", text: "Hi {customer_name}, your order has been confirmed! Thank you for shopping with Tiny Bloom!" },
   { name: "Payment Reminder", text: "Hi {customer_name}, just a reminder about your pending payment. Please reach out if you have any questions!" },
   { name: "Payment Received", text: "Payment of Rs. {amount} received for Invoice {invoice_no}. Remaining balance: Rs. {balance}. Thank you." },
   { name: "Thank You", text: "Hi {customer_name}, thank you for your purchase! We hope you love your items!" },

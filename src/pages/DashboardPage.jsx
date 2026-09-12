@@ -36,7 +36,7 @@ function StatCard({ label, value, icon: Icon, gradient, iconBg, textColor, value
       </div>
       <div className={`mt-1 flex items-center gap-1 text-xs ${subColor} font-medium`}>
         <TrendingUp size={12} />
-        <span>Shayan's Kids</span>
+        <span>Tiny Bloom</span>
       </div>
     </div>
   )
@@ -71,7 +71,7 @@ export default function DashboardPage() {
   const { dashboardWidgets } = usePermissions()
 
   useEffect(() => {
-    document.title = "Dashboard | Shayan's Kids"
+    document.title = "Dashboard | Tiny Bloom"
   }, [])
 
   const displayName = (() => {
@@ -492,7 +492,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
               <h1 className="text-2xl font-extrabold text-white">Welcome back, {displayName}</h1>
-              <p className="text-slate-400 dark:text-emerald-100/60 text-sm mt-1">Shayan's Kids &amp; Toys Store</p>
+              <p className="text-slate-400 dark:text-emerald-100/60 text-sm mt-1">Tiny Bloom</p>
               <div className="flex items-center gap-1.5 mt-2 text-xs text-slate-400 dark:text-emerald-100/50">
                 <Calendar size={12} />
                 {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} &middot; {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}

@@ -542,7 +542,7 @@ export default function ReceivablesPage() {
           const balanceAfter = Number(totalOutstanding ?? 0) - totalPaid
           const invoiceNos = settlementInvoices.join(', ')
 
-          const smsMessage = `Dear ${customerName},\n\nWe have received your payment of Rs. ${totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} for Invoice ${invoiceNos}.\n\nYour remaining balance is Rs. ${balanceAfter.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.\n\nThank you for your payment.\n\n- Shayan Kids & Toys Store`
+          const smsMessage = `Dear ${customerName},\n\nWe have received your payment of Rs. ${totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} for Invoice ${invoiceNos}.\n\nYour remaining balance is Rs. ${balanceAfter.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.\n\nThank you for your payment.\n\n- Tiny Bloom`
 
           // Send SMS
           await sendSingleSMS(customerPhone, smsMessage)

@@ -142,7 +142,7 @@ export default function ProductsPage() {
   const [rows, setRows] = useState([])
 
   useEffect(() => {
-    document.title = "Products | Shayan's Kids"
+    document.title = "Products | Tiny Bloom"
   }, [])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

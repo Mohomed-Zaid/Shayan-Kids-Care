@@ -12,7 +12,7 @@ const DEFAULT_SETTINGS = {
   salary_personal_bank_account_no: '101001362128',
   director_name: 'M.N.M. Niflan',
   director_designation: 'Director',
-  director_company: 'Shayan Kids & Toys',
+  director_company: 'Tiny Bloom',
   director_nic: '953630354V',
   director_mobile: '+94 75 3841599',
 }
@@ -93,7 +93,7 @@ function LetterIntro({ data }) {
       </div>
       <div className="subject">REQUEST FOR SALARY TRANSFER TO EMPLOYEES&apos; BANK ACCOUNTS</div>
       <p className="salutation">Dear Sir/Madam,</p>
-      <p>I hereby request you to process the salary payments for the employees of SHAYAN KIDS &amp; TOYS from my personal bank account maintained with your branch.</p>
+      <p>I hereby request you to process the salary payments for the employees of TINY BLOOM from my personal bank account maintained with your branch.</p>
       <p>As the company is a small business, the total salary amount will be provided through one cheque drawn from my personal account. I kindly request the bank to transfer the respective salary amounts to the individual bank accounts of the employees as per the details provided below.</p>
       <div className="account-grid">
         <div><span>Account Holder Name</span><strong>{data.settings.salary_account_holder_name}</strong></div>
@@ -441,7 +441,7 @@ export default function SalaryTransferRequestPage() {
       {previewData ? (
         <div className="fixed inset-0 z-50 overflow-auto bg-slate-950/70 p-4 print:bg-white print:p-0">
           <div className="print-hide sticky top-0 z-10 mx-auto mb-4 flex max-w-[210mm] items-center justify-between rounded-xl bg-white p-3 shadow-lg">
-            <div><div className="font-bold text-slate-900">Letter Preview</div><div className="text-xs text-slate-500">A4 preview using the official Shayan Kids &amp; Toys letterhead</div></div>
+            <div><div className="font-bold text-slate-900">Letter Preview</div><div className="text-xs text-slate-500">A4 preview using the official Tiny Bloom letterhead</div></div>
             <div className="flex gap-2">{canPrint ? <button onClick={() => printLetter(previewData)} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold"><Printer size={16} /> Print</button> : null}{canExport ? <button onClick={() => exportPdf(previewData, { saveHistory: previewData === currentData })} disabled={exporting} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white"><Download size={16} /> Download PDF</button> : null}<button onClick={() => setPreviewData(null)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18} /></button></div>
           </div>
           <div className="salary-preview-print mx-auto w-[210mm] shadow-2xl"><LetterDocument data={previewData} /></div>

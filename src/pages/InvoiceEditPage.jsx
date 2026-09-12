@@ -13,7 +13,7 @@ export default function InvoiceEditPage() {
   const { id } = useParams()
 
   useEffect(() => {
-    document.title = "Edit Invoice | Shayan's Kids"
+    document.title = "Edit Invoice | Tiny Bloom"
   }, [])
   const navigate = useNavigate()
   const toast = useToast()

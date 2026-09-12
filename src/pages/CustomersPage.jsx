@@ -126,7 +126,7 @@ export default function CustomersPage() {
   const [rows, setRows] = useState([])
 
   useEffect(() => {
-    document.title = "Customers | Shayan's Kids"
+    document.title = "Customers | Tiny Bloom"
   }, [])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)

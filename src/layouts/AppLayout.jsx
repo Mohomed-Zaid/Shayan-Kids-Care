@@ -200,7 +200,7 @@ export default function AppLayout() {
   const { signOut, user } = useAuth()
 
   useEffect(() => {
-    document.title = `${title} | Shayan's Kids`
+    document.title = `${title} | Tiny Bloom`
   }, [title])
 
   const { can, loading: permLoading, record: privilegeRecord } = usePermissions()
@@ -259,7 +259,7 @@ export default function AppLayout() {
           <NavLink to="/dashboard" onClick={closeMobile} className="flex items-center gap-3">
             <img src={logo} alt="Logo" className="h-10 w-10 rounded-lg object-cover shadow-sm" />
             <div>
-              <div className="text-base font-bold text-slate-900 dark:text-white">Shayan's Kids</div>
+              <div className="text-base font-bold text-slate-900 dark:text-white">Tiny Bloom</div>
               <div className="text-[11px] text-slate-400 mt-0.5">Management System</div>
             </div>
           </NavLink>

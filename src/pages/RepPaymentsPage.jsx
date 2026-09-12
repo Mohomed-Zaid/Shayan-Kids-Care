@@ -63,9 +63,9 @@ Advance Balance: ${fmt(advanceBalance)}`
 
   message += `
 
-Thank you for your valuable contribution to Shayan Kids & Toys Store.
+Thank you for your valuable contribution to Tiny Bloom.
 
-- Shayan Kids & Toys Store`
+- Tiny Bloom`
 
   return message
 }

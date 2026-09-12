@@ -1,6 +1,6 @@
-# Shayan's Kids — Wholesale Management System
+# Tiny Bloom — Wholesale Management System
 
-A modern admin dashboard for managing products, customers, orders, invoices, purchases, vendors, returns, commissions, journals, SMS notifications, and backorders for **Shayan's Kids & Toys Store**.
+A modern admin dashboard for managing products, customers, orders, invoices, purchases, vendors, returns, commissions, journals, SMS notifications, and backorders for **Tiny Bloom**.
 
 ## Features
 
@@ -84,7 +84,7 @@ In your Supabase Dashboard → Project Settings → Edge Functions → Secrets:
 
 ### 3. Deploy Edge Function
 ```bash
-cd "C:\Users\user\Desktop\Shayan Kids Care"
+cd "C:\Users\user\Desktop\Tiny Bloom"
 supabase functions deploy send-sms
 ```
 
