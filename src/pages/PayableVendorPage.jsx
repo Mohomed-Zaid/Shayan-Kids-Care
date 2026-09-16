@@ -11,7 +11,7 @@ import {
   isApprovedBankCode,
   isChequeFormatValid,
 } from '../lib/chequeValidation'
-import ChequeNumberField from '../components/ChequeNumberField'
+import ChequeNumberField, { ChequeBankNameDisplay } from '../components/ChequeNumberField'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
 import PaidStamp from '../components/PaidStamp'
 import PurchaseReversalDialog from '../components/PurchaseReversalDialog'
@@ -894,57 +894,81 @@ export default function PayableVendorPage() {
 
                     <div className="space-y-2">
                       {cheques.map((c, idx) => (
-                        <div key={idx} className="grid grid-cols-1 sm:grid-cols-7 gap-2">
-                          <div className="sm:col-span-2">
-                            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cheque Date</div>
-                            <input
-                              type="date"
-                              value={c.cheque_date}
-                              onChange={(e) =>
-                                setCheques((prev) =>
-                                  prev.map((x, i) => (i === idx ? { ...x, cheque_date: e.target.value } : x))
-                                )
-                              }
-                              className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
-                            />
-                          </div>
-                          <div className="sm:col-span-3">
-                            <ChequeNumberField
-                              value={c.cheque_number}
-                              onChange={({ cheque_number, bank_code, bank_name }) =>
-                                setCheques((prev) =>
-                                  prev.map((x, i) =>
-                                    i === idx
-                                      ? { ...x, cheque_number, bank_code, bank_name: bank_name || '' }
-                                      : x
+                        <div key={idx} className="space-y-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
+                            <div className="sm:col-span-2">
+                              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cheque Date</div>
+                              <input
+                                type="date"
+                                value={c.cheque_date}
+                                onChange={(e) =>
+                                  setCheques((prev) =>
+                                    prev.map((x, i) => (i === idx ? { ...x, cheque_date: e.target.value } : x))
                                   )
-                                )
-                              }
-                            />
+                                }
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                              />
+                            </div>
+                            <div className="sm:col-span-3">
+                              <ChequeNumberField
+                                value={c.cheque_number}
+                                onChange={({ cheque_number, bank_code, bank_name }) =>
+                                  setCheques((prev) =>
+                                    prev.map((x, i) =>
+                                      i === idx
+                                        ? { ...x, cheque_number, bank_code, bank_name: bank_name || '' }
+                                        : x
+                                    )
+                                  )
+                                }
+                              />
+                            </div>
+                            <div className="sm:col-span-2">
+                              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Amount</div>
+                              <input
+                                value={c.amount}
+                                onChange={(e) => {
+                                  const raw = e.target.value.replace(/[^0-9.]/g, '')
+                                  const parts = raw.split('.')
+                                  const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+                                  const formatted = parts.length > 1 ? intPart + '.' + parts[1].slice(0, 2) : intPart
+                                  setCheques((prev) =>
+                                    prev.map((x, i) => (i === idx ? { ...x, amount: formatted } : x))
+                                  )
+                                }}
+                                placeholder="0.00"
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                              />
+                            </div>
                           </div>
-                          <div className="sm:col-span-2">
-                            <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Amount</div>
-                            <input
-                              value={c.amount}
-                              onChange={(e) => {
-                                const raw = e.target.value.replace(/[^0-9.]/g, '')
-                                const parts = raw.split('.')
-                                const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-                                const formatted = parts.length > 1 ? intPart + '.' + parts[1].slice(0, 2) : intPart
-                                setCheques((prev) =>
-                                  prev.map((x, i) => (i === idx ? { ...x, amount: formatted } : x))
-                                )
-                              }}
-                              placeholder="0.00"
-                              className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
-                            />
+
+                          <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
+                            <div className="sm:col-span-2">
+                              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Bank Code</div>
+                              <input
+                                readOnly
+                                value={c.bank_code || extractBankCodeFromCheque(c.cheque_number)}
+                                placeholder="From cheque number"
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 text-sm text-slate-700 dark:text-slate-300"
+                              />
+                            </div>
+
+                            <div className="sm:col-span-5">
+                              <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Bank Name</div>
+                              <ChequeBankNameDisplay
+                                chequeNumber={c.cheque_number}
+                                bankCode={c.bank_code}
+                                bankName={c.bank_name || getApprovedBankName(c.bank_code)}
+                              />
+                            </div>
                           </div>
-                          <div className="flex items-end">
+
+                          <div className="flex justify-end">
                             {cheques.length > 1 && (
                               <button
                                 type="button"
                                 onClick={() => setCheques((prev) => prev.filter((_, i) => i !== idx))}
-                                className="px-3 py-2.5 rounded-lg text-xs font-bold border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                className="px-3 py-2 rounded-lg text-xs font-bold border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                               >
                                 Remove
                               </button>

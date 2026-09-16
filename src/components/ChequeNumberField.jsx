@@ -34,17 +34,6 @@ export default function ChequeNumberField({ value, onChange, label = 'Cheque Num
       {validation.formatMessage && !validation.complete ? (
         <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">{validation.formatMessage}</p>
       ) : null}
-      {validation.bankFeedback ? (
-        <p
-          className={`mt-1 text-[11px] font-semibold ${
-            validation.bankFeedback.type === 'success'
-              ? 'text-emerald-700 dark:text-emerald-400'
-              : 'text-red-600 dark:text-red-400'
-          }`}
-        >
-          {validation.bankFeedback.text}
-        </p>
-      ) : null}
     </div>
   )
 }
