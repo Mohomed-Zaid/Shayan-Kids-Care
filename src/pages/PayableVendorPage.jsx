@@ -7,6 +7,7 @@ import { logAction } from '../lib/auditLog'
 import {
   areChequeRowsValid,
   extractBankCodeFromCheque,
+  findDuplicateChequeNumbers,
   getApprovedBankName,
   isApprovedBankCode,
   isChequeFormatValid,
@@ -383,10 +384,24 @@ export default function PayableVendorPage() {
     return { purchased, paid, balance }
   }, [purRows])
 
+  const duplicateChequesInForm = useMemo(() => {
+    return findDuplicateChequeNumbers(cheques)
+  }, [cheques])
+
   const isAllChequesValid = useMemo(() => {
     if (payForm.method !== 'cheque') return true
+    if (duplicateChequesInForm.size > 0) return false
+    const hasUsedCheque = cheques.some((c) => {
+      const num = String(c.cheque_number || '').trim()
+      return (
+        num &&
+        isChequeFormatValid(num) &&
+        payments.some((p) => p.method === 'cheque' && String(p.reference || '').trim() === num)
+      )
+    })
+    if (hasUsedCheque) return false
     return areChequeRowsValid(cheques)
-  }, [payForm.method, cheques])
+  }, [payForm.method, cheques, duplicateChequesInForm, payments])
 
   const openPay = () => {
     const active = purRows.filter((x) => x.status !== 'reversed')
@@ -488,6 +503,35 @@ export default function PayableVendorPage() {
           return
         }
         if (!c.amount || c.amount <= 0) { toast.error('Cheque amount must be greater than 0'); return }
+      }
+
+      // Check for duplicate cheque numbers within the entered rows
+      const seen = new Set()
+      for (const c of rows) {
+        if (seen.has(c.cheque_number)) {
+          toast.error(`Duplicate cheque number: ${c.cheque_number}. You cannot add multiple cheques with the same number.`)
+          return
+        }
+        seen.add(c.cheque_number)
+      }
+
+      // Check for duplicate cheque numbers against existing purchase_payments
+      const chequeNumbers = rows.map((c) => c.cheque_number)
+      const { data: existing, error: existingErr } = await supabase
+        .from('purchase_payments')
+        .select('reference')
+        .eq('method', 'cheque')
+        .in('reference', chequeNumbers)
+
+      if (existingErr) {
+        toast.error('Failed to verify cheque uniqueness: ' + existingErr.message)
+        return
+      }
+
+      if (existing && existing.length > 0) {
+        const dupes = [...new Set(existing.map((e) => e.reference))].join(', ')
+        toast.error(`Cheque number already used: ${dupes}. A cheque with this number has already been recorded in vendor payments and cannot be reused.`)
+        return
       }
 
       setSaving(true)
@@ -910,18 +954,34 @@ export default function PayableVendorPage() {
                               />
                             </div>
                             <div className="sm:col-span-3">
-                              <ChequeNumberField
-                                value={c.cheque_number}
-                                onChange={({ cheque_number, bank_code, bank_name }) =>
-                                  setCheques((prev) =>
-                                    prev.map((x, i) =>
-                                      i === idx
-                                        ? { ...x, cheque_number, bank_code, bank_name: bank_name || '' }
-                                        : x
-                                    )
-                                  )
-                                }
-                              />
+                              {(() => {
+                                const chequeNum = String(c.cheque_number || '').trim()
+                                const isDupeInForm = duplicateChequesInForm.has(chequeNum)
+                                const isAlreadyUsed =
+                                  chequeNum &&
+                                  isChequeFormatValid(chequeNum) &&
+                                  payments.some((p) => p.method === 'cheque' && String(p.reference || '').trim() === chequeNum)
+                                const chequeError = isDupeInForm
+                                  ? 'Duplicate cheque number in this entry'
+                                  : isAlreadyUsed
+                                  ? 'Cheque number already used in another payment'
+                                  : ''
+                                return (
+                                  <ChequeNumberField
+                                    value={c.cheque_number}
+                                    error={chequeError}
+                                    onChange={({ cheque_number, bank_code, bank_name }) =>
+                                      setCheques((prev) =>
+                                        prev.map((x, i) =>
+                                          i === idx
+                                            ? { ...x, cheque_number, bank_code, bank_name: bank_name || '' }
+                                            : x
+                                        )
+                                      )
+                                    }
+                                  />
+                                )
+                              })()}
                             </div>
                             <div className="sm:col-span-2">
                               <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Amount</div>

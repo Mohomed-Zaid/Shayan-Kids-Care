@@ -8,6 +8,7 @@ import { registerReceivableChequesInHand } from '../lib/receivableChequeWorkflow
 import {
   areChequeRowsValid,
   extractBankCodeFromCheque,
+  findDuplicateChequeNumbers,
   getApprovedBankName,
   isApprovedBankCode,
   isChequeFormatValid,
@@ -65,6 +66,10 @@ export default function ReceivablesPage() {
       amount: '',
     },
   ])
+
+  const duplicateChequesInForm = useMemo(() => {
+    return findDuplicateChequeNumbers(cheques)
+  }, [cheques])
 
   const [receiptData, setReceiptData] = useState(null)
 
@@ -384,16 +389,32 @@ export default function ReceivablesPage() {
         }
       }
 
-      // Check for duplicate cheque numbers
+      // Check for duplicate cheque numbers within entered rows
+      const seen = new Set()
+      for (const c of chequeRows) {
+        if (seen.has(c.cheque_number)) {
+          toast.error(`Duplicate cheque number: ${c.cheque_number}. You cannot add multiple cheques with the same number.`)
+          return
+        }
+        seen.add(c.cheque_number)
+      }
+
+      // Check for duplicate cheque numbers in database
       const chequeNumbers = chequeRows.map((c) => c.cheque_number)
-      const { data: existing } = await supabase
+      const { data: existing, error: existingErr } = await supabase
         .from('invoice_payments')
         .select('reference')
         .eq('method', 'cheque')
         .in('reference', chequeNumbers)
+
+      if (existingErr) {
+        toast.error('Failed to verify cheque uniqueness: ' + existingErr.message)
+        return
+      }
+
       if (existing && existing.length > 0) {
-        const dupes = existing.map((e) => e.reference).join(', ')
-        toast.error(`Cheque number already used: ${dupes}`)
+        const dupes = [...new Set(existing.map((e) => e.reference))].join(', ')
+        toast.error(`Cheque number already used: ${dupes}. A cheque with this number has already been recorded and cannot be reused.`)
         return
       }
 
@@ -930,6 +951,7 @@ export default function ReceivablesPage() {
                             <div className="sm:col-span-3">
                               <ChequeNumberField
                                 value={c.cheque_number}
+                                error={duplicateChequesInForm.has(String(c.cheque_number || '').trim()) ? 'Duplicate cheque number in this entry' : ''}
                                 onChange={({ cheque_number, bank_code, bank_name }) =>
                                   setCheques((prev) =>
                                     prev.map((x, i) =>

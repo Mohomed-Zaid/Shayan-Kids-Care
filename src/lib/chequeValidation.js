@@ -145,3 +145,28 @@ export function areChequeRowsValid(rows) {
   if (!rows?.length) return false
   return rows.every(isChequePaymentRowValid)
 }
+
+/**
+ * Returns a Set of trimmed cheque numbers that appear more than once in the given rows.
+ */
+export function findDuplicateChequeNumbers(rows) {
+  const counts = new Map()
+  for (const r of rows || []) {
+    const num = String(r?.cheque_number || '').trim()
+    if (num) {
+      counts.set(num, (counts.get(num) || 0) + 1)
+    }
+  }
+  const dupes = new Set()
+  for (const [num, count] of counts.entries()) {
+    if (count > 1) dupes.add(num)
+  }
+  return dupes
+}
+
+/**
+ * Checks whether an array of cheque payment rows has duplicate cheque numbers within itself.
+ */
+export function hasDuplicateChequeNumbers(rows) {
+  return findDuplicateChequeNumbers(rows).size > 0
+}

@@ -8,13 +8,17 @@ const BASE_INPUT =
  * Auto-formatted cheque number input (XXXXXX-XXXX-XXX) with inline validation.
  * onChange receives { cheque_number, bank_code, bank_name }.
  */
-export default function ChequeNumberField({ value, onChange, label = 'Cheque Number', className = '' }) {
+export default function ChequeNumberField({ value, onChange, label = 'Cheque Number', className = '', error = '' }) {
   const validation = useMemo(() => getChequeNumberValidation(value), [value])
 
   const handleChange = (e) => {
     const { formatted, bankCode, bankName } = parseChequeNumberInput(e.target.value)
     onChange({ cheque_number: formatted, bank_code: bankCode, bank_name: bankName })
   }
+
+  const borderClass = error
+    ? 'border-red-500 dark:border-red-500 focus:border-red-500 focus:ring-red-500/30'
+    : validation.borderClass
 
   return (
     <div className={className}>
@@ -28,10 +32,12 @@ export default function ChequeNumberField({ value, onChange, label = 'Cheque Num
         value={value}
         onChange={handleChange}
         placeholder="XXXXXX-XXXX-XXX"
-        className={`${BASE_INPUT} ${validation.borderClass}`}
-        aria-invalid={validation.bankFeedback?.type === 'error' || (validation.formatMessage && !validation.complete)}
+        className={`${BASE_INPUT} ${borderClass}`}
+        aria-invalid={Boolean(error) || validation.bankFeedback?.type === 'error' || (validation.formatMessage && !validation.complete)}
       />
-      {validation.formatMessage && !validation.complete ? (
+      {error ? (
+        <p className="mt-1 text-[11px] text-red-600 dark:text-red-400 font-semibold">{error}</p>
+      ) : validation.formatMessage && !validation.complete ? (
         <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">{validation.formatMessage}</p>
       ) : null}
     </div>

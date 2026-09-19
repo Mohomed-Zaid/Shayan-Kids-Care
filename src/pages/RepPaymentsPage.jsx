@@ -351,9 +351,30 @@ export default function RepPaymentsPage() {
 
   const savePayment = async () => {
     if (!selectedRep || !summary) return
-    if (payForm.method === 'cheque' && !isChequeFormatValid(payForm.cheque_number)) {
-      toast.error('Enter a valid cheque number (XXXXXX-XXXX-XXX)')
-      return
+    if (payForm.method === 'cheque') {
+      if (!isChequeFormatValid(payForm.cheque_number)) {
+        toast.error('Enter a valid cheque number (XXXXXX-XXXX-XXX)')
+        return
+      }
+      const chq = payForm.cheque_number.trim()
+      const { data: existingRep } = await supabase
+        .from('rep_commission_payments')
+        .select('reference')
+        .eq('method', 'cheque')
+        .eq('reference', chq)
+      if (existingRep && existingRep.length > 0) {
+        toast.error(`Cheque number already used: ${chq}. A cheque with this number has already been recorded and cannot be reused.`)
+        return
+      }
+      const { data: existingPur } = await supabase
+        .from('purchase_payments')
+        .select('reference')
+        .eq('method', 'cheque')
+        .eq('reference', chq)
+      if (existingPur && existingPur.length > 0) {
+        toast.error(`Cheque number already used: ${chq}. A cheque with this number has already been recorded in vendor payments and cannot be reused.`)
+        return
+      }
     }
 
     const today = new Date().toISOString().split('T')[0]
