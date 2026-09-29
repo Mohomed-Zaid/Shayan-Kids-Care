@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { usePermissions } from '../contexts/PermissionsContext'
 import { logAction } from '../lib/auditLog'
-import { registerReceivableChequesInHand } from '../lib/receivableChequeWorkflow'
+import { registerReceivableChequesInHand, getChequeNumberVariants } from '../lib/receivableChequeWorkflow'
 import {
   areChequeRowsValid,
   extractBankCodeFromCheque,
@@ -17,7 +17,7 @@ import ChequeNumberField, { ChequeBankNameDisplay } from '../components/ChequeNu
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
 import ReceiptPaymentStatus from '../components/ReceiptPaymentStatus'
 import ControlledDateField from '../components/ControlledDateField'
-import { Search, Eye, FileText, Filter, Plus } from 'lucide-react'
+import { Search, Eye, FileText, Filter, Plus, RotateCcw } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 import { sendSingleSMS } from '../lib/sms'
 import { calculateAgingDays, getAgingBucket, getAgingColorClasses, calculateAgingSummary } from '../lib/agingCalculations'
@@ -41,6 +41,8 @@ export default function ReceivablesPage() {
   const [returns, setReturns] = useState([])
   const [banks, setBanks] = useState([])
   const [customers, setCustomers] = useState([])
+  const [customerCheques, setCustomerCheques] = useState([])
+  const [reversingPayment, setReversingPayment] = useState(false)
 
   const [payOpen, setPayOpen] = useState(false)
   const [paySaving, setPaySaving] = useState(false)
@@ -77,7 +79,7 @@ export default function ReceivablesPage() {
     setLoading(true)
     setError(null)
 
-    const [invRes, payRes, retRes, bankRes, custRes] = await Promise.all([
+    const [invRes, payRes, retRes, bankRes, custRes, chqRes] = await Promise.all([
       supabase
         .from('invoices')
         .select('id, invoice_number, customer_id, total_amount, created_at, payment_type, customers(name, phone)')
@@ -85,7 +87,7 @@ export default function ReceivablesPage() {
         .order('created_at', { ascending: false }),
       supabase
         .from('invoice_payments')
-        .select('id, invoice_id, amount, paid_at, method')
+        .select('id, invoice_id, amount, paid_at, method, reference, bank_name')
         .order('paid_at', { ascending: false }),
       supabase
         .from('returns')
@@ -93,6 +95,7 @@ export default function ReceivablesPage() {
         .order('created_at', { ascending: false }),
       supabase.from('banks').select('id, code, name, bank_code, branch').order('code'),
       supabase.from('customers').select('id, name, phone').order('name'),
+      supabase.from('customer_cheques').select('id, customer_id, cheque_number, amount, status, cheque_date'),
     ])
 
     if (invRes.error) {
@@ -126,6 +129,8 @@ export default function ReceivablesPage() {
     } else {
       setCustomers(custRes.data ?? [])
     }
+
+    setCustomerCheques(chqRes?.data ?? [])
 
     setLoading(false)
   }
@@ -200,6 +205,13 @@ export default function ReceivablesPage() {
       }
     }
 
+    // Associate cheque payments with each customer
+    for (const [cid, cust] of byCustomer.entries()) {
+      const custInvIds = new Set(invoices.filter((i) => i.customer_id === cid).map((i) => i.id))
+      const custPayments = payments.filter((p) => custInvIds.has(p.invoice_id))
+      cust.chequePayments = custPayments.filter((p) => String(p.method || '').toLowerCase() === 'cheque')
+    }
+
     const q = search.trim().toLowerCase()
     let rows = Array.from(byCustomer.values())
 
@@ -221,7 +233,68 @@ export default function ReceivablesPage() {
 
     rows.sort((a, b) => (b.balance ?? 0) - (a.balance ?? 0))
     return rows
-  }, [invoiceRows, search, statusFilter])
+  }, [invoiceRows, search, statusFilter, invoices, payments])
+
+  const handleRestoreChequeForCustomer = async (customerRow) => {
+    const custChequePayments = customerRow.chequePayments || []
+    if (custChequePayments.length === 0) {
+      toast.error('No cheque payments found for this customer')
+      return
+    }
+
+    const totalAmt = custChequePayments.reduce((s, p) => s + Number(p.amount ?? 0), 0)
+    const chequeRefs = [...new Set(custChequePayments.map((p) => p.reference).filter(Boolean))].join(', ')
+    const refText = chequeRefs ? ` (Cheque No: ${chequeRefs})` : ''
+
+    const confirmMsg =
+      `Hand over cheque${refText} for "${customerRow.name}" back to the customer?\n\n` +
+      `The paid amount of ${fmt(totalAmt)} will be removed from payments and returned directly to the customer's outstanding balance in Receivables.\n\n` +
+      `• Paid will decrease by ${fmt(totalAmt)}\n` +
+      `• Outstanding balance will increase by ${fmt(totalAmt)}.`
+
+    if (!window.confirm(confirmMsg)) return
+
+    setReversingPayment(true)
+    try {
+      const payIds = custChequePayments.map((p) => p.id)
+      const { error: delErr } = await supabase.from('invoice_payments').delete().in('id', payIds)
+      if (delErr) throw delErr
+
+      if (chequeRefs) {
+        const variants = custChequePayments.flatMap((p) => getChequeNumberVariants(p.reference))
+        await supabase
+          .from('customer_cheques')
+          .update({ status: 'handed_over', deposited_at: null })
+          .eq('customer_id', customerRow.customer_id)
+          .in('cheque_number', variants)
+      } else {
+        await supabase
+          .from('customer_cheques')
+          .update({ status: 'handed_over', deposited_at: null })
+          .eq('customer_id', customerRow.customer_id)
+      }
+
+      for (const p of custChequePayments) {
+        logAction({
+          action: 'handover_cheques',
+          targetType: 'customer_cheque',
+          targetId: p.reference || customerRow.customer_id,
+          targetLabel: p.reference,
+          details: `Handed over cheque ${p.reference || ''} (${fmt(p.amount)}) for ${customerRow.name}. Value returned to receivable balance.`,
+        })
+      }
+
+      toast.success(
+        `Cheque payment of ${fmt(totalAmt)} removed! Amount added back to ${customerRow.name}'s outstanding balance.`
+      )
+      await load()
+    } catch (e) {
+      console.error(e)
+      toast.error(e?.message ?? 'Failed to restore balance')
+    } finally {
+      setReversingPayment(false)
+    }
+  }
 
   // Calculate aging summary for all outstanding invoices
   const agingSummary = useMemo(() => {
@@ -816,6 +889,17 @@ export default function ReceivablesPage() {
                   </td>
                   <td className="px-5 py-3.5 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      {r.chequePayments && r.chequePayments.length > 0 ? (
+                        <button
+                          onClick={() => handleRestoreChequeForCustomer(r)}
+                          disabled={reversingPayment}
+                          title="Hand over cheque and return paid amount back to outstanding balance"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-semibold border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50 whitespace-nowrap"
+                        >
+                          <RotateCcw size={13} className="text-amber-600 dark:text-amber-400" />
+                          <span>Handover Cheque ({fmt(r.chequePayments.reduce((s, p) => s + Number(p.amount ?? 0), 0))})</span>
+                        </button>
+                      ) : null}
                       <button
                         onClick={() => openPay(r.customer_id)}
                         className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"

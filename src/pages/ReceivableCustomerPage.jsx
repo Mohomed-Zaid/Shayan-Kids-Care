@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { usePermissions } from '../contexts/PermissionsContext'
 import { logAction } from '../lib/auditLog'
-import { registerReceivableChequesInHand } from '../lib/receivableChequeWorkflow'
+import { registerReceivableChequesInHand, getChequeNumberVariants } from '../lib/receivableChequeWorkflow'
 import {
   areChequeRowsValid,
   extractBankCodeFromCheque,
@@ -16,7 +16,7 @@ import {
 import ChequeNumberField, { ChequeBankNameDisplay } from '../components/ChequeNumberField'
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
 import ReceiptPaymentStatus from '../components/ReceiptPaymentStatus'
-import { ArrowLeft, Plus, FileText } from 'lucide-react'
+import { ArrowLeft, Plus, FileText, RotateCcw } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 import ControlledDateField from '../components/ControlledDateField'
 import { calculateAgingDays, getAgingBucket, getAgingColorClasses, calculateAgingSummary } from '../lib/agingCalculations'
@@ -41,6 +41,8 @@ export default function ReceivableCustomerPage() {
   const [returns, setReturns] = useState([])
   const [banks, setBanks] = useState([])
   const [customerCredit, setCustomerCredit] = useState(0)
+  const [customerCheques, setCustomerCheques] = useState([])
+  const [handingOver, setHandingOver] = useState(false)
 
   const [payOpen, setPayOpen] = useState(false)
   const [payForm, setPayForm] = useState({
@@ -124,7 +126,7 @@ export default function ReceivableCustomerPage() {
     setLoading(true)
     setError(null)
 
-    const [custRes, invRes, payRes, retRes, bankRes, creditRes] = await Promise.all([
+    const [custRes, invRes, payRes, retRes, bankRes, creditRes, chqRes] = await Promise.all([
       supabase.from('customers').select('id, name, phone, address, credit_limit').eq('id', customerId).single(),
       supabase
         .from('invoices')
@@ -143,6 +145,7 @@ export default function ReceivableCustomerPage() {
         .order('created_at', { ascending: false }),
       supabase.from('banks').select('id, code, name, bank_code, branch').order('code'),
       supabase.from('customer_credits').select('balance').eq('customer_id', customerId).maybeSingle(),
+      supabase.from('customer_cheques').select('*').eq('customer_id', customerId),
     ])
 
     if (custRes.error) {
@@ -179,6 +182,7 @@ export default function ReceivableCustomerPage() {
     }
 
     setCustomerCredit(creditRes.error ? 0 : Number(creditRes.data?.balance ?? 0))
+    setCustomerCheques(chqRes?.data ?? [])
 
     setLoading(false)
   }
@@ -271,15 +275,83 @@ export default function ReceivableCustomerPage() {
       .sort((a, b) => new Date(b.paid_at ?? b.created_at ?? 0).getTime() - new Date(a.paid_at ?? a.created_at ?? 0).getTime())
   }, [paymentsForCustomer, payHistInvoiceId])
 
+  const customerChequePayments = useMemo(() => {
+    return paymentsForCustomer.filter((p) => String(p.method || '').toLowerCase() === 'cheque')
+  }, [paymentsForCustomer])
+
+  const handleHandoverCheque = async (payment) => {
+    const chqRef = payment.reference ? ` (Cheque No: ${payment.reference})` : ''
+    const amountFmt = fmt(payment.amount)
+    const confirmMsg =
+      `Hand over cheque${chqRef} back to ${customer?.name || 'the customer'}?\n\n` +
+      `The paid amount of ${amountFmt} will be deleted from payments and returned to the customer's outstanding balance in Receivables.\n\n` +
+      `• Paid will decrease by ${amountFmt}\n` +
+      `• Outstanding balance will increase by ${amountFmt}.`
+
+    if (!window.confirm(confirmMsg)) return
+
+    setHandingOver(true)
+    try {
+      const { error: delErr } = await supabase.from('invoice_payments').delete().eq('id', payment.id)
+      if (delErr) throw delErr
+
+      if (payment.reference) {
+        const variants = getChequeNumberVariants(payment.reference)
+        await supabase
+          .from('customer_cheques')
+          .update({ status: 'handed_over', deposited_at: null })
+          .eq('customer_id', customerId)
+          .in('cheque_number', variants)
+      } else {
+        await supabase
+          .from('customer_cheques')
+          .update({ status: 'handed_over', deposited_at: null })
+          .eq('customer_id', customerId)
+      }
+
+      logAction({
+        action: 'handover_cheques',
+        targetType: 'customer_cheque',
+        targetId: payment.reference || customerId,
+        targetLabel: payment.reference,
+        details: `Handed over cheque ${payment.reference || ''} (${amountFmt}) for ${customer?.name || ''}. Amount returned to receivable balance.`,
+      })
+
+      toast.success(`Cheque handed over! ${amountFmt} returned to outstanding balance.`)
+      await load()
+    } catch (e) {
+      console.error(e)
+      toast.error(e?.message ?? 'Failed to handover cheque')
+    } finally {
+      setHandingOver(false)
+    }
+  }
+
   const deletePayment = async (paymentId) => {
-    if (!confirm('Delete this payment?')) return
+    if (!confirm('Delete this payment? The paid amount will go back to the invoice balance in Receivables.')) return
+    const targetPayment = payments.find((p) => String(p.id) === String(paymentId))
+
     const { error: err } = await supabase.from('invoice_payments').delete().eq('id', paymentId)
     if (err) {
       toast.error(err.message)
       return
     }
-    toast.success('Payment deleted')
-    logAction({ action: 'delete_payment', targetType: 'payment', targetId: pay.id })
+
+    if (targetPayment?.method === 'cheque' && targetPayment.reference) {
+      try {
+        const variants = getChequeNumberVariants(targetPayment.reference)
+        await supabase
+          .from('customer_cheques')
+          .update({ status: 'handed_over', deposited_at: null })
+          .eq('customer_id', customerId)
+          .in('cheque_number', variants)
+      } catch (e) {
+        console.error('Failed to sync customer_cheques on payment deletion:', e)
+      }
+    }
+
+    toast.success('Payment deleted. Balance added back to Receivables.')
+    logAction({ action: 'delete_payment', targetType: 'payment', targetId: paymentId })
     await load()
   }
 
@@ -1276,6 +1348,18 @@ export default function ReceivableCustomerPage() {
                                   Edit
                                 </button>
                               )}
+
+                              {p.method === 'cheque' ? (
+                                <button
+                                  onClick={() => handleHandoverCheque(p)}
+                                  disabled={handingOver}
+                                  title="Hand over cheque to customer and return amount to outstanding balance"
+                                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-semibold border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-50"
+                                >
+                                  <RotateCcw size={12} className="text-amber-600 dark:text-amber-400" />
+                                  Handover Cheque
+                                </button>
+                              ) : null}
 
                               <button
                                 onClick={() => deletePayment(p.id)}

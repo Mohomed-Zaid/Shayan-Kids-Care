@@ -2,20 +2,23 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
-import { Search, Landmark, ArrowRightCircle, HandHelping } from 'lucide-react'
+import { Search, Landmark, ArrowRightCircle, HandHelping, AlertCircle, CheckCircle, RotateCcw, RefreshCw } from 'lucide-react'
+import {
+  STATUS_IN_HAND,
+  STATUS_DEPOSITED,
+  STATUS_HANDED_OVER,
+  STATUS_RETURNED,
+  reverseChequePayments,
+  matchesChequePayment,
+  getChequeNumberVariants,
+} from '../lib/receivableChequeWorkflow'
 
-/** Receivable: add payment (cheque) → customer_cheques in_hand; Deposit here + bank → deposited + bank_reconciliation_items. See `src/lib/receivableChequeWorkflow.js`. Payable cheque payments are also shown here under Deposited Cheques. */
 const fmtMoney = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
-
-const STATUS_IN_HAND = 'in_hand'
-const STATUS_DEPOSITED = 'deposited'
-const STATUS_HANDED_OVER = 'handed_over'
-const STATUS_RETURNED = 'returned'
 
 export default function ChequeAdministrationPage() {
   const toast = useToast()
 
-  const [tab, setTab] = useState('in_hand')
+  const [tab, setTab] = useState('in_hand') // 'in_hand' | 'deposited' | 'handed_over'
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -23,12 +26,15 @@ export default function ChequeAdministrationPage() {
 
   const [chequesInHand, setChequesInHand] = useState([])
   const [chequesDeposited, setChequesDeposited] = useState([])
+  const [chequesHandedOver, setChequesHandedOver] = useState([])
   const [payableCheques, setPayableCheques] = useState([])
   const [banks, setBanks] = useState([])
 
+  // Maps chequeId -> Array of active invoice_payments matching this cheque
+  const [unreversedPaymentsMap, setUnreversedPaymentsMap] = useState(new Map())
+
   const [selectedIds, setSelectedIds] = useState(new Set())
 
-  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const [depositFrom, setDepositFrom] = useState('')
   const [depositTo, setDepositTo] = useState('')
 
@@ -42,7 +48,7 @@ export default function ChequeAdministrationPage() {
     setError(null)
 
     try {
-      const [handRes, depRes, payChequeRes, bankRes] = await Promise.all([
+      const [handRes, depRes, handedRes, payChequeRes, bankRes] = await Promise.all([
         supabase
           .from('customer_cheques')
           .select('id, cheque_date, cheque_number, amount, bank_name, customer_id, status, deposited_at, created_at, customers(name)')
@@ -54,6 +60,11 @@ export default function ChequeAdministrationPage() {
           .eq('status', STATUS_DEPOSITED)
           .order('deposited_at', { ascending: false }),
         supabase
+          .from('customer_cheques')
+          .select('id, cheque_date, cheque_number, amount, bank_name, customer_id, status, deposited_at, created_at, customers(name)')
+          .in('status', [STATUS_HANDED_OVER, STATUS_RETURNED])
+          .order('created_at', { ascending: false }),
+        supabase
           .from('purchase_payments')
           .select('id, amount, paid_at, reference, method, bank_name, created_at, purchases(vendor_id, vendors(name))')
           .eq('method', 'cheque')
@@ -63,9 +74,15 @@ export default function ChequeAdministrationPage() {
 
       if (handRes.error) throw handRes.error
       if (depRes.error) throw depRes.error
+      if (handedRes.error) throw handedRes.error
 
-      setChequesInHand(handRes.data ?? [])
-      setChequesDeposited(depRes.data ?? [])
+      const inHandData = handRes.data ?? []
+      const depData = depRes.data ?? []
+      const handedData = handedRes.data ?? []
+
+      setChequesInHand(inHandData)
+      setChequesDeposited(depData)
+      setChequesHandedOver(handedData)
       setBanks(bankRes?.data ?? [])
       if (!depositBankId && (bankRes?.data ?? []).length > 0) {
         setDepositBankId(bankRes.data[0].id)
@@ -87,13 +104,76 @@ export default function ChequeAdministrationPage() {
         customers: null,
       }))
       setPayableCheques(payables)
+
+      // Detect unreversed payments for handed-over or returned cheques
+      if (handedData.length > 0) {
+        await checkUnreversedPayments(handedData)
+      } else {
+        setUnreversedPaymentsMap(new Map())
+      }
     } catch (e) {
       console.error(e)
       setError(e?.message ?? 'Failed to load')
       setChequesInHand([])
       setChequesDeposited([])
+      setChequesHandedOver([])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const checkUnreversedPayments = async (handedCheques) => {
+    try {
+      const custIds = Array.from(new Set(handedCheques.map((c) => c.customer_id).filter(Boolean)))
+      let candidatePayments = []
+
+      if (custIds.length > 0) {
+        const { data: custInvoices } = await supabase
+          .from('invoices')
+          .select('id, customer_id')
+          .in('customer_id', custIds)
+
+        if (custInvoices && custInvoices.length > 0) {
+          const invIds = custInvoices.map((i) => i.id)
+          const { data: invPayments } = await supabase
+            .from('invoice_payments')
+            .select('id, invoice_id, amount, paid_at, method, reference, bank_name')
+            .in('invoice_id', invIds)
+
+          if (invPayments) candidatePayments = invPayments
+        }
+      }
+
+      const allVariants = Array.from(
+        new Set(handedCheques.flatMap((c) => getChequeNumberVariants(c.cheque_number)))
+      )
+      if (allVariants.length > 0) {
+        const { data: refPayments } = await supabase
+          .from('invoice_payments')
+          .select('id, invoice_id, amount, paid_at, method, reference, bank_name')
+          .in('reference', allVariants)
+
+        if (refPayments) {
+          const seen = new Set(candidatePayments.map((p) => p.id))
+          for (const p of refPayments) {
+            if (!seen.has(p.id)) {
+              candidatePayments.push(p)
+              seen.add(p.id)
+            }
+          }
+        }
+      }
+
+      const map = new Map()
+      for (const cheque of handedCheques) {
+        const matches = candidatePayments.filter((p) => matchesChequePayment(p, cheque))
+        if (matches.length > 0) {
+          map.set(cheque.id, matches)
+        }
+      }
+      setUnreversedPaymentsMap(map)
+    } catch (err) {
+      console.error('Failed to check unreversed payments:', err)
     }
   }
 
@@ -118,7 +198,6 @@ export default function ChequeAdministrationPage() {
     )
   }, [chequesInHand, search])
 
-  /** Calendar day in UTC (YYYY-MM-DD) for stable filtering across timezones */
   const utcDayKey = (isoOrDate) => {
     if (!isoOrDate) return ''
     const d = new Date(isoOrDate)
@@ -128,7 +207,6 @@ export default function ChequeAdministrationPage() {
 
   const depositedFiltered = useMemo(() => {
     const q = search.trim().toLowerCase()
-
     const allDeposited = [...chequesDeposited, ...payableCheques]
 
     return allDeposited.filter((r) => {
@@ -152,6 +230,18 @@ export default function ChequeAdministrationPage() {
     })
   }, [chequesDeposited, payableCheques, depositFrom, depositTo, search])
 
+  const handedOverFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    const rows = chequesHandedOver.slice()
+    if (!q) return rows
+
+    return rows.filter((r) =>
+      String(r.cheque_number ?? '').toLowerCase().includes(q) ||
+      String(r.bank_name ?? '').toLowerCase().includes(q) ||
+      String(r.customers?.name ?? '').toLowerCase().includes(q)
+    )
+  }, [chequesHandedOver, search])
+
   const inHandTotals = useMemo(() => {
     const ids = selectedIds
     const selectedRows = filteredInHand.filter((r) => ids.has(r.id))
@@ -159,13 +249,44 @@ export default function ChequeAdministrationPage() {
     return { count: selectedRows.length, total }
   }, [filteredInHand, selectedIds])
 
+  const handedOverTotals = useMemo(() => {
+    const ids = selectedIds
+    const selectedRows = handedOverFiltered.filter((r) => ids.has(r.id))
+    const total = selectedRows.reduce((s, r) => s + Number(r.amount ?? 0), 0)
+    return { count: selectedRows.length, total }
+  }, [handedOverFiltered, selectedIds])
+
+  const selectedTotals = useMemo(() => {
+    const source =
+      tab === 'in_hand'
+        ? filteredInHand
+        : tab === 'deposited'
+          ? depositedFiltered
+          : handedOverFiltered
+    const rows = source.filter((r) => selectedIds.has(r.id))
+    const total = rows.reduce((s, r) => s + Number(r.amount ?? 0), 0)
+    return { count: rows.length, total }
+  }, [tab, filteredInHand, depositedFiltered, handedOverFiltered, selectedIds])
+
+  const showRows =
+    tab === 'in_hand'
+      ? filteredInHand
+      : tab === 'deposited'
+        ? depositedFiltered
+        : handedOverFiltered
+
   const toggleAll = (checked) => {
     if (!checked) {
       setSelectedIds(new Set())
       return
     }
 
-    const source = tab === 'in_hand' ? filteredInHand : depositedFiltered.filter((r) => r.cheque_type !== 'payable')
+    const source =
+      tab === 'in_hand'
+        ? filteredInHand
+        : tab === 'deposited'
+          ? depositedFiltered.filter((r) => r.cheque_type !== 'payable')
+          : handedOverFiltered
     const next = new Set(source.map((r) => r.id))
     setSelectedIds(next)
   }
@@ -205,7 +326,6 @@ export default function ChequeAdministrationPage() {
       return
     }
 
-    // Use full in-hand list so search/filter cannot hide selected rows
     const selectedRows = chequesInHand.filter((r) =>
       ids.some((id) => String(id) === String(r.id))
     )
@@ -245,7 +365,7 @@ export default function ChequeAdministrationPage() {
       if (reconErr) {
         console.error(reconErr)
         toast.error(
-          `Cheques deposited, but bank reconciliation could not be saved: ${reconErr.message}. Check RLS or table permissions.`
+          `Cheques deposited, but bank reconciliation could not be saved: ${reconErr.message}.`
         )
       } else {
         toast.success('Cheque(s) deposited to bank')
@@ -253,7 +373,6 @@ export default function ChequeAdministrationPage() {
       logAction({ action: 'deposit_cheques', targetType: 'customer_cheque' })
       setSelectedIds(new Set())
       setDepositBankOpen(false)
-      // Clear date filters so newly deposited cheques are not hidden by an old range
       setDepositFrom('')
       setDepositTo('')
       await load()
@@ -266,6 +385,7 @@ export default function ChequeAdministrationPage() {
     }
   }
 
+  // Handover selected cheques to customer
   const handoverSelected = async () => {
     const ids = Array.from(selectedIds)
     if (ids.length === 0) {
@@ -273,7 +393,7 @@ export default function ChequeAdministrationPage() {
       return
     }
 
-    const allCheques = [...chequesInHand, ...chequesDeposited]
+    const allCheques = [...chequesInHand, ...chequesDeposited, ...chequesHandedOver]
     const selectedRows = allCheques.filter((r) =>
       ids.some((id) => String(id) === String(r.id))
     )
@@ -283,98 +403,48 @@ export default function ChequeAdministrationPage() {
       return
     }
 
+    const totalVal = selectedRows.reduce((s, r) => s + Number(r.amount ?? 0), 0)
+
     const confirmMsg =
       selectedRows.length === 1
-        ? `Hand over cheque "${selectedRows[0].cheque_number}" back to customer? The cheque value (${fmtMoney(selectedRows[0].amount)}) will be removed from payments and added back to the customer's balance in Receivables.`
-        : `Hand over ${selectedRows.length} cheques back to customers? Their values will be removed from payments and added back to customers' balances in Receivables.`
+        ? `Hand over cheque "${selectedRows[0].cheque_number}" back to customer? The cheque value (${fmtMoney(selectedRows[0].amount)}) will be removed from payments and returned back to the customer's balance in Receivables.`
+        : `Hand over ${selectedRows.length} cheques back to customers? Total ${fmtMoney(totalVal)} will be removed from payments and returned back to customers' balances in Receivables.`
 
     if (!window.confirm(confirmMsg)) return
 
     setProcessingHandover(true)
     try {
-      // 1. Gather all cheque numbers (both raw and trimmed)
-      const chequeNumbers = Array.from(
-        new Set(
-          selectedRows
-            .flatMap((r) => [r.cheque_number, String(r.cheque_number || '').trim()])
-            .filter(Boolean)
-        )
-      )
+      const result = await reverseChequePayments(supabase, selectedRows, STATUS_HANDED_OVER)
 
-      if (chequeNumbers.length > 0) {
-        // 2. Fetch invoice_payments associated with these cheques
-        const { data: payments, error: payFetchErr } = await supabase
-          .from('invoice_payments')
-          .select('id, amount, reference, invoice_id, invoices(customer_id)')
-          .eq('method', 'cheque')
-          .in('reference', chequeNumbers)
-
-        if (payFetchErr) {
-          throw new Error(`Failed to find associated payments: ${payFetchErr.message}`)
-        }
-
-        // Filter payments to match customer_id if present
-        const paymentsToDelete = (payments || []).filter((p) => {
-          const pRef = String(p.reference || '').trim().toLowerCase()
-          const pCustId = Array.isArray(p.invoices) ? p.invoices[0]?.customer_id : p.invoices?.customer_id
-          return selectedRows.some((r) => {
-            const rRef = String(r.cheque_number || '').trim().toLowerCase()
-            if (rRef !== pRef) return false
-            if (r.customer_id && pCustId && String(r.customer_id) !== String(pCustId)) return false
-            return true
-          })
-        })
-
-        // 3. Delete matching invoice_payments to add balance back to customer
-        if (paymentsToDelete.length > 0) {
-          const payIds = paymentsToDelete.map((p) => p.id)
-          const { error: delErr } = await supabase
-            .from('invoice_payments')
-            .delete()
-            .in('id', payIds)
-
-          if (delErr) {
-            throw new Error(`Failed to reverse receivable payments: ${delErr.message}`)
-          }
-        }
+      if (!result.ok) {
+        throw result.error || new Error('Failed to reverse cheque payments')
       }
 
-      // 4. Clean up any bank reconciliation items if any cheque was previously deposited
-      const reconRefs = selectedRows.map((r) => `RCV-CHQ-${r.id}`)
-      await supabase
-        .from('bank_reconciliation_items')
-        .delete()
-        .in('ref_no', reconRefs)
-
-      // 5. Update customer_cheques status to STATUS_HANDED_OVER
-      const { error: err } = await supabase
-        .from('customer_cheques')
-        .update({ status: STATUS_HANDED_OVER, deposited_at: null })
-        .in('id', ids)
-
-      if (err) throw err
-
-      // 6. Log audit trail
       for (const r of selectedRows) {
         logAction({
           action: 'handover_cheques',
           targetType: 'customer_cheque',
           targetId: r.id,
           targetLabel: r.cheque_number,
-          details: `Handed over cheque ${r.cheque_number} (${fmtMoney(r.amount)}) back to customer ${r.customers?.name || r.customer_id || ''}. Value added back to receivable balance.`,
+          details: `Handed over cheque ${r.cheque_number} (${fmtMoney(r.amount)}) back to customer ${r.customers?.name || r.customer_id || ''}. Value of ${fmtMoney(result.reversedTotal)} added back to Receivable balance.`,
         })
       }
 
-      const totalVal = selectedRows.reduce((s, r) => s + Number(r.amount ?? 0), 0)
-      toast.success(
-        selectedRows.length === 1
-          ? `Cheque ${selectedRows[0].cheque_number} handed over to customer. ${fmtMoney(totalVal)} added back to Receivable balance.`
-          : `${selectedRows.length} cheques handed over to customers. ${fmtMoney(totalVal)} added back to Receivable balances.`
-      )
+      if (result.reversedTotal > 0) {
+        toast.success(
+          selectedRows.length === 1
+            ? `Cheque ${selectedRows[0].cheque_number} handed over. ${fmtMoney(result.reversedTotal)} removed from payments and returned to customer's Receivable balance!`
+            : `${selectedRows.length} cheques handed over. ${fmtMoney(result.reversedTotal)} removed from payments and returned to Receivable balances!`
+        )
+      } else {
+        toast.success(
+          `Cheque(s) marked as handed over. (Payment was already reversed or not found in receivables.)`
+        )
+      }
 
       setSelectedIds(new Set())
       await load()
-      setTab('in_hand')
+      setTab('handed_over')
     } catch (e) {
       console.error(e)
       toast.error(e?.message ?? 'Failed to handover cheque(s)')
@@ -383,8 +453,9 @@ export default function ChequeAdministrationPage() {
     }
   }
 
-  const moveToInHandSelected = async () => {
-    const ids = Array.from(selectedIds)
+  // Move selected cheques back to In Hand
+  const moveToInHandSelected = async (targetIds = null) => {
+    const ids = targetIds ? Array.from(targetIds) : Array.from(selectedIds)
     if (ids.length === 0) {
       toast.error('Select at least one cheque')
       return
@@ -407,6 +478,7 @@ export default function ChequeAdministrationPage() {
     setTab('in_hand')
   }
 
+  // Return selected cheques (e.g. bounced / returned by bank)
   const returnSelected = async () => {
     const ids = Array.from(selectedIds)
     if (ids.length === 0) {
@@ -414,26 +486,132 @@ export default function ChequeAdministrationPage() {
       return
     }
 
-    const { error: err } = await supabase
-      .from('customer_cheques')
-      .update({ status: STATUS_RETURNED })
-      .in('id', ids)
+    const allCheques = [...chequesInHand, ...chequesDeposited]
+    const selectedRows = allCheques.filter((r) =>
+      ids.some((id) => String(id) === String(r.id))
+    )
 
-    if (err) {
-      toast.error(err.message)
+    if (selectedRows.length === 0) {
+      toast.error('No cheques found for selection')
       return
     }
 
-    toast.success('Cheque(s) returned')
-    logAction({ action: 'return_cheques', targetType: 'customer_cheque' })
-    setSelectedIds(new Set())
-    await load()
-    setTab('deposited')
+    const totalVal = selectedRows.reduce((s, r) => s + Number(r.amount ?? 0), 0)
+
+    const confirmMsg =
+      `Mark ${selectedRows.length} cheque(s) as RETURNED? Their value (${fmtMoney(totalVal)}) will be removed from payments and returned back to the customer's balance in Receivables.`
+
+    if (!window.confirm(confirmMsg)) return
+
+    setProcessingHandover(true)
+    try {
+      const result = await reverseChequePayments(supabase, selectedRows, STATUS_RETURNED)
+
+      if (!result.ok) {
+        throw result.error || new Error('Failed to return cheque(s)')
+      }
+
+      for (const r of selectedRows) {
+        logAction({
+          action: 'return_cheques',
+          targetType: 'customer_cheque',
+          targetId: r.id,
+          targetLabel: r.cheque_number,
+          details: `Returned cheque ${r.cheque_number} (${fmtMoney(r.amount)}). Value returned back to customer's Receivable balance.`,
+        })
+      }
+
+      toast.success(
+        `Cheque(s) returned. ${fmtMoney(result.reversedTotal)} added back to Receivable balance.`
+      )
+
+      setSelectedIds(new Set())
+      await load()
+      setTab('handed_over')
+    } catch (e) {
+      console.error(e)
+      toast.error(e?.message ?? 'Failed to return cheque(s)')
+    } finally {
+      setProcessingHandover(false)
+    }
+  }
+
+  // Reverse lingering payments for a single handed over cheque
+  const reverseLingeringPaymentForCheque = async (cheque) => {
+    const payments = unreversedPaymentsMap.get(cheque.id) || []
+    const totalAmount = payments.reduce((s, p) => s + Number(p.amount ?? 0), 0) || cheque.amount
+
+    if (
+      !window.confirm(
+        `Reverse payment for cheque "${cheque.cheque_number}" (${fmtMoney(totalAmount)}) and add it back to ${cheque.customers?.name || 'customer'}'s balance in Receivables?`
+      )
+    ) {
+      return
+    }
+
+    setProcessingHandover(true)
+    try {
+      const result = await reverseChequePayments(supabase, [cheque], cheque.status || STATUS_HANDED_OVER)
+      if (!result.ok) throw result.error
+
+      toast.success(
+        `Payment of ${fmtMoney(result.reversedTotal || totalAmount)} reversed! Added back to ${cheque.customers?.name || 'customer'}'s balance in Receivables.`
+      )
+      await load()
+    } catch (e) {
+      console.error(e)
+      toast.error(e?.message ?? 'Failed to reverse payment')
+    } finally {
+      setProcessingHandover(false)
+    }
+  }
+
+  // Reverse all lingering payments for all handed-over/returned cheques
+  const reverseAllLingeringPayments = async () => {
+    const unreversedCheques = chequesHandedOver.filter(
+      (c) => (unreversedPaymentsMap.get(c.id) || []).length > 0
+    )
+    if (unreversedCheques.length === 0) return
+
+    const totalAmt = unreversedCheques.reduce((s, c) => {
+      const pays = unreversedPaymentsMap.get(c.id) || []
+      return s + (pays.reduce((ps, p) => ps + Number(p.amount ?? 0), 0) || Number(c.amount ?? 0))
+    }, 0)
+
+    if (
+      !window.confirm(
+        `Reverse payments for ${unreversedCheques.length} handed-over/returned cheque(s) totaling ${fmtMoney(totalAmt)} and return all values back to customers' balances in Receivables?`
+      )
+    ) {
+      return
+    }
+
+    setProcessingHandover(true)
+    try {
+      const result = await reverseChequePayments(supabase, unreversedCheques, STATUS_HANDED_OVER)
+      if (!result.ok) throw result.error
+
+      toast.success(
+        `Reversed payments for ${unreversedCheques.length} cheque(s) (${fmtMoney(result.reversedTotal)}). Customer receivable balances restored!`
+      )
+      await load()
+    } catch (e) {
+      console.error(e)
+      toast.error(e?.message ?? 'Failed to reverse payments')
+    } finally {
+      setProcessingHandover(false)
+    }
   }
 
   const daysLabel = (chequeDate, status) => {
     if (status === STATUS_DEPOSITED) {
-      return { label: '0 days', className: 'text-slate-500 dark:text-emerald-100/70' }
+      return { label: 'Deposited', className: 'text-sky-600 dark:text-sky-300' }
+    }
+    if (status === STATUS_HANDED_OVER) {
+      return { label: 'Handed Over', className: 'text-amber-600 dark:text-amber-300' }
+    }
+    if (status === STATUS_RETURNED) {
+      return { label: 'Returned', className: 'text-rose-600 dark:text-rose-300' }
     }
     const dt = chequeDate ? new Date(`${String(chequeDate).slice(0, 10)}T00:00:00`) : null
     if (!dt) return { label: '-', className: 'text-slate-400' }
@@ -442,19 +620,20 @@ export default function ChequeAdministrationPage() {
     const diffDays = Math.floor((dt.getTime() - startToday.getTime()) / 86400000)
     if (diffDays < 0) {
       const v = Math.abs(diffDays)
-      return { label: `${v} day${v === 1 ? '' : 's'} Passed`, className: 'text-rose-300' }
+      return { label: `${v} day${v === 1 ? '' : 's'} Passed`, className: 'text-rose-500 dark:text-rose-300' }
     }
-    return { label: `${diffDays} day${diffDays === 1 ? '' : 's'} Remaining`, className: 'text-emerald-300' }
+    return { label: `${diffDays} day${diffDays === 1 ? '' : 's'} Remaining`, className: 'text-emerald-600 dark:text-emerald-300' }
   }
 
-  const showRows = tab === 'in_hand' ? filteredInHand : depositedFiltered
-
-  const selectedTotals = useMemo(() => {
-    const source = tab === 'in_hand' ? filteredInHand : depositedFiltered
-    const rows = source.filter((r) => selectedIds.has(r.id))
-    const total = rows.reduce((s, r) => s + Number(r.amount ?? 0), 0)
-    return { count: rows.length, total }
-  }, [tab, filteredInHand, depositedFiltered, selectedIds])
+  // Count unreversed cheques
+  const unreversedChequesCount = unreversedPaymentsMap.size
+  const totalUnreversedAmount = useMemo(() => {
+    let sum = 0
+    for (const payments of unreversedPaymentsMap.values()) {
+      sum += payments.reduce((s, p) => s + Number(p.amount ?? 0), 0)
+    }
+    return sum
+  }, [unreversedPaymentsMap])
 
   return (
     <div className="space-y-4">
@@ -462,39 +641,110 @@ export default function ChequeAdministrationPage() {
         <div>
           <div className="text-lg font-semibold text-slate-900 dark:text-white">Cheque Administration</div>
           <div className="text-sm text-slate-500 dark:text-emerald-100/70 max-w-3xl">
-            Receivable cheque payments create rows under <span className="font-semibold text-slate-700 dark:text-emerald-50">Cheques In Hand</span>.
-            Select them and click <span className="font-semibold text-slate-700 dark:text-emerald-50">Deposit</span> — choose the <span className="font-semibold text-slate-700 dark:text-emerald-50">receiving bank</span> — they move to <span className="font-semibold text-slate-700 dark:text-emerald-50">Deposited Cheques</span> and a line is added for Bank Reconciliation.
-            {' '}Payable cheque payments are also listed under <span className="font-semibold text-slate-700 dark:text-emerald-50">Deposited Cheques</span> for tracking.
+            Manage receivable and payable cheques. Deposit customer cheques into your bank accounts, or{' '}
+            <span className="font-semibold text-slate-700 dark:text-emerald-50">Handover To Customer</span> to reverse
+            the payment and return the cheque value back to the customer's balance in Receivables.
           </div>
         </div>
+        <button
+          onClick={load}
+          disabled={loading || processingHandover}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-emerald-900/40 text-xs font-semibold text-slate-700 dark:text-emerald-100 hover:bg-slate-50 dark:hover:bg-emerald-950/40 transition-colors self-start sm:self-auto"
+        >
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </button>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-2">
+      {/* Alert banner if any handed over cheques still have active payments in receivables */}
+      {unreversedChequesCount > 0 && (
+        <div className="p-4 rounded-xl border border-amber-300 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <AlertCircle size={20} className="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
+            <div>
+              <div className="font-bold text-sm">
+                {unreversedChequesCount} Handed-over / Returned Cheque(s) have payments still active in Receivables!
+              </div>
+              <div className="text-xs text-amber-800 dark:text-amber-300 mt-0.5">
+                Total value: <span className="font-extrabold">{fmtMoney(totalUnreversedAmount)}</span>.
+                These cheques were handed over or returned, but their payments are still reducing customer balances.
+              </div>
+            </div>
+          </div>
           <button
             type="button"
-            onClick={() => setTab('in_hand')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+            disabled={processingHandover}
+            onClick={reverseAllLingeringPayments}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-xs font-bold shadow-sm whitespace-nowrap self-start sm:self-auto"
+          >
+            <RotateCcw size={14} />
+            {processingHandover ? 'Reversing...' : 'Reverse All to Receivables Balance'}
+          </button>
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => {
+              setTab('in_hand')
+              setSelectedIds(new Set())
+            }}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors flex items-center gap-2 ${
               tab === 'in_hand'
                 ? 'bg-slate-900 text-white border-slate-900 dark:bg-emerald-500/15 dark:border-emerald-400/20 dark:text-emerald-50'
                 : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-emerald-950/30 dark:border-emerald-900/40 dark:text-emerald-100/80 dark:hover:bg-emerald-500/10'
             }`}
           >
             Cheques In Hand
+            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 dark:bg-emerald-900/50 text-slate-700 dark:text-emerald-200">
+              {filteredInHand.length}
+            </span>
           </button>
           <button
             type="button"
-            onClick={() => setTab('deposited')}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors ${
+            onClick={() => {
+              setTab('deposited')
+              setSelectedIds(new Set())
+            }}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors flex items-center gap-2 ${
               tab === 'deposited'
                 ? 'bg-slate-900 text-white border-slate-900 dark:bg-emerald-500/15 dark:border-emerald-400/20 dark:text-emerald-50'
                 : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-emerald-950/30 dark:border-emerald-900/40 dark:text-emerald-100/80 dark:hover:bg-emerald-500/10'
             }`}
           >
             Deposited Cheques
+            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 dark:bg-emerald-900/50 text-slate-700 dark:text-emerald-200">
+              {depositedFiltered.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setTab('handed_over')
+              setSelectedIds(new Set())
+            }}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors flex items-center gap-2 ${
+              tab === 'handed_over'
+                ? 'bg-slate-900 text-white border-slate-900 dark:bg-emerald-500/15 dark:border-emerald-400/20 dark:text-emerald-50'
+                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-emerald-950/30 dark:border-emerald-900/40 dark:text-emerald-100/80 dark:hover:bg-emerald-500/10'
+            }`}
+          >
+            Handed Over / Returned
+            <span className={`text-xs px-2 py-0.5 rounded-full ${
+              unreversedChequesCount > 0
+                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 font-bold'
+                : 'bg-slate-200 dark:bg-emerald-900/50 text-slate-700 dark:text-emerald-200'
+            }`}>
+              {handedOverFiltered.length}
+              {unreversedChequesCount > 0 ? ` (${unreversedChequesCount} alert)` : ''}
+            </span>
           </button>
         </div>
 
+        {/* Top Actions and Filters */}
         <div className="flex flex-wrap items-center gap-2">
           {tab === 'deposited' && (
             <>
@@ -520,30 +770,47 @@ export default function ChequeAdministrationPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search cheques"
+              placeholder="Search cheques, customer, bank..."
               className="pl-9 pr-3 py-2 rounded-lg border border-slate-200 dark:border-emerald-900/40 bg-white dark:bg-emerald-950/30 text-sm text-slate-900 dark:text-white"
             />
           </div>
 
+          {/* Quick Action in top bar for tab === 'in_hand' */}
           {tab === 'in_hand' && (
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                disabled={processingHandover}
+                disabled={processingHandover || selectedIds.size === 0}
                 onClick={handoverSelected}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm transition-opacity"
               >
                 <HandHelping size={16} />
                 {processingHandover ? 'Processing...' : 'Handover To Customer'}
               </button>
               <button
                 type="button"
+                disabled={selectedIds.size === 0}
                 onClick={depositSelected}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-sm font-semibold shadow-sm"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm transition-opacity"
               >
                 <Landmark size={16} />
                 Deposit
                 <ArrowRightCircle size={16} />
+              </button>
+            </div>
+          )}
+
+          {/* Quick Action in top bar for tab === 'deposited' */}
+          {tab === 'deposited' && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={processingHandover || selectedIds.size === 0}
+                onClick={handoverSelected}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm transition-opacity"
+              >
+                <HandHelping size={16} />
+                {processingHandover ? 'Processing...' : 'Handover To Customer'}
               </button>
             </div>
           )}
@@ -556,7 +823,8 @@ export default function ChequeAdministrationPage() {
         </div>
       )}
 
-      <div className="rounded-xl border border-slate-200 dark:border-emerald-900/40 bg-white dark:bg-emerald-950/30 overflow-hidden">
+      {/* Main Table */}
+      <div className="rounded-xl border border-slate-200 dark:border-emerald-900/40 bg-white dark:bg-emerald-950/30 overflow-hidden shadow-sm">
         <div className="overflow-auto">
           <table className="min-w-[980px] w-full text-sm">
             <thead className="bg-slate-50 dark:bg-emerald-950/40 text-slate-600 dark:text-emerald-100/70">
@@ -567,7 +835,9 @@ export default function ChequeAdministrationPage() {
                     checked={
                       tab === 'in_hand'
                         ? filteredInHand.length > 0 && filteredInHand.every((r) => selectedIds.has(r.id))
-                        : depositedFiltered.length > 0 && depositedFiltered.every((r) => selectedIds.has(r.id))
+                        : tab === 'deposited'
+                          ? depositedFiltered.length > 0 && depositedFiltered.filter((r) => r.cheque_type !== 'payable').every((r) => selectedIds.has(r.id))
+                          : handedOverFiltered.length > 0 && handedOverFiltered.every((r) => selectedIds.has(r.id))
                     }
                     onChange={(e) => toggleAll(e.target.checked)}
                   />
@@ -577,25 +847,41 @@ export default function ChequeAdministrationPage() {
                 <th className="p-3 text-left">Type</th>
                 <th className="p-3 text-left">Name</th>
                 <th className="p-3 text-left">Bank</th>
-                <th className="p-3 text-left">Days Remaining</th>
+                <th className="p-3 text-left">
+                  {tab === 'handed_over' ? 'Status' : 'Days Remaining'}
+                </th>
                 <th className="p-3 text-right">Amount</th>
+                {tab === 'handed_over' && (
+                  <th className="p-3 text-center">Receivables Status</th>
+                )}
+                {tab === 'handed_over' && (
+                  <th className="p-3 text-right">Action</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-emerald-900/30">
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="p-6 text-center text-slate-500 dark:text-emerald-100/60">Loading...</td>
+                  <td colSpan={tab === 'handed_over' ? 10 : 8} className="p-6 text-center text-slate-500 dark:text-emerald-100/60">
+                    Loading cheques...
+                  </td>
                 </tr>
               ) : showRows.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-6 text-center text-slate-500 dark:text-emerald-100/60">No cheques found</td>
+                  <td colSpan={tab === 'handed_over' ? 10 : 8} className="p-6 text-center text-slate-500 dark:text-emerald-100/60">
+                    {tab === 'handed_over' ? 'No handed over or returned cheques found' : 'No cheques found'}
+                  </td>
                 </tr>
               ) : (
-                showRows.map((r, idx) => {
+                showRows.map((r) => {
                   const days = daysLabel(r.cheque_date, r.status)
                   const isPayable = r.cheque_type === 'payable'
                   const checked = !isPayable && selectedIds.has(r.id)
                   const name = isPayable ? r.vendors?.name : r.customers?.name
+                  const lingering = unreversedPaymentsMap.get(r.id) || []
+                  const hasLingering = lingering.length > 0
+                  const lingeringAmt = lingering.reduce((s, p) => s + Number(p.amount ?? 0), 0)
+
                   return (
                     <tr
                       key={r.id}
@@ -604,31 +890,88 @@ export default function ChequeAdministrationPage() {
                           ? 'bg-slate-100/70 dark:bg-emerald-500/10'
                           : isPayable
                             ? 'bg-amber-50/40 dark:bg-amber-950/10 hover:bg-amber-50/60 dark:hover:bg-amber-900/15'
-                            : 'hover:bg-slate-50 dark:hover:bg-emerald-500/5'
+                            : hasLingering
+                              ? 'bg-amber-50/30 dark:bg-amber-950/20 hover:bg-amber-50/50'
+                              : 'hover:bg-slate-50 dark:hover:bg-emerald-500/5'
                       }
                     >
                       <td className="p-3">
                         {isPayable ? (
-                          <span className="inline-flex items-center justify-center w-4 h-4 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 text-[10px] font-bold">P</span>
+                          <span className="inline-flex items-center justify-center w-4 h-4 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 text-[10px] font-bold">
+                            P
+                          </span>
                         ) : (
-                          <input type="checkbox" checked={checked} onChange={(e) => toggleOne(r.id, e.target.checked)} />
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(e) => toggleOne(r.id, e.target.checked)}
+                          />
                         )}
                       </td>
-                      <td className="p-3 text-slate-900 dark:text-white">{r.cheque_date ? String(r.cheque_date).slice(0, 10) : '-'}</td>
-                      <td className="p-3 text-slate-700 dark:text-emerald-50">{r.cheque_number || '-'}</td>
+                      <td className="p-3 text-slate-900 dark:text-white">
+                        {r.cheque_date ? String(r.cheque_date).slice(0, 10) : '-'}
+                      </td>
+                      <td className="p-3 font-semibold text-slate-800 dark:text-emerald-50">
+                        {r.cheque_number || '-'}
+                      </td>
                       <td className="p-3">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          isPayable
-                            ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200'
-                            : 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200'
-                        }`}>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                            isPayable
+                              ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200'
+                              : 'bg-sky-100 text-sky-700 dark:bg-sky-900/40 dark:text-sky-200'
+                          }`}
+                        >
                           {isPayable ? 'Payable' : 'Receivable'}
                         </span>
                       </td>
                       <td className="p-3 text-slate-700 dark:text-emerald-50">{name ?? '-'}</td>
                       <td className="p-3 text-slate-700 dark:text-emerald-50">{r.bank_name || '-'}</td>
                       <td className={`p-3 font-semibold ${days.className}`}>{days.label}</td>
-                      <td className="p-3 text-right font-semibold text-slate-900 dark:text-white">{fmtMoney(r.amount)}</td>
+                      <td className="p-3 text-right font-semibold text-slate-900 dark:text-white">
+                        {fmtMoney(r.amount)}
+                      </td>
+
+                      {/* Extra columns for Handed Over & Returned tab */}
+                      {tab === 'handed_over' && (
+                        <td className="p-3 text-center">
+                          {hasLingering ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                              <AlertCircle size={12} />
+                              Payment in Receivables: {fmtMoney(lingeringAmt)}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                              <CheckCircle size={12} />
+                              Balance Restored
+                            </span>
+                          )}
+                        </td>
+                      )}
+
+                      {tab === 'handed_over' && (
+                        <td className="p-3 text-right">
+                          <div className="inline-flex items-center gap-2 justify-end">
+                            {hasLingering && (
+                              <button
+                                type="button"
+                                disabled={processingHandover}
+                                onClick={() => reverseLingeringPaymentForCheque(r)}
+                                className="px-2.5 py-1 rounded-md bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold shadow-sm"
+                              >
+                                Reverse to Receivables
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => moveToInHandSelected([r.id])}
+                              className="text-xs text-sky-600 hover:text-sky-800 dark:text-sky-400 dark:hover:underline font-semibold"
+                            >
+                              Move to In Hand
+                            </button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   )
                 })
@@ -637,17 +980,41 @@ export default function ChequeAdministrationPage() {
           </table>
         </div>
 
+        {/* Bottom Bar: Tab in_hand */}
         {tab === 'in_hand' && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3 border-t border-slate-100 dark:border-emerald-900/30 bg-slate-50/50 dark:bg-emerald-950/20">
             <div className="text-sm text-slate-600 dark:text-emerald-100/70">
               Selected cheques: <span className="font-bold text-slate-900 dark:text-white">{inHandTotals.count}</span>
             </div>
-            <div className="text-sm text-slate-600 dark:text-emerald-100/70">
-              Total: <span className="font-extrabold text-slate-900 dark:text-white">{fmtMoney(inHandTotals.total)}</span>
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-slate-600 dark:text-emerald-100/70">
+                Total: <span className="font-extrabold text-slate-900 dark:text-white">{fmtMoney(inHandTotals.total)}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={processingHandover || inHandTotals.count === 0}
+                  onClick={handoverSelected}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm"
+                >
+                  <HandHelping size={15} />
+                  {processingHandover ? 'Processing...' : 'Handover To Customer'}
+                </button>
+                <button
+                  type="button"
+                  disabled={inHandTotals.count === 0}
+                  onClick={depositSelected}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm"
+                >
+                  <Landmark size={15} />
+                  Deposit
+                </button>
+              </div>
             </div>
           </div>
         )}
 
+        {/* Bottom Bar: Tab deposited */}
         {tab === 'deposited' && (() => {
           const receivableTotal = depositedFiltered
             .filter((r) => r.cheque_type !== 'payable')
@@ -657,43 +1024,83 @@ export default function ChequeAdministrationPage() {
             .reduce((s, r) => s + Number(r.amount ?? 0), 0)
           const grandTotal = receivableTotal + payableTotal
           return (
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3 border-t border-slate-100 dark:border-emerald-900/30 bg-slate-50/50 dark:bg-emerald-950/20">
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="text-sm text-slate-600 dark:text-emerald-100/70">
-                Selected: <span className="font-bold text-slate-900 dark:text-white">{selectedTotals.count}</span>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3 border-t border-slate-100 dark:border-emerald-900/30 bg-slate-50/50 dark:bg-emerald-950/20">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="text-sm text-slate-600 dark:text-emerald-100/70">
+                  Selected: <span className="font-bold text-slate-900 dark:text-white">{selectedTotals.count}</span>
+                </div>
+                <div className="text-sm text-slate-600 dark:text-emerald-100/70">
+                  Receivable: <span className="font-extrabold text-sky-700 dark:text-sky-200">{fmtMoney(receivableTotal)}</span>
+                </div>
+                <div className="text-sm text-slate-600 dark:text-emerald-100/70">
+                  Payable: <span className="font-extrabold text-amber-700 dark:text-amber-200">{fmtMoney(payableTotal)}</span>
+                </div>
+                <div className="text-sm text-slate-600 dark:text-emerald-100/70">
+                  Total: <span className="font-extrabold text-slate-900 dark:text-white">{fmtMoney(grandTotal)}</span>
+                </div>
               </div>
-              <div className="text-sm text-slate-600 dark:text-emerald-100/70">
-                Receivable: <span className="font-extrabold text-sky-700 dark:text-sky-200">{fmtMoney(receivableTotal)}</span>
-              </div>
-              <div className="text-sm text-slate-600 dark:text-emerald-100/70">
-                Payable: <span className="font-extrabold text-amber-700 dark:text-amber-200">{fmtMoney(payableTotal)}</span>
-              </div>
-              <div className="text-sm text-slate-600 dark:text-emerald-100/70">
-                Total: <span className="font-extrabold text-slate-900 dark:text-white">{fmtMoney(grandTotal)}</span>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={moveToInHandSelected}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm"
-              >
-                Move To Cheques In Hand
-              </button>
-              <button
-                type="button"
-                onClick={returnSelected}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold shadow-sm"
-              >
-                Return
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  disabled={processingHandover || selectedTotals.count === 0}
+                  onClick={handoverSelected}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm"
+                >
+                  <HandHelping size={15} />
+                  {processingHandover ? 'Processing...' : 'Handover To Customer'}
+                </button>
+                <button
+                  type="button"
+                  disabled={selectedTotals.count === 0}
+                  onClick={() => moveToInHandSelected()}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-semibold shadow-sm"
+                >
+                  Move To Cheques In Hand
+                </button>
+                <button
+                  type="button"
+                  disabled={processingHandover || selectedTotals.count === 0}
+                  onClick={returnSelected}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm"
+                >
+                  Return
+                </button>
+              </div>
             </div>
-          </div>
           )
         })()}
+
+        {/* Bottom Bar: Tab handed_over */}
+        {tab === 'handed_over' && (
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3 border-t border-slate-100 dark:border-emerald-900/30 bg-slate-50/50 dark:bg-emerald-950/20">
+            <div className="text-sm text-slate-600 dark:text-emerald-100/70">
+              Selected cheques:{' '}
+              <span className="font-bold text-slate-900 dark:text-white">{handedOverTotals.count}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-sm text-slate-600 dark:text-emerald-100/70">
+                Total:{' '}
+                <span className="font-extrabold text-slate-900 dark:text-white">
+                  {fmtMoney(handedOverTotals.total)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={handedOverTotals.count === 0}
+                  onClick={() => moveToInHandSelected()}
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-semibold shadow-sm"
+                >
+                  Move To Cheques In Hand
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
+      {/* Modal: Deposit Cheques to Bank */}
       {depositBankOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
           <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200/60 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden">
@@ -713,42 +1120,51 @@ export default function ChequeAdministrationPage() {
                   Choose the <span className="font-semibold">bank account</span> you are depositing these receivable cheques into.
                 </p>
                 <p>
-                  Confirming updates them to <span className="font-semibold">Deposited</span> and writes matching rows to <span className="font-semibold">Bank Reconciliation</span> for that bank.
+                  Confirming updates them to <span className="font-semibold">Deposited</span> and writes matching rows to{' '}
+                  <span className="font-semibold">Bank Reconciliation</span> for that bank.
                 </p>
               </div>
 
               <div>
-                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Bank</div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">
+                  Receiving Bank Account
+                </label>
                 <select
                   value={depositBankId}
                   onChange={(e) => setDepositBankId(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
                 >
-                  <option value="">Select bank</option>
                   {banks.map((b) => (
                     <option key={b.id} value={b.id}>
-                      {(b.code ? `${b.code} - ` : '') + (b.name ?? '') + (b.branch ? ` (${b.branch})` : '')}
+                      {b.code} - {b.name}
+                      {b.branch ? ` (${b.branch})` : ''}
                     </option>
                   ))}
                 </select>
               </div>
 
-              <div className="flex items-center justify-end gap-2">
+              <div className="text-xs text-slate-500 dark:text-slate-400">
+                Selected: <span className="font-bold text-slate-900 dark:text-white">{inHandTotals.count}</span> cheques (
+                <span className="font-bold text-slate-900 dark:text-white">{fmtMoney(inHandTotals.total)}</span>)
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
                 <button
                   type="button"
-                  onClick={() => setDepositBankOpen(false)}
                   disabled={depositBankSaving}
-                  className="px-4 py-2.5 rounded-lg text-sm font-semibold border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 transition-colors"
+                  onClick={() => setDepositBankOpen(false)}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
+                  disabled={depositBankSaving}
                   onClick={confirmDepositToBank}
-                  disabled={depositBankSaving || !depositBankId}
-                  className="px-4 py-2.5 rounded-lg text-sm font-semibold bg-sky-600 hover:bg-sky-700 text-white disabled:opacity-50 transition-colors shadow-sm"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm"
                 >
-                  {depositBankSaving ? 'Depositing...' : 'Deposit'}
+                  <Landmark size={16} />
+                  {depositBankSaving ? 'Saving...' : 'Confirm Deposit'}
                 </button>
               </div>
             </div>

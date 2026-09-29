@@ -45,3 +45,22 @@ test('legacy unlinked return clears prior outstanding without reducing a later i
   assert.equal(rows.find((row) => row.id === 'new').balance, 91800)
   assert.equal(rows.filter((row) => row.id !== 'new').reduce((sum, row) => sum + row.balance, 0), 0)
 })
+
+test('matchesChequePayment matches exact, dashed, digits-only, and prefixed references', async () => {
+  const { matchesChequePayment, getChequeNumberVariants } = await import('../src/lib/receivableChequeWorkflow.js')
+  const cheque = { cheque_number: '123456-7010-001' }
+
+  assert.equal(matchesChequePayment({ reference: '123456-7010-001' }, cheque), true)
+  assert.equal(matchesChequePayment({ reference: '1234567010001' }, cheque), true)
+  assert.equal(matchesChequePayment({ reference: '123456' }, cheque), true)
+  assert.equal(matchesChequePayment({ reference: 'CHQ-123456' }, cheque), true)
+  assert.equal(matchesChequePayment({ reference: 'Cheque 123456-7010-001' }, cheque), true)
+  assert.equal(matchesChequePayment({ reference: ' 123456-7010-001 ' }, cheque), true)
+  assert.equal(matchesChequePayment({ reference: '999999' }, cheque), false)
+
+  const variants = getChequeNumberVariants('123456-7010-001')
+  assert.ok(variants.includes('123456-7010-001'))
+  assert.ok(variants.includes('1234567010001'))
+  assert.ok(variants.includes('123456'))
+})
+
