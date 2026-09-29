@@ -68,6 +68,7 @@ import DayBookReportPage from './pages/reports/DayBookReportPage'
 import ExpenseReportsPage from './pages/reports/ExpenseReportsPage'
 import ProfitLossReportPage from './pages/reports/ProfitLossReportPage'
 import BalanceSheetReportPage from './pages/reports/BalanceSheetReportPage'
+import BusinessMoneyOutReportPage from './pages/reports/BusinessMoneyOutReportPage'
 import SalaryTransferRequestPage from './pages/SalaryTransferRequestPage'
 
 function P({ module, action = 'view', children }) {
@@ -122,6 +123,7 @@ export default function App() {
                   <Route path="/reports/balance-sheet" element={<Navigate to="/reports/finance/balance-sheet" replace />} />
                   <Route path="/reports/returns-delivery" element={<Navigate to="/reports/returns" replace />} />
                   <Route path="/reports/admin-system" element={<Navigate to="/reports/admin" replace />} />
+                  <Route path="/reports/finance/money-out" element={<P module="reports_finance"><BusinessMoneyOutReportPage /></P>} />
                   <Route path="/reports/:categoryKey/:reportSlug" element={<ReportRoutePage />} />
                   <Route path="/reports/:categoryKey" element={<ReportDirectoryPage />} />
                   <Route path="/finance/journal-entry" element={<P module="finance_journal_entry"><JournalEntryPage /></P>} />

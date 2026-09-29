@@ -32,12 +32,27 @@ function presetRange(preset) {
 const emptyFilters = { customer: '', product: '', rep: '', invoice: '', payment: '', status: '' }
 
 async function fetchReportData(start, end) {
-  const [invoiceResult, paymentResult, productResult, purchaseResult, orderResult] = await Promise.all([
-    supabase.from('invoices').select(`
-      id, invoice_number, created_at, customer_id, rep_id, payment_type, total_amount, status,
-      customers(id, name, phone, address), employees(id, name),
+  const fetchInvoices = async () => {
+    const baseFields = `
+      id, invoice_number, created_at, customer_id, rep_id, payment_type, total_amount,
+      customers(id, name, phone, address), employees(id, name)
+    `
+    const res = await supabase.from('invoices').select(`
+      ${baseFields},
       invoice_items(id, product_id, quantity, price, discount, total, cost_price)
-    `).gte('created_at', startOfDay(start)).lte('created_at', endOfDay(end)).order('created_at', { ascending: false }),
+    `).gte('created_at', startOfDay(start)).lte('created_at', endOfDay(end)).order('created_at', { ascending: false })
+
+    if (res.error && (res.error.message?.toLowerCase().includes('cost_price') || JSON.stringify(res.error).toLowerCase().includes('cost_price'))) {
+      return await supabase.from('invoices').select(`
+        ${baseFields},
+        invoice_items(id, product_id, quantity, price, discount, total)
+      `).gte('created_at', startOfDay(start)).lte('created_at', endOfDay(end)).order('created_at', { ascending: false })
+    }
+    return res
+  }
+
+  const [invoiceResult, paymentResult, productResult, purchaseResult, orderResult] = await Promise.all([
+    fetchInvoices(),
     supabase.from('invoice_payments').select('id, invoice_id, amount, paid_at, method'),
     supabase.from('products').select('id, name, code, price, stock').order('name'),
     supabase.from('purchase_items').select('id, product_id, quantity, cost, purchases(date, created_at, status)'),
@@ -369,7 +384,7 @@ export default function SalesReportsPage({ initialMode = 'daily' }) {
     <PrintHeader title={title} generatedBy={generatedBy} range={range} />
     <header className="rounded-lg border border-slate-200 bg-white p-4 dark:border-emerald-400/15 dark:bg-emerald-950/25 print:hidden"><div className="flex flex-col gap-4 xl:flex-row xl:items-center"><div><p className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-300">Sales reports</p><h1 className="mt-1 text-xl font-bold text-slate-900 dark:text-white">Sales Reports</h1><p className="mt-0.5 text-sm text-slate-500 dark:text-emerald-100/65">Detailed sales, historical cost, profitability and receivables.</p></div><div className="xl:ml-auto inline-flex w-fit flex-wrap gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 dark:border-emerald-400/15 dark:bg-emerald-950/40">{modes.map(([key,label])=><button key={key} onClick={()=>setMode(key)} className={`rounded-md px-3 py-1.5 text-xs font-bold ${mode===key?'bg-emerald-600 text-white':'text-slate-600 hover:bg-white dark:text-emerald-100/75 dark:hover:bg-emerald-900'}`}>{label}</button>)}</div></div></header>
     <Filters {...{preset,setPreset,range,setRange,filters,setFilters,options,onRefresh:load}} />
-    {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"><b>Report could not load:</b> {error}<br/><span className="text-xs">If the error mentions cost_price, run supabase/sales_reports_historical_cost.sql in Supabase.</span></div>}
+    {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700"><b>Report could not load:</b> {error}</div>}
     <Summary totals={model.totals} />
     <div className="flex flex-wrap justify-between items-center gap-3 print:hidden"><div><div className="flex items-center gap-2"><span className="h-5 w-1 rounded-full bg-emerald-500"/><h2 className="font-extrabold text-lg text-slate-900 dark:text-white">{title}</h2></div><p className="ml-3 mt-0.5 text-xs text-slate-500">{range.start} to {range.end} <span className="mx-1">·</span> {model.invoices.length} invoices</p></div><div className="flex flex-wrap gap-2"><button onClick={()=>window.print()} className="report-action"><Printer size={15}/>Print</button><button onClick={()=>exportSalesReportPDF({ mode, title, range, generatedBy, model, exportRows })} className="report-action"><Download size={15}/>PDF</button><button onClick={()=>exportToExcel(exportRows,`${mode}-sales-report.xlsx`,'Sales Report')} className="report-action"><FileSpreadsheet size={15}/>Excel</button><button onClick={doCsv} className="report-action"><Download size={15}/>CSV</button></div></div>
     {mode==='daily'?<DailyTable invoices={model.invoices} totals={model.totals} expanded={expanded} setExpanded={setExpanded}/>:<AggregateTable mode={mode} rows={model[mode]} />}

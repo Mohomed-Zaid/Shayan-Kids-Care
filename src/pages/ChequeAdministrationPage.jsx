@@ -35,6 +35,7 @@ export default function ChequeAdministrationPage() {
   const [depositBankOpen, setDepositBankOpen] = useState(false)
   const [depositBankSaving, setDepositBankSaving] = useState(false)
   const [depositBankId, setDepositBankId] = useState('')
+  const [processingHandover, setProcessingHandover] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -272,21 +273,114 @@ export default function ChequeAdministrationPage() {
       return
     }
 
-    const { error: err } = await supabase
-      .from('customer_cheques')
-      .update({ status: STATUS_HANDED_OVER })
-      .in('id', ids)
+    const allCheques = [...chequesInHand, ...chequesDeposited]
+    const selectedRows = allCheques.filter((r) =>
+      ids.some((id) => String(id) === String(r.id))
+    )
 
-    if (err) {
-      toast.error(err.message)
+    if (selectedRows.length === 0) {
+      toast.error('No cheques found for selection')
       return
     }
 
-    toast.success('Cheque(s) handed over')
-    logAction({ action: 'handover_cheques', targetType: 'customer_cheque' })
-    setSelectedIds(new Set())
-    await load()
-    setTab('in_hand')
+    const confirmMsg =
+      selectedRows.length === 1
+        ? `Hand over cheque "${selectedRows[0].cheque_number}" back to customer? The cheque value (${fmtMoney(selectedRows[0].amount)}) will be removed from payments and added back to the customer's balance in Receivables.`
+        : `Hand over ${selectedRows.length} cheques back to customers? Their values will be removed from payments and added back to customers' balances in Receivables.`
+
+    if (!window.confirm(confirmMsg)) return
+
+    setProcessingHandover(true)
+    try {
+      // 1. Gather all cheque numbers (both raw and trimmed)
+      const chequeNumbers = Array.from(
+        new Set(
+          selectedRows
+            .flatMap((r) => [r.cheque_number, String(r.cheque_number || '').trim()])
+            .filter(Boolean)
+        )
+      )
+
+      if (chequeNumbers.length > 0) {
+        // 2. Fetch invoice_payments associated with these cheques
+        const { data: payments, error: payFetchErr } = await supabase
+          .from('invoice_payments')
+          .select('id, amount, reference, invoice_id, invoices(customer_id)')
+          .eq('method', 'cheque')
+          .in('reference', chequeNumbers)
+
+        if (payFetchErr) {
+          throw new Error(`Failed to find associated payments: ${payFetchErr.message}`)
+        }
+
+        // Filter payments to match customer_id if present
+        const paymentsToDelete = (payments || []).filter((p) => {
+          const pRef = String(p.reference || '').trim().toLowerCase()
+          const pCustId = Array.isArray(p.invoices) ? p.invoices[0]?.customer_id : p.invoices?.customer_id
+          return selectedRows.some((r) => {
+            const rRef = String(r.cheque_number || '').trim().toLowerCase()
+            if (rRef !== pRef) return false
+            if (r.customer_id && pCustId && String(r.customer_id) !== String(pCustId)) return false
+            return true
+          })
+        })
+
+        // 3. Delete matching invoice_payments to add balance back to customer
+        if (paymentsToDelete.length > 0) {
+          const payIds = paymentsToDelete.map((p) => p.id)
+          const { error: delErr } = await supabase
+            .from('invoice_payments')
+            .delete()
+            .in('id', payIds)
+
+          if (delErr) {
+            throw new Error(`Failed to reverse receivable payments: ${delErr.message}`)
+          }
+        }
+      }
+
+      // 4. Clean up any bank reconciliation items if any cheque was previously deposited
+      const reconRefs = selectedRows.map((r) => `RCV-CHQ-${r.id}`)
+      await supabase
+        .from('bank_reconciliation_items')
+        .delete()
+        .in('ref_no', reconRefs)
+
+      // 5. Update customer_cheques status to STATUS_HANDED_OVER
+      const { error: err } = await supabase
+        .from('customer_cheques')
+        .update({ status: STATUS_HANDED_OVER, deposited_at: null })
+        .in('id', ids)
+
+      if (err) throw err
+
+      // 6. Log audit trail
+      for (const r of selectedRows) {
+        logAction({
+          action: 'handover_cheques',
+          targetType: 'customer_cheque',
+          targetId: r.id,
+          targetLabel: r.cheque_number,
+          details: `Handed over cheque ${r.cheque_number} (${fmtMoney(r.amount)}) back to customer ${r.customers?.name || r.customer_id || ''}. Value added back to receivable balance.`,
+        })
+      }
+
+      const totalVal = selectedRows.reduce((s, r) => s + Number(r.amount ?? 0), 0)
+      toast.success(
+        selectedRows.length === 1
+          ? `Cheque ${selectedRows[0].cheque_number} handed over to customer. ${fmtMoney(totalVal)} added back to Receivable balance.`
+          : `${selectedRows.length} cheques handed over to customers. ${fmtMoney(totalVal)} added back to Receivable balances.`
+      )
+
+      setSelectedIds(new Set())
+      await load()
+      setTab('in_hand')
+    } catch (e) {
+      console.error(e)
+      toast.error(e?.message ?? 'Failed to handover cheque(s)')
+    } finally {
+      setProcessingHandover(false)
+    }
   }
 
   const moveToInHandSelected = async () => {
@@ -435,11 +529,12 @@ export default function ChequeAdministrationPage() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                disabled={processingHandover}
                 onClick={handoverSelected}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm"
               >
                 <HandHelping size={16} />
-                Handover To Customer
+                {processingHandover ? 'Processing...' : 'Handover To Customer'}
               </button>
               <button
                 type="button"

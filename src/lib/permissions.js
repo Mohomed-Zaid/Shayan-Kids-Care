@@ -544,6 +544,7 @@ export const NAV_PERMISSION_MAP = {
   '/reports/admin-system': 'reports_admin_system',
   '/reports/inventory/detailed': 'reports_inventory',
   '/reports/finance': 'reports_finance',
+  '/reports/finance/money-out': 'reports_finance',
   '/reports/cheques': 'reports_cheques',
   '/reports/day-book': 'reports_day_book',
   '/reports/expenses': 'reports_expenses',
