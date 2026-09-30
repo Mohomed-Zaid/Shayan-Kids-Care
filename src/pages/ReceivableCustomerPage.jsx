@@ -279,6 +279,58 @@ export default function ReceivableCustomerPage() {
     return paymentsForCustomer.filter((p) => String(p.method || '').toLowerCase() === 'cheque')
   }, [paymentsForCustomer])
 
+  const handedOverCheques = useMemo(() => {
+    return customerCheques.filter((c) => c.status === 'handed_over' || c.status === 'returned')
+  }, [customerCheques])
+
+  const handleRestoreChequeToInHand = async (cheque) => {
+    const confirmMsg =
+      `Restore cheque "${cheque.cheque_number}" (${fmt(cheque.amount)}) to Cheques In Hand?\n\n` +
+      `• Cheque status will return to "In Hand" in Cheque Administration.\n` +
+      `• Cheque amount of ${fmt(cheque.amount)} will be re-applied as payment to this customer's balance.`
+
+    if (!window.confirm(confirmMsg)) return
+
+    try {
+      await supabase
+        .from('customer_cheques')
+        .update({ status: 'in_hand', deposited_at: null })
+        .eq('id', cheque.id)
+
+      const variants = new Set(getChequeNumberVariants(cheque.cheque_number))
+      const hasPayment = paymentsForCustomer.some(
+        (p) => variants.has(String(p.reference || '').trim()) || String(p.reference) === String(cheque.id)
+      )
+
+      if (!hasPayment && invRows.length > 0) {
+        const targetInv = invRows.find((i) => (i.balance ?? 0) > 0) || invRows[0]
+        await supabase.from('invoice_payments').insert({
+          invoice_id: targetInv.id,
+          amount: cheque.amount,
+          paid_at: cheque.cheque_date || new Date().toISOString().slice(0, 10),
+          method: 'cheque',
+          reference: cheque.cheque_number,
+          bank_name: cheque.bank_name || null,
+          note: 'Restored from handed-over cheques',
+        })
+      }
+
+      logAction({
+        action: 'restore_cheques_to_in_hand',
+        targetType: 'customer_cheque',
+        targetId: cheque.id,
+        targetLabel: cheque.cheque_number,
+        details: `Restored cheque ${cheque.cheque_number} (${fmt(cheque.amount)}) to Cheques In Hand.`,
+      })
+
+      toast.success(`Cheque ${cheque.cheque_number} restored to Cheques In Hand!`)
+      await load()
+    } catch (e) {
+      console.error(e)
+      toast.error(e?.message ?? 'Failed to restore cheque')
+    }
+  }
+
   const handleHandoverCheque = async (payment) => {
     const chqRef = payment.reference ? ` (Cheque No: ${payment.reference})` : ''
     const amountFmt = fmt(payment.amount)
@@ -763,6 +815,34 @@ export default function ReceivableCustomerPage() {
           Add Payment
         </button>
       </div>
+
+      {handedOverCheques.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs">
+          <span className="font-semibold text-slate-700 dark:text-slate-300">
+            Handed Over Cheques ({handedOverCheques.length}):
+          </span>
+          {handedOverCheques.map((c) => (
+            <div
+              key={c.id}
+              className="inline-flex items-center gap-2 px-2.5 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xs"
+            >
+              <span className="font-mono font-medium text-slate-800 dark:text-slate-200">
+                {c.cheque_number}
+              </span>
+              <span className="font-semibold text-slate-900 dark:text-white">{fmt(c.amount)}</span>
+              <button
+                type="button"
+                onClick={() => handleRestoreChequeToInHand(c)}
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-sky-600 hover:bg-sky-700 text-white shadow-xs transition-colors"
+                title="Restore this cheque back to Cheques In Hand"
+              >
+                <RotateCcw size={11} />
+                Restore to In Hand
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {/* Customer Info Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3 mb-4">

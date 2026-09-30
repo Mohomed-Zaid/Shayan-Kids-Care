@@ -453,13 +453,16 @@ export default function ChequeAdministrationPage() {
     }
   }
 
-  // Move selected cheques back to In Hand
+  // Move / Restore selected cheques back to In Hand
   const moveToInHandSelected = async (targetIds = null) => {
     const ids = targetIds ? Array.from(targetIds) : Array.from(selectedIds)
     if (ids.length === 0) {
       toast.error('Select at least one cheque')
       return
     }
+
+    const allCheques = [...chequesInHand, ...chequesDeposited, ...chequesHandedOver]
+    const targetCheques = allCheques.filter((c) => ids.some((id) => String(id) === String(c.id)))
 
     const { error: err } = await supabase
       .from('customer_cheques')
@@ -471,8 +474,47 @@ export default function ChequeAdministrationPage() {
       return
     }
 
-    toast.success('Moved to cheques in hand')
-    logAction({ action: 'move_cheques_to_in_hand', targetType: 'customer_cheque' })
+    // If restoring from handed_over / returned, check if invoice_payments should be restored
+    for (const cheque of targetCheques) {
+      if (cheque.status === STATUS_HANDED_OVER || cheque.status === STATUS_RETURNED) {
+        const existingPayments = unreversedPaymentsMap.get(cheque.id) || []
+        if (existingPayments.length === 0 && cheque.customer_id) {
+          try {
+            const { data: invs } = await supabase
+              .from('invoices')
+              .select('id, invoice_number, total_amount, created_at')
+              .eq('customer_id', cheque.customer_id)
+              .eq('payment_type', 'credit')
+              .order('created_at', { ascending: true })
+
+            if (invs && invs.length > 0) {
+              await supabase.from('invoice_payments').insert({
+                invoice_id: invs[0].id,
+                amount: cheque.amount,
+                paid_at: cheque.cheque_date || new Date().toISOString().slice(0, 10),
+                method: 'cheque',
+                reference: cheque.cheque_number,
+                bank_name: cheque.bank_name || null,
+                note: 'Restored from handed-over cheques',
+              })
+            }
+          } catch (restoreErr) {
+            console.warn('Could not auto-restore invoice payment for cheque:', restoreErr)
+          }
+        }
+      }
+    }
+
+    toast.success(
+      ids.length === 1
+        ? 'Cheque restored to Cheques In Hand'
+        : `${ids.length} cheques restored to Cheques In Hand`
+    )
+    logAction({
+      action: 'restore_cheques_to_in_hand',
+      targetType: 'customer_cheque',
+      details: `Restored ${ids.length} cheque(s) to Cheques In Hand.`,
+    })
     setSelectedIds(new Set())
     await load()
     setTab('in_hand')
@@ -965,9 +1007,11 @@ export default function ChequeAdministrationPage() {
                             <button
                               type="button"
                               onClick={() => moveToInHandSelected([r.id])}
-                              className="text-xs text-sky-600 hover:text-sky-800 dark:text-sky-400 dark:hover:underline font-semibold"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-600 hover:bg-sky-700 text-white shadow-sm transition-colors whitespace-nowrap"
+                              title="Restore this cheque back to Cheques In Hand"
                             >
-                              Move to In Hand
+                              <RotateCcw size={13} />
+                              Restore to In Hand
                             </button>
                           </div>
                         </td>
@@ -1090,9 +1134,10 @@ export default function ChequeAdministrationPage() {
                   type="button"
                   disabled={handedOverTotals.count === 0}
                   onClick={() => moveToInHandSelected()}
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-semibold shadow-sm"
+                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm transition-colors"
                 >
-                  Move To Cheques In Hand
+                  <RotateCcw size={15} />
+                  Restore To Cheques In Hand
                 </button>
               </div>
             </div>
