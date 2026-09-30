@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { useAuth } from '../contexts/AuthContext'
 import { usePermissions } from '../contexts/PermissionsContext'
 import { logAction } from '../lib/auditLog'
 import { registerReceivableChequesInHand, getChequeNumberVariants } from '../lib/receivableChequeWorkflow'
@@ -27,6 +28,8 @@ const fmt = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimum
 
 export default function ReceivablesPage() {
   const toast = useToast()
+  const { user } = useAuth()
+  const canHandoverAndRestore = user?.email?.trim().toLowerCase() === 'zaidn2848@gmail.com'
   const { isSuperAdmin } = usePermissions()
 
   const receiptRef = useRef(null)
@@ -889,7 +892,7 @@ export default function ReceivablesPage() {
                   </td>
                   <td className="px-5 py-3.5 text-right">
                     <div className="flex items-center justify-end gap-2">
-                      {r.chequePayments && r.chequePayments.length > 0 ? (
+                      {canHandoverAndRestore && r.chequePayments && r.chequePayments.length > 0 ? (
                         <button
                           onClick={() => handleRestoreChequeForCustomer(r)}
                           disabled={reversingPayment}

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { useAuth } from '../contexts/AuthContext'
 import { logAction } from '../lib/auditLog'
 import { Search, Landmark, ArrowRightCircle, HandHelping, AlertCircle, CheckCircle, RotateCcw, RefreshCw } from 'lucide-react'
 import {
@@ -17,12 +18,20 @@ const fmtMoney = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { mi
 
 export default function ChequeAdministrationPage() {
   const toast = useToast()
+  const { user } = useAuth()
+  const canHandoverAndRestore = user?.email?.trim().toLowerCase() === 'zaidn2848@gmail.com'
 
   const [tab, setTab] = useState('in_hand') // 'in_hand' | 'deposited' | 'handed_over'
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    if (!canHandoverAndRestore && tab === 'handed_over') {
+      setTab('in_hand')
+    }
+  }, [canHandoverAndRestore, tab])
 
   const [chequesInHand, setChequesInHand] = useState([])
   const [chequesDeposited, setChequesDeposited] = useState([])
@@ -699,7 +708,7 @@ export default function ChequeAdministrationPage() {
       </div>
 
       {/* Alert banner if any handed over cheques still have active payments in receivables */}
-      {unreversedChequesCount > 0 && (
+      {canHandoverAndRestore && unreversedChequesCount > 0 && (
         <div className="p-4 rounded-xl border border-amber-300 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-start gap-3">
             <AlertCircle size={20} className="text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
@@ -762,28 +771,30 @@ export default function ChequeAdministrationPage() {
               {depositedFiltered.length}
             </span>
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setTab('handed_over')
-              setSelectedIds(new Set())
-            }}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors flex items-center gap-2 ${
-              tab === 'handed_over'
-                ? 'bg-slate-900 text-white border-slate-900 dark:bg-emerald-500/15 dark:border-emerald-400/20 dark:text-emerald-50'
-                : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-emerald-950/30 dark:border-emerald-900/40 dark:text-emerald-100/80 dark:hover:bg-emerald-500/10'
-            }`}
-          >
-            Handed Over / Returned
-            <span className={`text-xs px-2 py-0.5 rounded-full ${
-              unreversedChequesCount > 0
-                ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 font-bold'
-                : 'bg-slate-200 dark:bg-emerald-900/50 text-slate-700 dark:text-emerald-200'
-            }`}>
-              {handedOverFiltered.length}
-              {unreversedChequesCount > 0 ? ` (${unreversedChequesCount} alert)` : ''}
-            </span>
-          </button>
+          {canHandoverAndRestore && (
+            <button
+              type="button"
+              onClick={() => {
+                setTab('handed_over')
+                setSelectedIds(new Set())
+              }}
+              className={`px-4 py-2 rounded-lg text-sm font-semibold border transition-colors flex items-center gap-2 ${
+                tab === 'handed_over'
+                  ? 'bg-slate-900 text-white border-slate-900 dark:bg-emerald-500/15 dark:border-emerald-400/20 dark:text-emerald-50'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 dark:bg-emerald-950/30 dark:border-emerald-900/40 dark:text-emerald-100/80 dark:hover:bg-emerald-500/10'
+              }`}
+            >
+              Handed Over / Returned
+              <span className={`text-xs px-2 py-0.5 rounded-full ${
+                unreversedChequesCount > 0
+                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200 font-bold'
+                  : 'bg-slate-200 dark:bg-emerald-900/50 text-slate-700 dark:text-emerald-200'
+              }`}>
+                {handedOverFiltered.length}
+                {unreversedChequesCount > 0 ? ` (${unreversedChequesCount} alert)` : ''}
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Top Actions and Filters */}
@@ -820,15 +831,17 @@ export default function ChequeAdministrationPage() {
           {/* Quick Action in top bar for tab === 'in_hand' */}
           {tab === 'in_hand' && (
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                disabled={processingHandover || selectedIds.size === 0}
-                onClick={handoverSelected}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm transition-opacity"
-              >
-                <HandHelping size={16} />
-                {processingHandover ? 'Processing...' : 'Handover To Customer'}
-              </button>
+              {canHandoverAndRestore && (
+                <button
+                  type="button"
+                  disabled={processingHandover || selectedIds.size === 0}
+                  onClick={handoverSelected}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm transition-opacity"
+                >
+                  <HandHelping size={16} />
+                  {processingHandover ? 'Processing...' : 'Handover To Customer'}
+                </button>
+              )}
               <button
                 type="button"
                 disabled={selectedIds.size === 0}
@@ -843,7 +856,7 @@ export default function ChequeAdministrationPage() {
           )}
 
           {/* Quick Action in top bar for tab === 'deposited' */}
-          {tab === 'deposited' && (
+          {tab === 'deposited' && canHandoverAndRestore && (
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -1035,15 +1048,17 @@ export default function ChequeAdministrationPage() {
                 Total: <span className="font-extrabold text-slate-900 dark:text-white">{fmtMoney(inHandTotals.total)}</span>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  disabled={processingHandover || inHandTotals.count === 0}
-                  onClick={handoverSelected}
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm"
-                >
-                  <HandHelping size={15} />
-                  {processingHandover ? 'Processing...' : 'Handover To Customer'}
-                </button>
+                {canHandoverAndRestore && (
+                  <button
+                    type="button"
+                    disabled={processingHandover || inHandTotals.count === 0}
+                    onClick={handoverSelected}
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm"
+                  >
+                    <HandHelping size={15} />
+                    {processingHandover ? 'Processing...' : 'Handover To Customer'}
+                  </button>
+                )}
                 <button
                   type="button"
                   disabled={inHandTotals.count === 0}
@@ -1085,23 +1100,27 @@ export default function ChequeAdministrationPage() {
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  disabled={processingHandover || selectedTotals.count === 0}
-                  onClick={handoverSelected}
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm"
-                >
-                  <HandHelping size={15} />
-                  {processingHandover ? 'Processing...' : 'Handover To Customer'}
-                </button>
-                <button
-                  type="button"
-                  disabled={selectedTotals.count === 0}
-                  onClick={() => moveToInHandSelected()}
-                  className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-semibold shadow-sm"
-                >
-                  Move To Cheques In Hand
-                </button>
+                {canHandoverAndRestore && (
+                  <button
+                    type="button"
+                    disabled={processingHandover || selectedTotals.count === 0}
+                    onClick={handoverSelected}
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-semibold shadow-sm"
+                  >
+                    <HandHelping size={15} />
+                    {processingHandover ? 'Processing...' : 'Handover To Customer'}
+                  </button>
+                )}
+                {canHandoverAndRestore && (
+                  <button
+                    type="button"
+                    disabled={selectedTotals.count === 0}
+                    onClick={() => moveToInHandSelected()}
+                    className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-800 disabled:opacity-50 text-white text-sm font-semibold shadow-sm"
+                  >
+                    Move To Cheques In Hand
+                  </button>
+                )}
                 <button
                   type="button"
                   disabled={processingHandover || selectedTotals.count === 0}

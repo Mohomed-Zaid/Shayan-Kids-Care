@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
+import { useAuth } from '../contexts/AuthContext'
 import { usePermissions } from '../contexts/PermissionsContext'
 import { logAction } from '../lib/auditLog'
 import { registerReceivableChequesInHand, getChequeNumberVariants } from '../lib/receivableChequeWorkflow'
@@ -27,6 +28,8 @@ const fmt = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimum
 export default function ReceivableCustomerPage() {
   const { customerId } = useParams()
   const toast = useToast()
+  const { user } = useAuth()
+  const canHandoverAndRestore = user?.email?.trim().toLowerCase() === 'zaidn2848@gmail.com'
   const { isSuperAdmin } = usePermissions()
 
   const receiptRef = useRef(null)
@@ -816,7 +819,7 @@ export default function ReceivableCustomerPage() {
         </button>
       </div>
 
-      {handedOverCheques.length > 0 ? (
+      {canHandoverAndRestore && handedOverCheques.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs">
           <span className="font-semibold text-slate-700 dark:text-slate-300">
             Handed Over Cheques ({handedOverCheques.length}):
@@ -1429,7 +1432,7 @@ export default function ReceivableCustomerPage() {
                                 </button>
                               )}
 
-                              {p.method === 'cheque' ? (
+                              {canHandoverAndRestore && p.method === 'cheque' ? (
                                 <button
                                   onClick={() => handleHandoverCheque(p)}
                                   disabled={handingOver}
