@@ -2,14 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Package, Users, DollarSign, Plus, Eye, TrendingUp, ArrowUpRight, ShoppingCart, Wallet, Calendar, Landmark, RotateCcw, CreditCard, CheckCircle2 } from 'lucide-react'
+import { Package, Users, DollarSign, Plus, Eye, TrendingUp, TrendingDown, ArrowUpRight, ShoppingCart, ShoppingBag, Wallet, Calendar, Landmark, RotateCcw, CreditCard, CheckCircle2 } from 'lucide-react'
 import { usePermissions } from '../contexts/PermissionsContext'
 import PermissionGate from '../components/PermissionGate'
 import Chart from 'react-apexcharts'
 import { buildInvoiceBalanceRows } from '../lib/receivables'
 
 const statConfig = [
-  { key: 'todaySales', label: 'Today Sales', icon: DollarSign, gradient: 'from-amber-500 to-orange-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-amber-100', isCurrency: true },
+  { key: 'totalPurchase', label: 'Total Purchase', icon: ShoppingBag, gradient: 'from-amber-500 to-orange-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-amber-100', isCurrency: true },
   { key: 'totalSales', label: 'Total Sales', icon: TrendingUp, gradient: 'from-rose-500 to-pink-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-rose-100', isCurrency: true },
   { key: 'totalExpenses', label: 'Total Expenses', icon: ShoppingCart, gradient: 'from-indigo-500 to-indigo-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-indigo-100', isCurrency: true },
   { key: 'totalPayments', label: 'Total Cash & Bank Payments', icon: Wallet, gradient: 'from-teal-500 to-cyan-500', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-teal-100', isCurrency: true },
@@ -20,23 +20,51 @@ const statConfig = [
   { key: 'payable', label: 'Payable', icon: CreditCard, gradient: 'from-pink-500 to-rose-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-pink-100', isCurrency: true },
   { key: 'products', label: 'Products', icon: Package, gradient: 'from-blue-500 to-blue-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-blue-100' },
   { key: 'customers', label: 'Customers', icon: Users, gradient: 'from-emerald-500 to-emerald-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-emerald-100' },
+  { key: 'monthlyProfitLoss', label: 'Monthly Profit / Loss', icon: TrendingUp, gradient: 'from-emerald-500 to-teal-600', iconBg: 'bg-white/20', textColor: 'text-white', valueColor: 'text-white', subColor: 'text-emerald-100', isCurrency: true },
 ]
 
-function StatCard({ label, value, icon: Icon, gradient, iconBg, textColor, valueColor, subColor, isCurrency }) {
+function StatCard({ label, value, icon: Icon, gradient, iconBg, textColor, valueColor, subColor, isCurrency, extraSub }) {
+  const isLoss = isCurrency && typeof value === 'number' && value < 0
+  const isProfitLossCard = label.toLowerCase().includes('profit') || label.toLowerCase().includes('loss')
+  const isMonthlyCard = label.toLowerCase().includes('monthly')
+  const displayLabel = isProfitLossCard
+    ? (isMonthlyCard ? (isLoss ? 'Monthly Loss' : 'Monthly Profit') : (isLoss ? 'Net Loss' : 'Net Profit'))
+    : label
+  const CardIcon = isProfitLossCard ? (isLoss ? TrendingDown : TrendingUp) : Icon
+  const cardGradient = isProfitLossCard
+    ? (isLoss ? 'from-rose-500 to-red-600' : 'from-emerald-500 to-teal-600')
+    : gradient
+  const cardSubColor = isProfitLossCard
+    ? (isLoss ? 'text-rose-100' : 'text-emerald-100')
+    : subColor
+  const darkClasses = isProfitLossCard && isLoss
+    ? 'dark:from-rose-950/40 dark:via-slate-950/40 dark:to-rose-950/40 dark:border-rose-400/20'
+    : 'dark:from-emerald-950/40 dark:via-slate-950/40 dark:to-emerald-950/40 dark:border-emerald-400/15'
+
   return (
-    <div className={`bg-gradient-to-br ${gradient} dark:from-emerald-950/40 dark:via-slate-950/40 dark:to-emerald-950/40 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 dark:border dark:border-emerald-400/15`}>
+    <div className={`bg-gradient-to-br ${cardGradient} ${darkClasses} rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5 dark:border`}>
       <div className="flex items-center justify-between">
-        <div className={`text-xs font-semibold ${textColor} uppercase tracking-wider opacity-90`}>{label}</div>
+        <div className={`text-xs font-semibold ${textColor} uppercase tracking-wider opacity-90`}>{displayLabel}</div>
         <div className={`${iconBg} p-2.5 rounded-xl`}>
-          <Icon size={20} className={textColor} />
+          <CardIcon size={20} className={textColor} />
         </div>
       </div>
       <div className={`mt-4 text-3xl font-extrabold ${valueColor} tracking-tight`}>
-        {isCurrency ? `Rs. ${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2 })}` : value}
+        {isCurrency ? (
+          Number(value) < 0
+            ? `-Rs. ${Math.abs(Number(value)).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+            : `Rs. ${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+        ) : value}
       </div>
-      <div className={`mt-1 flex items-center gap-1 text-xs ${subColor} font-medium`}>
-        <TrendingUp size={12} />
-        <span>Tiny Bloom</span>
+      <div className={`mt-1 flex items-center gap-1 text-xs ${cardSubColor} font-medium`}>
+        <CardIcon size={12} />
+        <span>
+          {extraSub
+            ? `Tiny Bloom • ${extraSub}`
+            : isProfitLossCard
+              ? `Tiny Bloom • ${isLoss ? 'Loss' : 'Profit'}`
+              : 'Tiny Bloom'}
+        </span>
       </div>
     </div>
   )
@@ -86,7 +114,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState({
     products: 0,
     customers: 0,
-    todaySales: 0,
+    totalPurchase: 0,
     totalExpenses: 0,
     totalSales: 0,
     totalPayments: 0,
@@ -95,6 +123,7 @@ export default function DashboardPage() {
     depositedCheques: 0,
     returnAmount: 0,
     payable: 0,
+    monthlyProfitLoss: 0,
   })
   const [receivableCheques, setReceivableCheques] = useState([])
   const [recentPayments, setRecentPayments] = useState([])
@@ -104,7 +133,15 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailPayment, setDetailPayment] = useState(null)
-  const show = (id) => dashboardWidgets[id] !== false
+  const show = (id) => {
+    if (id === 'stat_totalPurchase' && dashboardWidgets[id] === undefined) {
+      return dashboardWidgets['stat_todaySales'] !== false
+    }
+    if ((id === 'stat_monthlyProfitLoss' || id === 'stat_profitLoss') && dashboardWidgets[id] === undefined) {
+      return (dashboardWidgets['stat_monthlyProfitLoss'] ?? dashboardWidgets['stat_profitLoss']) !== false
+    }
+    return dashboardWidgets[id] !== false
+  }
 
   const receivableSegments = useMemo(() => {
     return [
@@ -137,14 +174,9 @@ export default function DashboardPage() {
         .order('paid_at', { ascending: false })
         .limit(10)
 
-      const [productsRes, customersRes, todaySalesRes, todayPaymentsRes, totalExpensesRes, totalSalesRes, totalPaymentsRes, recentInvRes, allPayRes, recentPayRes, invForChartsRes, payForChartsRes, invItemsForProfitRes, purchaseItemsRes, chequeInHandRes, returnChequeRes, depositedChequeRes, returnsRes, payableRes, purchasePaymentsRes, journalEntryLinesRes] = await Promise.all([
+      const [productsRes, customersRes, todayPaymentsRes, totalExpensesRes, totalSalesRes, totalPaymentsRes, recentInvRes, allPayRes, recentPayRes, invForChartsRes, payForChartsRes, invItemsForProfitRes, purchaseItemsRes, chequeInHandRes, returnChequeRes, depositedChequeRes, returnsRes, payableRes, purchasePaymentsRes, journalEntryLinesRes] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }),
         supabase.from('customers').select('id', { count: 'exact', head: true }),
-        supabase
-          .from('invoices')
-          .select('total_amount, created_at')
-          .gte('created_at', todayStart.toISOString())
-          .lte('created_at', todayEnd.toISOString()),
         supabase
           .from('invoice_payments')
           .select('amount, paid_at, method')
@@ -209,7 +241,7 @@ export default function DashboardPage() {
           .select('invoice_id, customer_id, total_amount, created_at'),
         supabase
           .from('purchases')
-          .select('total_amount'),
+          .select('total_amount, status'),
         supabase
           .from('purchase_payments')
           .select('amount'),
@@ -220,7 +252,6 @@ export default function DashboardPage() {
 
       const payChequeData = await payChequeRes
 
-      const todaySales = (todaySalesRes.data ?? []).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
       const todayPayments = (todayPaymentsRes.data ?? []).filter(row => row.method !== 'cheque').reduce((sum, row) => sum + (row.amount ?? 0), 0)
       const journalsExpenses = (totalExpensesRes.data ?? []).reduce((sum, row) => sum + (Number(row.budget ?? 0) + Number(row.s_balance ?? 0) + Number(row.h_balance ?? 0)), 0)
       const journalEntriesExpenses = (journalEntryLinesRes.data ?? []).reduce((sum, row) => sum + (Number(row.debit ?? 0)), 0)
@@ -252,20 +283,6 @@ export default function DashboardPage() {
       const totalPurchases = (payableRes.data ?? []).filter((row) => !['reversed','cancelled','canceled','deleted','void'].includes(String(row.status ?? '').toLowerCase())).reduce((sum, row) => sum + (row.total_amount ?? 0), 0)
       const totalPurchasePayments = (purchasePaymentsRes.data ?? []).reduce((sum, row) => sum + (row.amount ?? 0), 0)
       const payable = Math.max(0, totalPurchases - totalPurchasePayments)
-
-      setStats({
-        products: productsRes.count ?? 0,
-        customers: customersRes.count ?? 0,
-        todaySales,
-        totalExpenses,
-        totalSales,
-        totalPayments,
-        chequeInHand,
-        returnCheque,
-        depositedCheques,
-        returnAmount,
-        payable,
-      })
 
       setReceivableCheques((recentInvRes.data ?? []).map((cheque) => ({
         ...cheque,
@@ -332,6 +349,27 @@ export default function DashboardPage() {
       const profit = sales.map((s, i) => Number(s ?? 0) - Number(purchase[i] ?? 0))
 
       setMonthSeries({ labels, sales, purchase, profit })
+
+      const nowLabel = new Date().toLocaleString(undefined, { month: 'short' })
+      const currentMonthIdx = labels.findIndex((l) => l === nowLabel)
+      const curMonthSales = currentMonthIdx >= 0 ? Number(sales[currentMonthIdx] ?? 0) : 0
+      const curMonthPurchase = currentMonthIdx >= 0 ? Number(purchase[currentMonthIdx] ?? 0) : 0
+      const monthlyProfitLoss = curMonthSales - curMonthPurchase
+
+      setStats({
+        products: productsRes.count ?? 0,
+        customers: customersRes.count ?? 0,
+        totalPurchase: totalPurchases,
+        totalExpenses,
+        totalSales,
+        totalPayments,
+        chequeInHand,
+        returnCheque,
+        depositedCheques,
+        returnAmount,
+        payable,
+        monthlyProfitLoss,
+      })
 
       // Receivable summary
       const due = buildInvoiceBalanceRows(totalSalesRes.data ?? [], totalPaymentsRes.data ?? [], returnsRes.data ?? [])
@@ -527,6 +565,7 @@ export default function DashboardPage() {
               valueColor={cfg.valueColor}
               subColor={cfg.subColor}
               isCurrency={cfg.isCurrency}
+              extraSub={cfg.key === 'monthlyProfitLoss' && currentMonthSales > 0 ? `${profitPct.toFixed(1)}% margin` : null}
             />
           ))}
         </div>

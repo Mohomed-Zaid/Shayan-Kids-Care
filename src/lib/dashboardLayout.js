@@ -5,7 +5,7 @@ export const DASHBOARD_WIDGETS_KEY = 'dashboard_widgets'
 export const DASHBOARD_WIDGETS = [
   { id: 'welcome', label: 'Welcome header', group: 'General' },
   { id: 'quick_create_order', label: 'Create Order button', group: 'General' },
-  { id: 'stat_todaySales', label: 'Today Sales', group: 'Summary cards' },
+  { id: 'stat_totalPurchase', label: 'Total Purchase', group: 'Summary cards' },
   { id: 'stat_totalSales', label: 'Total Sales', group: 'Summary cards' },
   { id: 'stat_todayPayments', label: 'Today Payments', group: 'Summary cards' },
   { id: 'stat_totalPayments', label: 'Total Payments', group: 'Summary cards' },
@@ -14,6 +14,7 @@ export const DASHBOARD_WIDGETS = [
   { id: 'stat_payable', label: 'Payable', group: 'Summary cards' },
   { id: 'stat_products', label: 'Products count', group: 'Summary cards' },
   { id: 'stat_customers', label: 'Customers count', group: 'Summary cards' },
+  { id: 'stat_monthlyProfitLoss', label: 'Monthly Profit / Loss', group: 'Summary cards' },
   { id: 'chart_sales_profit', label: 'Sales & Profit chart', group: 'Charts' },
   { id: 'chart_month_summary', label: 'Current month summary (under chart)', group: 'Charts' },
   { id: 'chart_receivable', label: 'Customer Receivable chart', group: 'Charts' },
@@ -32,7 +33,13 @@ export function normalizeDashboardVisibility(raw) {
   const base = defaultDashboardVisibility()
   if (!raw || typeof raw !== 'object') return base
   for (const w of DASHBOARD_WIDGETS) {
-    if (typeof raw[w.id] === 'boolean') base[w.id] = raw[w.id]
+    if (typeof raw[w.id] === 'boolean') {
+      base[w.id] = raw[w.id]
+    } else if (w.id === 'stat_totalPurchase' && typeof raw['stat_todaySales'] === 'boolean') {
+      base[w.id] = raw['stat_todaySales']
+    } else if (w.id === 'stat_monthlyProfitLoss' && (typeof raw['stat_monthlyProfitLoss'] === 'boolean' || typeof raw['stat_profitLoss'] === 'boolean')) {
+      base[w.id] = raw['stat_monthlyProfitLoss'] ?? raw['stat_profitLoss']
+    }
   }
   return base
 }
