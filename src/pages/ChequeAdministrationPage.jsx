@@ -321,6 +321,19 @@ export default function ChequeAdministrationPage() {
       return
     }
 
+    // Smart pre-select receiving bank if selected cheques match a registered bank
+    const selectedRows = chequesInHand.filter((r) => ids.some((id) => String(id) === String(r.id)))
+    if (selectedRows.length > 0) {
+      const firstCheque = selectedRows[0]
+      const matchingBank = banks.find((b) =>
+        (firstCheque.bank_code && (String(b.bank_code) === String(firstCheque.bank_code) || String(b.code) === String(firstCheque.bank_code))) ||
+        (firstCheque.bank_name && String(b.name).toLowerCase().includes(String(firstCheque.bank_name).toLowerCase()))
+      )
+      if (matchingBank) {
+        setDepositBankId(matchingBank.id)
+      }
+    }
+
     setDepositBankOpen(true)
   }
 
@@ -350,7 +363,7 @@ export default function ChequeAdministrationPage() {
     try {
       const { error: err } = await supabase
         .from('customer_cheques')
-        .update({ status: STATUS_DEPOSITED, deposited_at: nowIso })
+        .update({ status: STATUS_DEPOSITED, deposited_at: nowIso, deposit_bank_id: depositBankId })
         .in('id', ids)
       if (err) throw err
 
@@ -362,7 +375,7 @@ export default function ChequeAdministrationPage() {
           trx_date: trxDate,
           ref_no: `RCV-CHQ-${r.id}`,
           post_date: trxDate,
-          description: `Receivable cheque deposit${customerName ? ` - ${customerName}` : ''}`,
+          description: `Receivable cheque deposit${customerName ? ` - ${customerName}` : ''}${r.bank_name ? ` (${r.bank_name})` : ''}`,
           due_date: r.cheque_date ? String(r.cheque_date).slice(0, 10) : null,
           cheque_number: chequeNo || null,
           amount: Number(r.amount ?? 0),

@@ -130,22 +130,44 @@ export function buildFinanceReports(raw) {
     ...repPayments.filter((row) => row.method === 'cash').map((row) => ({ id: `rep-${row.id}`, date: dateOnly(row.paid_at), reference: row.reference ?? String(row.id).slice(0, 8), transactionType: 'Rep Payment', description: `Commission payment to ${employees.get(String(row.rep_id))?.name ?? 'rep'}`, cashIn: 0, cashOut: n(row.amount), createdBy: creator(row) })),
   ].sort((a, b) => new Date(a.date) - new Date(b.date)).map((row, index, all) => ({ ...row, amount: row.cashIn || row.cashOut, runningBalance: sum(all.slice(0, index + 1), (x) => x.cashIn - x.cashOut) }))
 
+  const findBank = (idOrName) => {
+    if (!idOrName) return null
+    const keyStr = String(idOrName).trim().toLowerCase()
+    return banks.get(String(idOrName)) ||
+      [...banks.values()].find((b) =>
+        String(b.id).toLowerCase() === keyStr ||
+        (b.code && String(b.code).toLowerCase() === keyStr) ||
+        (b.bank_code && String(b.bank_code) === keyStr) ||
+        (b.name && String(b.name).toLowerCase() === keyStr) ||
+        (b.name && keyStr.includes(String(b.name).toLowerCase()))
+      ) || null
+  }
+
   const reconciliations = (raw.bank_reconciliation_items ?? []).map((row) => {
-    const bank = banks.get(String(row.bank_id)) ?? {}
-    return { id: row.id, bankId: row.bank_id, bank: bank.name ?? row.bank_name ?? '-', date: dateOnly(row.trx_date), postDate: dateOnly(row.post_date),
+    const bank = findBank(row.bank_id) || findBank(row.bank_name) || {}
+    return { id: row.id, bankId: bank.id ?? row.bank_id, bank: bank.name ?? row.bank_name ?? '-', date: dateOnly(row.trx_date), postDate: dateOnly(row.post_date),
       reference: row.ref_no ?? '-', description: row.description ?? '-', chequeNumber: row.cheque_number ?? '-', amount: n(row.amount),
       reconciled: row.reconciled ? 'Yes' : 'No', reconciliationDate: row.reconciled ? dateOnly(row.reconciled_at ?? row.updated_at ?? row.post_date) : '', createdBy: creator(row) }
   })
 
   const bankTransactionsBase = [
-    ...invoicePayments.filter((row) => row.method === 'bank').map((row) => ({ id: `receipt-${row.id}`, date: dateOnly(row.paid_at), bank: row.bank_name ?? '-', bankId: row.bank_id, reference: row.reference ?? '-', transactionType: 'Customer Bank Payment', description: 'Customer bank receipt', deposit: n(row.amount), withdrawal: 0, reconciled: row.reconciled ? 'Yes' : 'No', createdBy: creator(row) })),
-    ...purchasePayments.filter((row) => row.method === 'bank').map((row) => ({ id: `payment-${row.id}`, date: dateOnly(row.paid_at), bank: row.bank_name ?? '-', bankId: row.bank_id, reference: row.reference ?? '-', transactionType: 'Vendor Bank Payment', description: 'Vendor bank payment', deposit: 0, withdrawal: n(row.amount), reconciled: row.reconciled ? 'Yes' : 'No', createdBy: creator(row) })),
-    ...cheques.filter((row) => row.status === 'deposited').map((row) => ({ id: `cheque-${row.id}`, date: dateOnly(row.deposited_at ?? row.cheque_date), bank: banks.get(String(row.deposit_bank_id))?.name ?? row.deposit_bank_name ?? row.bank_name ?? '-', bankId: row.deposit_bank_id, reference: row.cheque_number ?? '-', transactionType: 'Deposited Customer Cheque', description: `Cheque from ${customers.get(String(row.customer_id))?.name ?? 'customer'}`, deposit: n(row.amount), withdrawal: 0, reconciled: row.reconciled ? 'Yes' : 'No', createdBy: creator(row) })),
+    ...invoicePayments.filter((row) => row.method === 'bank').map((row) => {
+      const bank = findBank(row.bank_id) || findBank(row.bank_name)
+      return { id: `receipt-${row.id}`, date: dateOnly(row.paid_at), bank: bank?.name ?? row.bank_name ?? '-', bankId: bank?.id ?? row.bank_id, reference: row.reference ?? '-', transactionType: 'Customer Bank Payment', description: 'Customer bank receipt', deposit: n(row.amount), withdrawal: 0, reconciled: row.reconciled ? 'Yes' : 'No', createdBy: creator(row) }
+    }),
+    ...purchasePayments.filter((row) => row.method === 'bank').map((row) => {
+      const bank = findBank(row.bank_id) || findBank(row.bank_name)
+      return { id: `payment-${row.id}`, date: dateOnly(row.paid_at), bank: bank?.name ?? row.bank_name ?? '-', bankId: bank?.id ?? row.bank_id, reference: row.reference ?? '-', transactionType: 'Vendor Bank Payment', description: 'Vendor bank payment', deposit: 0, withdrawal: n(row.amount), reconciled: row.reconciled ? 'Yes' : 'No', createdBy: creator(row) }
+    }),
+    ...cheques.filter((row) => row.status === 'deposited').map((row) => {
+      const bank = findBank(row.deposit_bank_id) || findBank(row.deposit_bank_name) || findBank(row.bank_name)
+      return { id: `cheque-${row.id}`, date: dateOnly(row.deposited_at ?? row.cheque_date), bank: bank?.name ?? row.deposit_bank_name ?? row.bank_name ?? '-', bankId: bank?.id ?? row.deposit_bank_id, reference: row.cheque_number ?? '-', transactionType: 'Deposited Customer Cheque', description: `Cheque from ${customers.get(String(row.customer_id))?.name ?? 'customer'}`, deposit: n(row.amount), withdrawal: 0, reconciled: row.reconciled ? 'Yes' : 'No', createdBy: creator(row) }
+    }),
   ].sort((a, b) => new Date(a.date) - new Date(b.date))
   const bankRunning = new Map()
   const bankTransactions = bankTransactionsBase.map((row) => {
     const key = String(row.bankId ?? row.bank)
-    const bank = banks.get(String(row.bankId)) ?? {}
+    const bank = findBank(row.bankId) || {}
     const previous = bankRunning.has(key) ? bankRunning.get(key) : n(bank.opening_balance)
     const runningBalance = previous + n(row.deposit) - n(row.withdrawal)
     bankRunning.set(key, runningBalance)

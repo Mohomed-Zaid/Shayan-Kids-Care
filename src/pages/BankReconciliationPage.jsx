@@ -2,21 +2,39 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { useToast } from '../contexts/ToastContext'
 import { logAction } from '../lib/auditLog'
-import { Search } from 'lucide-react'
+import { Search, RefreshCw } from 'lucide-react'
+import { extractBankCodeFromCheque, APPROVED_BANK_CODES } from '../lib/chequeValidation'
 
 const fmtMoney = (val) => `Rs. ${Number(val ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`
+
+function getBankCodeForBank(bank) {
+  if (!bank) return ''
+  if (bank.bank_code) return String(bank.bank_code)
+  const normName = String(bank.name || '').toLowerCase()
+  for (const [code, name] of Object.entries(APPROVED_BANK_CODES)) {
+    if (name.toLowerCase().includes(normName) || normName.includes(name.toLowerCase())) {
+      return code
+    }
+  }
+  return ''
+}
 
 export default function BankReconciliationPage() {
   const toast = useToast()
 
   const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const firstOfMonthStr = useMemo(() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
+  }, [])
+
   const [banks, setBanks] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   const [form, setForm] = useState({
     bank_id: '',
-    from_date: todayStr,
+    from_date: firstOfMonthStr,
     to_date: todayStr,
   })
 
@@ -24,21 +42,10 @@ export default function BankReconciliationPage() {
   const [search, setSearch] = useState('')
   const [savingId, setSavingId] = useState('')
 
-  const loadBanks = async () => {
-    const { data, error: err } = await supabase.from('banks').select('id, code, name, branch').order('code')
-    if (err) {
-      setBanks([])
-      return
-    }
-    setBanks(data ?? [])
-    if (!form.bank_id && (data ?? []).length > 0) {
-      setForm((p) => ({ ...p, bank_id: data[0].id }))
-    }
-  }
-
-  const load = async () => {
-    if (!form.bank_id) {
-      toast.error('Select a bank')
+  const load = async (bankIdToUse = form.bank_id, fromDate = form.from_date, toDate = form.to_date, bankList = banks) => {
+    const activeBankId = bankIdToUse || form.bank_id
+    if (!activeBankId) {
+      setRows([])
       return
     }
 
@@ -46,30 +53,132 @@ export default function BankReconciliationPage() {
     setError(null)
 
     try {
-      const from = form.from_date
-      const to = form.to_date
+      const from = fromDate
+      const to = toDate
 
-      const q = supabase
+      const targetBank = bankList.find((b) => String(b.id) === String(activeBankId))
+      const targetBankCode = getBankCodeForBank(targetBank)
+      const targetBankName = String(targetBank?.name || '').toLowerCase().trim()
+      const targetCode = String(targetBank?.code || '').toLowerCase().trim()
+
+      // Fetch bank reconciliation items
+      let reconQuery = supabase
         .from('bank_reconciliation_items')
-        .select(
-          'id, bank_id, trx_date, ref_no, post_date, description, due_date, cheque_number, amount, reconciled, created_at'
-        )
-        .eq('bank_id', form.bank_id)
+        .select('id, bank_id, trx_date, ref_no, post_date, description, due_date, cheque_number, amount, reconciled, created_at')
         .order('trx_date', { ascending: true })
 
-      if (from) q.gte('trx_date', from)
-      if (to) q.lte('trx_date', to)
+      if (from) reconQuery = reconQuery.gte('trx_date', from)
+      if (to) reconQuery = reconQuery.lte('trx_date', to)
 
-      const { data, error: err } = await q
-      if (err) throw err
+      // Fetch customer cheques marked as deposited to ensure none are missing
+      const chequeQuery = supabase
+        .from('customer_cheques')
+        .select('id, cheque_date, cheque_number, amount, bank_name, bank_code, deposit_bank_id, deposited_at, status, customers(name)')
+        .eq('status', 'deposited')
 
-      setRows(data ?? [])
+      const [reconRes, chequeRes] = await Promise.all([reconQuery, chequeQuery])
+      if (reconRes.error) throw reconRes.error
+
+      const rawItems = reconRes.data ?? []
+      const depositedCheques = chequeRes.data ?? []
+
+      // Create lookup of existing recon items by ref_no and cheque_number
+      const existingRefNos = new Set(rawItems.map((r) => String(r.ref_no || '').trim().toLowerCase()))
+      const existingChequeNos = new Set(rawItems.map((r) => String(r.cheque_number || '').trim().toLowerCase()))
+
+      // Helper to check if a row matches the selected bank
+      const matchesTargetBank = (row) => {
+        // Direct bank_id match with UUID, code, or bank_code
+        if (String(row.bank_id) === String(activeBankId)) return true
+        if (targetCode && String(row.bank_id).toLowerCase() === targetCode) return true
+        if (targetBankCode && String(row.bank_id) === targetBankCode) return true
+        if (targetBankName && String(row.bank_id || '').toLowerCase() === targetBankName) return true
+        if (targetBankName && String(row.bank_name || '').toLowerCase() === targetBankName) return true
+
+        // Cheque number bank code match (Sri Lankan cheque format XXXXXX-XXXX-XXX)
+        const rowChequeNo = row.cheque_number || ''
+        const codeInCheque = extractBankCodeFromCheque(rowChequeNo)
+        if (targetBankCode && codeInCheque && codeInCheque === targetBankCode) return true
+
+        // Description contains bank name
+        if (targetBankName && String(row.description || '').toLowerCase().includes(targetBankName)) return true
+
+        return false
+      }
+
+      // Filter recon items that match this bank
+      const matchedReconItems = rawItems.filter(matchesTargetBank)
+
+      // Check if there are deposited customer cheques for this bank not yet in bank_reconciliation_items
+      const missingCheques = depositedCheques.filter((c) => {
+        const matchesBank =
+          String(c.deposit_bank_id) === String(activeBankId) ||
+          (targetBankCode && String(c.bank_code) === targetBankCode) ||
+          (targetBankName && String(c.bank_name || '').toLowerCase().includes(targetBankName)) ||
+          (targetBankCode && extractBankCodeFromCheque(c.cheque_number) === targetBankCode)
+
+        if (!matchesBank) return false
+
+        const refNo = `rcv-chq-${c.id}`.toLowerCase()
+        const chqNo = String(c.cheque_number || '').trim().toLowerCase()
+        return !existingRefNos.has(refNo) && (!chqNo || !existingChequeNos.has(chqNo))
+      })
+
+      // If any deposited cheques are missing from bank_reconciliation_items, insert them automatically
+      if (missingCheques.length > 0) {
+        const newReconRows = missingCheques.map((c) => {
+          const cName = c.customers?.name ?? ''
+          const day = c.deposited_at ? String(c.deposited_at).slice(0, 10) : (c.cheque_date ? String(c.cheque_date).slice(0, 10) : todayStr)
+          return {
+            bank_id: activeBankId,
+            trx_date: day,
+            ref_no: `RCV-CHQ-${c.id}`,
+            post_date: day,
+            description: `Receivable cheque deposit${cName ? ` - ${cName}` : ''}${c.bank_name ? ` (${c.bank_name})` : ''}`,
+            due_date: c.cheque_date ? String(c.cheque_date).slice(0, 10) : null,
+            cheque_number: c.cheque_number || null,
+            amount: Number(c.amount ?? 0),
+            reconciled: false,
+          }
+        })
+
+        const { data: inserted, error: insErr } = await supabase
+          .from('bank_reconciliation_items')
+          .insert(newReconRows)
+          .select('id, bank_id, trx_date, ref_no, post_date, description, due_date, cheque_number, amount, reconciled, created_at')
+
+        if (!insErr && inserted) {
+          inserted.forEach((item) => {
+            const itemDate = item.trx_date ? String(item.trx_date).slice(0, 10) : ''
+            const withinDate = (!from || itemDate >= from) && (!to || itemDate <= to)
+            if (withinDate) {
+              matchedReconItems.push(item)
+            }
+          })
+        }
+      }
+
+      setRows(matchedReconItems)
     } catch (e) {
       console.error(e)
       setRows([])
       setError(e?.message ?? 'Failed to load')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadBanks = async () => {
+    const { data, error: err } = await supabase.from('banks').select('id, code, name, bank_code, branch').order('code')
+    if (err) {
+      setBanks([])
+      return
+    }
+    const bankList = data ?? []
+    setBanks(bankList)
+    if (!form.bank_id && bankList.length > 0) {
+      setForm((p) => ({ ...p, bank_id: bankList[0].id }))
+      load(bankList[0].id, form.from_date, form.to_date, bankList)
     }
   }
 
@@ -85,6 +194,28 @@ export default function BankReconciliationPage() {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const handleBankChange = (newBankId) => {
+    setForm((p) => ({ ...p, bank_id: newBankId }))
+    load(newBankId, form.from_date, form.to_date)
+  }
+
+  const applyDatePreset = (preset) => {
+    let nextFrom = ''
+    let nextTo = ''
+    if (preset === 'today') {
+      nextFrom = todayStr
+      nextTo = todayStr
+    } else if (preset === 'this-month') {
+      nextFrom = firstOfMonthStr
+      nextTo = todayStr
+    } else if (preset === 'all') {
+      nextFrom = ''
+      nextTo = ''
+    }
+    setForm((p) => ({ ...p, from_date: nextFrom, to_date: nextTo }))
+    load(form.bank_id, nextFrom, nextTo)
+  }
 
   const filteredRows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -117,9 +248,11 @@ export default function BankReconciliationPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <div className="text-lg font-semibold text-slate-900 dark:text-white">Bank Reconciliation</div>
-        <div className="text-sm text-slate-500 dark:text-emerald-100/70">Mark bank transactions as reconciled (Yes/No).</div>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div>
+          <div className="text-lg font-semibold text-slate-900 dark:text-white">Bank Reconciliation</div>
+          <div className="text-sm text-slate-500 dark:text-emerald-100/70">Mark bank transactions as reconciled (Yes/No).</div>
+        </div>
       </div>
 
       <div className="rounded-xl border border-slate-200 dark:border-emerald-900/40 bg-white dark:bg-emerald-950/30 p-4">
@@ -128,13 +261,13 @@ export default function BankReconciliationPage() {
             <div className="text-xs font-semibold text-slate-600 dark:text-emerald-100/70 mb-1">Select Bank</div>
             <select
               value={form.bank_id}
-              onChange={(e) => setForm((p) => ({ ...p, bank_id: e.target.value }))}
-              className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-emerald-900/40 bg-white dark:bg-emerald-950/30 text-sm text-slate-900 dark:text-white"
+              onChange={(e) => handleBankChange(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-lg border border-slate-200 dark:border-emerald-900/40 bg-white dark:bg-emerald-950/30 text-sm text-slate-900 dark:text-white font-medium"
             >
-              <option value="">Select</option>
+              <option value="">Select Bank</option>
               {banks.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {(b.code ? `${b.code} - ` : '') + (b.name ?? '')}
+                  {(b.code ? `${b.code} - ` : '') + (b.name ?? '') + (b.branch ? ` (${b.branch})` : '')}
                 </option>
               ))}
             </select>
@@ -163,9 +296,10 @@ export default function BankReconciliationPage() {
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={load}
-              className="px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm"
+              onClick={() => load()}
+              className="px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-sm inline-flex items-center gap-1.5"
             >
+              <RefreshCw size={15} />
               Load
             </button>
           </div>
@@ -175,10 +309,48 @@ export default function BankReconciliationPage() {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search"
+              placeholder="Search ref, desc, cheque..."
               className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-slate-200 dark:border-emerald-900/40 bg-white dark:bg-emerald-950/30 text-sm text-slate-900 dark:text-white"
             />
           </div>
+        </div>
+
+        {/* Quick Date Presets */}
+        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-emerald-900/20 flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-slate-500 dark:text-emerald-100/60 font-semibold">Quick range:</span>
+          <button
+            type="button"
+            onClick={() => applyDatePreset('this-month')}
+            className={`px-2.5 py-1 rounded-md border font-medium transition ${
+              form.from_date === firstOfMonthStr && form.to_date === todayStr
+                ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/50 dark:text-emerald-200 dark:border-emerald-700'
+                : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-emerald-900/40 dark:text-emerald-100/70 dark:hover:bg-emerald-950/50'
+            }`}
+          >
+            This Month
+          </button>
+          <button
+            type="button"
+            onClick={() => applyDatePreset('today')}
+            className={`px-2.5 py-1 rounded-md border font-medium transition ${
+              form.from_date === todayStr && form.to_date === todayStr
+                ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/50 dark:text-emerald-200 dark:border-emerald-700'
+                : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-emerald-900/40 dark:text-emerald-100/70 dark:hover:bg-emerald-950/50'
+            }`}
+          >
+            Today
+          </button>
+          <button
+            type="button"
+            onClick={() => applyDatePreset('all')}
+            className={`px-2.5 py-1 rounded-md border font-medium transition ${
+              !form.from_date && !form.to_date
+                ? 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-900/50 dark:text-emerald-200 dark:border-emerald-700'
+                : 'border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-emerald-900/40 dark:text-emerald-100/70 dark:hover:bg-emerald-950/50'
+            }`}
+          >
+            All Dates
+          </button>
         </div>
       </div>
 
@@ -207,11 +379,18 @@ export default function BankReconciliationPage() {
             <tbody className="divide-y divide-slate-100 dark:divide-emerald-900/30">
               {loading ? (
                 <tr>
-                  <td colSpan={9} className="p-6 text-center text-slate-500 dark:text-emerald-100/60">Loading...</td>
+                  <td colSpan={9} className="p-6 text-center text-slate-500 dark:text-emerald-100/60">Loading transactions...</td>
                 </tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="p-6 text-center text-slate-500 dark:text-emerald-100/60">No transactions</td>
+                  <td colSpan={9} className="p-6 text-center text-slate-500 dark:text-emerald-100/60">
+                    No transactions found for this bank in the selected date range.
+                    {form.from_date && (
+                      <span className="block mt-1 text-xs text-slate-400">
+                        Try selecting <button type="button" onClick={() => applyDatePreset('all')} className="text-emerald-600 dark:text-emerald-400 underline font-semibold">All Dates</button> to see all transactions.
+                      </span>
+                    )}
+                  </td>
                 </tr>
               ) : (
                 filteredRows.map((r) => {
@@ -250,7 +429,10 @@ export default function BankReconciliationPage() {
           </table>
         </div>
 
-        <div className="px-4 py-3 border-t border-slate-100 dark:border-emerald-900/30 bg-slate-50/50 dark:bg-emerald-950/20">
+        <div className="px-4 py-3 border-t border-slate-100 dark:border-emerald-900/30 bg-slate-50/50 dark:bg-emerald-950/20 flex items-center justify-between">
+          <div className="text-xs text-slate-500 dark:text-emerald-100/60">
+            Showing {filteredRows.length} transaction{filteredRows.length === 1 ? '' : 's'}
+          </div>
           <div className="text-sm text-slate-600 dark:text-emerald-100/70">
             Total: <span className="font-extrabold text-slate-900 dark:text-white">{fmtMoney(totals.total)}</span>
           </div>
@@ -259,3 +441,4 @@ export default function BankReconciliationPage() {
     </div>
   )
 }
+
