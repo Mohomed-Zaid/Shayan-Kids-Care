@@ -103,6 +103,7 @@ const navItems = [
       { to: '/reports/returns-delivery', label: 'Returns & Delivery Reports', icon: Truck },
       { to: '/reports/admin-system', label: 'Admin, Audit & System Reports', icon: Shield },
       { to: '/reports/finance', label: 'Finance Reports', icon: Wallet },
+      { to: '/reports/finance/bank-reconciliation', label: 'Bank Reconciliation Report', icon: Landmark },
       { to: '/reports/finance/money-out', label: 'Business Money Out Report', icon: CircleDollarSign },
       { to: '/reports/cheques', label: 'Cheque Reports', icon: Landmark },
       { to: '/reports/day-book', label: 'Day Book', icon: BookOpen },
@@ -171,6 +172,7 @@ function usePageTitle() {
     if (path.startsWith('/reports/reps')) return 'Rep & Commission Reports'
     if (path.startsWith('/reports/returns-delivery')) return 'Returns & Delivery Reports'
     if (path.startsWith('/reports/admin-system')) return 'Admin, Audit & System Reports'
+    if (path.startsWith('/reports/finance/bank-reconciliation')) return 'Bank Reconciliation Report'
     if (path.startsWith('/reports/finance/money-out')) return 'Business Money Out Report'
     if (path.startsWith('/reports/finance')) return 'Finance Reports'
     if (path.startsWith('/reports/cheques')) return 'Cheque Reports'

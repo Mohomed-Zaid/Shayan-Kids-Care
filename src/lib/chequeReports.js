@@ -85,14 +85,14 @@ export function buildChequeRegister(raw, now = new Date()) {
     const status = String(cheque.status ?? '').toLowerCase()
     const { payment = {}, invoice = {} } = paymentMap.get(`${key(cheque.customer_id)}|${key(cheque.cheque_number)}`) ?? {}
     const recon = reconByRef.get(`RCV-CHQ-${cheque.id}`) ?? (reconByNumber.get(key(cheque.cheque_number)) ?? []).find((row) => n(row.amount) === n(cheque.amount)) ?? null
-    const depositBank = recon ? banks.get(key(recon.bank_id)) ?? {} : {}
+    const depositBank = (recon ? banks.get(key(recon.bank_id)) : null) ?? banks.get(key(cheque.deposit_bank_id)) ?? {}
     const days = calendarDays(cheque.cheque_date, now)
     return {
       id: `customer-${cheque.id}`, sourceId: cheque.id, type: 'Customer', customerId: cheque.customer_id ?? invoice.customer_id ?? '', vendorId: '',
       party: customers.get(key(cheque.customer_id))?.name ?? cheque.customers?.name ?? '-', documentNumber: invoice.invoice_number ?? '-', reference: payment.reference ?? cheque.reference ?? cheque.cheque_number ?? '-',
       chequeNumber: cheque.cheque_number ?? payment.reference ?? '-', bankCode: cheque.bank_code ?? '', bankName: cheque.bank_name ?? payment.bank_name ?? '-', chequeDate: dateKey(cheque.cheque_date),
       transactionDate: dateKey(payment.paid_at ?? cheque.received_at ?? cheque.created_at), amount: n(cheque.amount), status, statusLabel: label(status), daysUntilDue: days, dueSection: dueSection(days),
-      depositBankId: recon?.bank_id ?? '', depositBank: depositBank.name ?? recon?.bank_name ?? '-', depositDate: dateKey(cheque.deposited_at ?? recon?.trx_date), reconciliationReference: recon?.ref_no ?? '-',
+      depositBankId: recon?.bank_id ?? cheque.deposit_bank_id ?? '', depositBank: depositBank.name ?? recon?.bank_name ?? cheque.deposit_bank_name ?? '-', depositDate: dateKey(cheque.deposited_at ?? recon?.trx_date), reconciliationReference: recon?.ref_no ?? '-',
       reconciled: !!recon?.reconciled, reconciledLabel: recon ? (recon.reconciled ? 'Yes' : 'No') : 'No', clearedDate: dateKey(cheque.cleared_at ?? (status === 'cleared' ? recon?.updated_at ?? recon?.post_date : '')),
       returnedDate: dateKey(cheque.returned_at ?? (status === 'returned' ? cheque.updated_at : '')), returnReason: cheque.return_reason ?? cheque.reason ?? '-', previousStatus: label(cheque.previous_status ?? (status === 'returned' ? 'deposited' : '')),
       outstandingAfterReturn: status === 'returned' ? n(outstanding.get(key(cheque.customer_id))) : 0, recordedBy: cheque.created_by ?? payment.created_by ?? cheque.recorded_by ?? '-',
@@ -102,12 +102,15 @@ export function buildChequeRegister(raw, now = new Date()) {
     const purchase = purchases.get(key(payment.purchase_id)) ?? {}
     const status = String(payment.cheque_status ?? payment.status ?? 'deposited').toLowerCase()
     const days = calendarDays(payment.cheque_date ?? payment.paid_at, now)
+    const recon = reconByRef.get(`PAY-CHQ-${payment.id}`) ?? (reconByNumber.get(key(payment.cheque_number ?? payment.reference)) ?? []).find((row) => n(row.amount) === n(payment.amount)) ?? null
+    const reconBank = recon ? banks.get(key(recon.bank_id)) : null
+    const isReconciled = !!(recon ? recon.reconciled : payment.reconciled)
     return {
       id: `vendor-${payment.id}`, sourceId: payment.id, type: 'Vendor', customerId: '', vendorId: purchase.vendor_id ?? '', party: vendors.get(key(purchase.vendor_id))?.name ?? purchase.vendors?.name ?? '-',
       documentNumber: purchase.ref_no ?? purchase.purchase_number ?? '-', reference: payment.reference ?? '-', chequeNumber: payment.cheque_number ?? payment.reference ?? '-', bankCode: payment.bank_code ?? '', bankName: payment.bank_name ?? '-',
       chequeDate: dateKey(payment.cheque_date ?? payment.paid_at), transactionDate: dateKey(payment.paid_at ?? payment.created_at), amount: n(payment.amount), status, statusLabel: label(status), daysUntilDue: days, dueSection: dueSection(days),
-      depositBankId: payment.bank_id ?? '', depositBank: payment.deposit_bank_name ?? payment.bank_name ?? '-', depositDate: dateKey(payment.deposited_at ?? payment.paid_at), reconciliationReference: payment.reconciliation_reference ?? '-',
-      reconciled: !!payment.reconciled, reconciledLabel: payment.reconciled ? 'Yes' : 'No', clearedDate: dateKey(payment.cleared_at), returnedDate: dateKey(payment.returned_at), returnReason: payment.return_reason ?? '-',
+      depositBankId: recon?.bank_id ?? payment.bank_id ?? '', depositBank: reconBank?.name ?? payment.deposit_bank_name ?? payment.bank_name ?? '-', depositDate: dateKey(payment.deposited_at ?? payment.paid_at), reconciliationReference: recon?.ref_no ?? payment.reconciliation_reference ?? '-',
+      reconciled: isReconciled, reconciledLabel: isReconciled ? 'Yes' : 'No', clearedDate: dateKey(payment.cleared_at), returnedDate: dateKey(payment.returned_at), returnReason: payment.return_reason ?? '-',
       previousStatus: label(payment.previous_status), outstandingAfterReturn: 0, recordedBy: payment.created_by ?? payment.recorded_by ?? '-',
     }
   })

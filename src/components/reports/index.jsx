@@ -192,10 +192,10 @@ export function exportToPDF(elementId, filename = 'report.pdf', options = {}) {
       backgroundColor: '#ffffff',
       scrollX: 0,
       scrollY: 0,
-      windowWidth: cloned.scrollWidth,
+      windowWidth: Math.max(cloned.scrollWidth, cloned.offsetWidth, 1060),
     },
     jsPDF: { unit: 'in', format, orientation },
-    pagebreak: { mode: ['css', 'legacy'], avoid: ['tr', '.pdf-avoid-break'] },
+    pagebreak: { mode: ['css', 'legacy'], before: ['.pdf-page-break'], avoid: ['tr', '.pdf-avoid-break'] },
   };
   const worker = html2pdf().set(opt).from(cloned);
   const save = options.pageNumbers

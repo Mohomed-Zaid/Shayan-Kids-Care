@@ -1,6 +1,7 @@
 import { getCommissionRate } from './repCommission.js'
 import { buildProfitLoss, profitLossStatement } from './profitLoss.js'
 import { buildInvoiceBalanceRows } from './receivables.js'
+import { extractBankCodeFromCheque, APPROVED_BANK_CODES } from './chequeValidation.js'
 
 const n = (value) => Number(value ?? 0) || 0
 const dateOnly = (value) => value ? String(value).slice(0, 10) : ''
@@ -24,6 +25,18 @@ const groupBy = (rows = [], field) => {
   return result
 }
 const creator = (row) => row.created_by_name ?? row.recorded_by ?? row.created_by ?? row.user_email ?? '-'
+
+function getBankCodeForBank(bank) {
+  if (!bank) return ''
+  if (bank.bank_code) return String(bank.bank_code).trim()
+  const normName = String(bank.name || '').toLowerCase()
+  for (const [code, name] of Object.entries(APPROVED_BANK_CODES)) {
+    if (name.toLowerCase().includes(normName) || normName.includes(name.toLowerCase())) {
+      return code
+    }
+  }
+  return ''
+}
 
 export const FINANCE_REPORTS = [
   ['receivables', 'Receivables Report', 'view_receivables'],
@@ -58,7 +71,7 @@ export const REPORT_COLUMNS = {
   ],
   'cash-book': [['date', 'Date', 'date'], ['reference', 'Reference'], ['transactionType', 'Transaction Type'], ['description', 'Description'], ['cashIn', 'Cash In', 'money'], ['cashOut', 'Cash Out', 'money'], ['runningBalance', 'Running Balance', 'money'], ['createdBy', 'Recorded By']],
   'bank-book': [['date', 'Date', 'date'], ['bank', 'Bank'], ['reference', 'Reference'], ['transactionType', 'Transaction Type'], ['description', 'Description'], ['deposit', 'Deposit', 'money'], ['withdrawal', 'Withdrawal', 'money'], ['runningBalance', 'Running Balance', 'money'], ['reconciled', 'Reconciled'], ['createdBy', 'Created By']],
-  'bank-reconciliation': [['bank', 'Bank'], ['date', 'Transaction Date', 'date'], ['postDate', 'Post Date', 'date'], ['reference', 'Reference Number'], ['description', 'Description'], ['chequeNumber', 'Cheque Number'], ['amount', 'Amount', 'money'], ['reconciled', 'Reconciled'], ['reconciliationDate', 'Reconciliation Date', 'date']],
+  'bank-reconciliation': [['bank', 'Bank'], ['transactionType', 'Transaction Type'], ['party', 'Customer / Vendor'], ['date', 'Transaction Date', 'date'], ['postDate', 'Post Date', 'date'], ['reference', 'Reference Number'], ['description', 'Description'], ['chequeNumber', 'Cheque / Ref #'], ['deposit', 'Money In (Deposit)', 'money'], ['withdrawal', 'Money Out (Payment)', 'money'], ['amount', 'Amount', 'money'], ['reconciled', 'Reconciled'], ['reconciliationDate', 'Reconciliation Date', 'date']],
   cheques: [['chequeType', 'Cheque Type'], ['party', 'Customer / Vendor'], ['chequeNumber', 'Cheque Number'], ['bankCode', 'Bank Code'], ['bank', 'Bank Name'], ['date', 'Cheque Date', 'date'], ['amount', 'Amount', 'money'], ['status', 'Status'], ['depositBank', 'Deposit Bank'], ['depositDate', 'Deposit Date', 'date'], ['dueDate', 'Due Date', 'date'], ['days', 'Days'], ['reference', 'Reference'], ['createdBy', 'Recorded By']],
   journals: [['entryNumber', 'Entry Number'], ['date', 'Date', 'date'], ['description', 'Description'], ['accountCode', 'Account Code'], ['accountName', 'Account Name'], ['debit', 'Debit', 'money'], ['credit', 'Credit', 'money'], ['status', 'Status'], ['createdBy', 'Created By']],
   'general-ledger': [['date', 'Date', 'date'], ['reference', 'Reference'], ['description', 'Description'], ['debit', 'Debit', 'money'], ['credit', 'Credit', 'money'], ['runningBalance', 'Running Balance', 'money']],
@@ -67,6 +80,30 @@ export const REPORT_COLUMNS = {
   commissions: [['rep', 'Rep'], ['month', 'Month'], ['totalSales', 'Total Sales', 'money'], ['commissionRate', 'Commission Rate'], ['commissionEarned', 'Commission Earned', 'money'], ['advanceApplied', 'Advance Applied', 'money'], ['amountPaid', 'Amount Paid', 'money'], ['remainingCommission', 'Remaining Commission', 'money'], ['status', 'Status']],
   'profit-loss': [['section', 'Section'], ['description', 'Description'], ['amount', 'Amount', 'money']],
   'cash-flow': [['section', 'Cash Flow'], ['description', 'Description'], ['amount', 'Amount', 'money']],
+}
+
+export function formatReconReference(ref) {
+  if (!ref || ref === '-') return '-'
+  const str = String(ref).trim()
+  return str.replace(
+    /^([A-Za-z]+-[A-Za-z]+-)([0-9a-f]{8})-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    (_, prefix, shortHex) => `${prefix.toUpperCase()}${shortHex.toUpperCase()}`
+  )
+}
+
+const formatDocRef = (val, prefix) => {
+  if (!val) return ''
+  const str = String(val).trim()
+  if (!str) return ''
+  const regex = new RegExp(`^(${prefix}-)+`, 'i')
+  return `${prefix}-${str.replace(regex, '')}`
+}
+
+const cleanReconDescription = (desc) => {
+  if (!desc) return '-'
+  return String(desc)
+    .replace(/\bPUR-PUR-/gi, 'PUR-')
+    .replace(/\bINV-INV-/gi, 'INV-')
 }
 
 export function buildFinanceReports(raw) {
@@ -86,6 +123,12 @@ export function buildFinanceReports(raw) {
   const paymentsByPurchase = groupBy(purchasePayments, 'purchase_id')
   const chequesByCustomer = groupBy(cheques, 'customer_id')
   const receivableBalanceRows = buildInvoiceBalanceRows(invoices, invoicePayments, returns)
+
+  const invoicesById = keyBy(invoices)
+  const purchasesById = keyBy(purchases)
+  const chequesById = keyBy(cheques)
+  const rcvPaymentsById = keyBy(invoicePayments)
+  const payPaymentsById = keyBy(purchasePayments)
 
   const receivables = receivableBalanceRows.filter((inv) => inv.payment_type === 'credit').map((inv) => {
     const customer = customers.get(String(inv.customer_id)) ?? {}
@@ -130,38 +173,326 @@ export function buildFinanceReports(raw) {
     ...repPayments.filter((row) => row.method === 'cash').map((row) => ({ id: `rep-${row.id}`, date: dateOnly(row.paid_at), reference: row.reference ?? String(row.id).slice(0, 8), transactionType: 'Rep Payment', description: `Commission payment to ${employees.get(String(row.rep_id))?.name ?? 'rep'}`, cashIn: 0, cashOut: n(row.amount), createdBy: creator(row) })),
   ].sort((a, b) => new Date(a.date) - new Date(b.date)).map((row, index, all) => ({ ...row, amount: row.cashIn || row.cashOut, runningBalance: sum(all.slice(0, index + 1), (x) => x.cashIn - x.cashOut) }))
 
-  const findBank = (idOrName) => {
-    if (!idOrName) return null
-    const keyStr = String(idOrName).trim().toLowerCase()
-    return banks.get(String(idOrName)) ||
-      [...banks.values()].find((b) =>
-        String(b.id).toLowerCase() === keyStr ||
-        (b.code && String(b.code).toLowerCase() === keyStr) ||
-        (b.bank_code && String(b.bank_code) === keyStr) ||
-        (b.name && String(b.name).toLowerCase() === keyStr) ||
-        (b.name && keyStr.includes(String(b.name).toLowerCase()))
-      ) || null
+  const bankList = [...banks.values()]
+  const findBank = (idOrName, refOrChequeNo = '') => {
+    if (idOrName) {
+      const direct = banks.get(String(idOrName))
+      if (direct) return direct
+      const keyStr = String(idOrName).trim().toLowerCase()
+      const matched = bankList.find((b) => {
+        const bId = String(b.id || '').trim().toLowerCase()
+        const bCode = String(b.code || '').trim().toLowerCase()
+        const bBankCode = getBankCodeForBank(b).toLowerCase()
+        const bName = String(b.name || '').trim().toLowerCase()
+        if (bId && bId === keyStr) return true
+        if (bCode && (keyStr === bCode || keyStr.startsWith(`${bCode} -`) || keyStr.startsWith(`${bCode}-`) || keyStr.startsWith(`${bCode} `))) return true
+        if (bBankCode && (keyStr === bBankCode || keyStr.includes(bBankCode))) return true
+        if (bName) {
+          if (keyStr.includes(bName) || bName.includes(keyStr)) return true
+          const keywords = bName.split(/[\s-]+/).filter((w) => w.length >= 3 && !['bank', 'plc', 'ltd'].includes(w))
+          if (keywords.some((kw) => keyStr.includes(kw))) return true
+        }
+        if (bCode && bCode.length >= 3 && keyStr.includes(bCode)) return true
+        return false
+      })
+      if (matched) return matched
+    }
+    if (refOrChequeNo) {
+      const codeInRef = extractBankCodeFromCheque(refOrChequeNo)
+      if (codeInRef) {
+        const byChequeCode = bankList.find((b) => getBankCodeForBank(b) === codeInRef)
+        if (byChequeCode) return byChequeCode
+      }
+    }
+    return null
   }
 
-  const reconciliations = (raw.bank_reconciliation_items ?? []).map((row) => {
-    const bank = findBank(row.bank_id) || findBank(row.bank_name) || {}
-    return { id: row.id, bankId: bank.id ?? row.bank_id, bank: bank.name ?? row.bank_name ?? '-', date: dateOnly(row.trx_date), postDate: dateOnly(row.post_date),
-      reference: row.ref_no ?? '-', description: row.description ?? '-', chequeNumber: row.cheque_number ?? '-', amount: n(row.amount),
-      reconciled: row.reconciled ? 'Yes' : 'No', reconciliationDate: row.reconciled ? dateOnly(row.reconciled_at ?? row.updated_at ?? row.post_date) : '', createdBy: creator(row) }
+  const rawReconItems = raw.bank_reconciliation_items ?? []
+
+  // Deduplicate rawReconItems by ref_no (or cheque_number + amount for cheque rows)
+  // so duplicate database entries never appear multiple times in reports.
+  const scoreReconItem = (r) => {
+    let score = 0
+    if (r.reconciled) score += 100
+    const refU = String(r.ref_no || '').trim().toUpperCase()
+    if (refU.startsWith('RCV-CHQ-')) {
+      const chq = chequesById.get(String(r.ref_no || '').trim().slice(8))
+      if (chq?.deposit_bank_id && String(r.bank_id) === String(chq.deposit_bank_id)) score += 50
+    }
+    if (r.bank_id && banks.has(String(r.bank_id))) score += 10
+    return score
+  }
+
+  const dedupedByKey = new Map()
+  rawReconItems.forEach((r) => {
+    const refKey = String(r.ref_no || '').trim().toLowerCase()
+    const chqKey = String(r.cheque_number || '').trim().toLowerCase()
+    const key = refKey || (chqKey ? `chq:${chqKey}:${n(r.amount)}` : `id:${r.id}`)
+    const prev = dedupedByKey.get(key)
+    if (!prev) {
+      dedupedByKey.set(key, { ...r })
+    } else {
+      const anyReconciled = Boolean(prev.reconciled || r.reconciled)
+      const winner = scoreReconItem(r) > scoreReconItem(prev) ? { ...r } : { ...prev }
+      winner.reconciled = anyReconciled
+      dedupedByKey.set(key, winner)
+    }
   })
+  const uniqueReconItems = [...dedupedByKey.values()]
+
+  const existingRefNos = new Set(uniqueReconItems.map((r) => String(r.ref_no || '').trim().toLowerCase()).filter(Boolean))
+  const existingChequeNos = new Set(uniqueReconItems.map((r) => String(r.cheque_number || '').trim().toLowerCase()).filter(Boolean))
+  const reconByRef = new Map()
+  const reconByCheque = new Map()
+  uniqueReconItems.forEach((r) => {
+    if (r.ref_no) reconByRef.set(String(r.ref_no).trim().toLowerCase(), r)
+    if (r.cheque_number) reconByCheque.set(String(r.cheque_number).trim().toLowerCase(), r)
+  })
+
+  const reconciliationsBase = uniqueReconItems.map((row) => {
+    const refUpper = String(row.ref_no || '').trim().toUpperCase()
+    const descLower = String(row.description || '').toLowerCase()
+    let bank = findBank(row.bank_id || row.bank_name, row.cheque_number) || {}
+
+    let transactionType = 'Bank Entry'
+    let flow = 'in'
+    let method = 'bank'
+    let party = '-'
+    let customerId = ''
+    let vendorId = ''
+
+    if (refUpper.startsWith('RCV-CHQ-')) {
+      const chqId = String(row.ref_no || '').slice(8)
+      const chq = chequesById.get(chqId)
+      if (chq?.deposit_bank_id) {
+        const depBank = findBank(chq.deposit_bank_id)
+        if (depBank) bank = depBank
+      }
+      const cust = customers.get(String(chq?.customer_id))
+      transactionType = 'Customer Cheque Deposit'
+      flow = 'in'
+      method = 'cheque'
+      customerId = chq?.customer_id ?? ''
+      party = cust?.name ?? '-'
+    } else if (refUpper.startsWith('RCV-TRF-')) {
+      const payId = String(row.ref_no || '').slice(8)
+      const pay = rcvPaymentsById.get(payId)
+      const inv = invoicesById.get(String(pay?.invoice_id))
+      const cust = customers.get(String(inv?.customer_id))
+      transactionType = 'Customer Bank Transfer'
+      flow = 'in'
+      method = 'bank'
+      customerId = inv?.customer_id ?? ''
+      party = cust?.name ?? '-'
+    } else if (refUpper.startsWith('PAY-TRF-')) {
+      const payId = String(row.ref_no || '').slice(8)
+      const pay = payPaymentsById.get(payId)
+      const pur = purchasesById.get(String(pay?.purchase_id))
+      const vend = vendors.get(String(pur?.vendor_id))
+      transactionType = 'Vendor Bank Transfer'
+      flow = 'out'
+      method = 'bank'
+      vendorId = pur?.vendor_id ?? ''
+      party = vend?.name ?? '-'
+    } else if (refUpper.startsWith('PAY-CHQ-')) {
+      const payId = String(row.ref_no || '').slice(8)
+      const pay = payPaymentsById.get(payId)
+      const pur = purchasesById.get(String(pay?.purchase_id))
+      const vend = vendors.get(String(pur?.vendor_id))
+      transactionType = 'Vendor Cheque Payment'
+      flow = 'out'
+      method = 'cheque'
+      vendorId = pur?.vendor_id ?? ''
+      party = vend?.name ?? '-'
+    } else if (descLower.includes('cheque deposit') || descLower.includes('receivable cheque')) {
+      transactionType = 'Customer Cheque Deposit'
+      flow = 'in'
+      method = 'cheque'
+    } else if (descLower.includes('customer bank')) {
+      transactionType = 'Customer Bank Transfer'
+      flow = 'in'
+      method = 'bank'
+    } else if (descLower.includes('vendor bank')) {
+      transactionType = 'Vendor Bank Transfer'
+      flow = 'out'
+      method = 'bank'
+    } else if (descLower.includes('vendor cheque')) {
+      transactionType = 'Vendor Cheque Payment'
+      flow = 'out'
+      method = 'cheque'
+    } else if (descLower.includes('payment') || descLower.includes('outflow') || descLower.includes('withdrawal')) {
+      transactionType = 'Bank Payment'
+      flow = 'out'
+      method = 'bank'
+    }
+
+    const amt = n(row.amount)
+    return {
+      id: row.id,
+      bankId: bank.id ?? row.bank_id,
+      bank: bank.name ?? row.bank_name ?? '-',
+      transactionType,
+      party,
+      customerId,
+      vendorId,
+      method,
+      date: dateOnly(row.trx_date),
+      postDate: dateOnly(row.post_date ?? row.trx_date),
+      dueDate: dateOnly(row.due_date),
+      reference: row.ref_no ?? '-',
+      displayReference: formatReconReference(row.ref_no ?? '-'),
+      description: cleanReconDescription(row.description),
+      chequeNumber: row.cheque_number ?? '-',
+      deposit: flow === 'in' ? amt : 0,
+      withdrawal: flow === 'out' ? amt : 0,
+      amount: amt,
+      reconciled: row.reconciled ? 'Yes' : 'No',
+      status: row.reconciled ? 'Yes' : 'No',
+      reconciliationDate: row.reconciled ? dateOnly(row.reconciled_at ?? row.updated_at ?? row.post_date ?? row.trx_date) : '',
+      createdBy: creator(row),
+    }
+  })
+
+  // Include any deposited customer cheques not yet in bank_reconciliation_items
+  cheques.filter((c) => c.status === 'deposited').forEach((c) => {
+    const refNo = `rcv-chq-${c.id}`.toLowerCase()
+    const chqNo = String(c.cheque_number || '').trim().toLowerCase()
+    if (existingRefNos.has(refNo) || (chqNo && existingChequeNos.has(chqNo))) return
+    const bank = (c.deposit_bank_id ? findBank(c.deposit_bank_id) : null) || findBank(c.deposit_bank_name || c.bank_code || c.bank_name, c.cheque_number) || {}
+    const cust = customers.get(String(c.customer_id))
+    const cName = cust?.name ?? ''
+    const day = dateOnly(c.deposited_at ?? c.cheque_date)
+    const amt = n(c.amount)
+    const rawRef = `RCV-CHQ-${c.id}`
+    reconciliationsBase.push({
+      id: `unsynced-chq-${c.id}`,
+      bankId: bank.id ?? c.deposit_bank_id ?? '',
+      bank: bank.name ?? c.deposit_bank_name ?? c.bank_name ?? '-',
+      transactionType: 'Customer Cheque Deposit',
+      party: cName || '-',
+      customerId: c.customer_id ?? '',
+      vendorId: '',
+      method: 'cheque',
+      date: day,
+      postDate: day,
+      dueDate: dateOnly(c.cheque_date),
+      reference: rawRef,
+      displayReference: formatReconReference(rawRef),
+      description: cleanReconDescription(`Customer Cheque Deposit${cName ? ` - ${cName}` : ''}${c.bank_name ? ` (${c.bank_name})` : ''}`),
+      chequeNumber: c.cheque_number ?? '-',
+      deposit: amt,
+      withdrawal: 0,
+      amount: amt,
+      reconciled: c.reconciled ? 'Yes' : 'No',
+      status: c.reconciled ? 'Yes' : 'No',
+      reconciliationDate: c.reconciled ? day : '',
+      createdBy: creator(c),
+    })
+  })
+
+  // Include any customer bank transfers not yet in bank_reconciliation_items
+  invoicePayments.filter((p) => p.method === 'bank').forEach((p) => {
+    const refNo = `rcv-trf-${p.id}`.toLowerCase()
+    if (existingRefNos.has(refNo)) return
+    const bank = findBank(p.bank_id || p.bank_name, p.reference) || {}
+    const inv = invoicesById.get(String(p.invoice_id))
+    const cust = customers.get(String(inv?.customer_id))
+    const cName = cust?.name ?? ''
+    const invNo = formatDocRef(inv?.invoice_number, 'INV')
+    const day = dateOnly(p.paid_at)
+    const amt = n(p.amount)
+    const rawRef = `RCV-TRF-${p.id}`
+    reconciliationsBase.push({
+      id: `unsynced-rcv-trf-${p.id}`,
+      bankId: bank.id ?? p.bank_id ?? '',
+      bank: bank.name ?? p.bank_name ?? '-',
+      transactionType: 'Customer Bank Transfer',
+      party: cName || '-',
+      customerId: inv?.customer_id ?? '',
+      vendorId: '',
+      method: 'bank',
+      date: day,
+      postDate: day,
+      dueDate: '',
+      reference: rawRef,
+      displayReference: formatReconReference(rawRef),
+      description: cleanReconDescription(`Customer Bank Transfer${cName ? ` - ${cName}` : ''}${invNo ? ` (${invNo})` : ''}`),
+      chequeNumber: p.reference ?? '-',
+      deposit: amt,
+      withdrawal: 0,
+      amount: amt,
+      reconciled: p.reconciled ? 'Yes' : 'No',
+      status: p.reconciled ? 'Yes' : 'No',
+      reconciliationDate: p.reconciled ? day : '',
+      createdBy: creator(p),
+    })
+  })
+
+  // Include any vendor bank transfers and vendor cheques not yet in bank_reconciliation_items
+  purchasePayments.filter((p) => p.method === 'bank' || p.method === 'cheque').forEach((p) => {
+    const isCheque = p.method === 'cheque'
+    const refNo = `${isCheque ? 'pay-chq' : 'pay-trf'}-${p.id}`.toLowerCase()
+    const chqNo = String(p.reference || '').trim().toLowerCase()
+    if (existingRefNos.has(refNo) || (isCheque && chqNo && existingChequeNos.has(chqNo))) return
+    const bank = findBank(p.bank_id || p.bank_name, p.reference) || {}
+    const pur = purchasesById.get(String(p.purchase_id))
+    const vend = vendors.get(String(pur?.vendor_id))
+    const vName = vend?.name ?? ''
+    const purRef = formatDocRef(pur?.ref_no, 'PUR')
+    const day = dateOnly(p.paid_at)
+    const amt = n(p.amount)
+    const rawRef = `${isCheque ? 'PAY-CHQ' : 'PAY-TRF'}-${p.id}`
+    reconciliationsBase.push({
+      id: `unsynced-pay-${p.id}`,
+      bankId: bank.id ?? p.bank_id ?? '',
+      bank: bank.name ?? p.bank_name ?? '-',
+      transactionType: isCheque ? 'Vendor Cheque Payment' : 'Vendor Bank Transfer',
+      party: vName || '-',
+      customerId: '',
+      vendorId: pur?.vendor_id ?? '',
+      method: p.method,
+      date: day,
+      postDate: day,
+      dueDate: isCheque ? day : '',
+      reference: rawRef,
+      displayReference: formatReconReference(rawRef),
+      description: cleanReconDescription(`${isCheque ? 'Vendor Cheque Payment' : 'Vendor Bank Transfer'}${vName ? ` - ${vName}` : ''}${purRef ? ` (${purRef})` : ''}`),
+      chequeNumber: p.reference ?? '-',
+      deposit: 0,
+      withdrawal: amt,
+      amount: amt,
+      reconciled: p.reconciled ? 'Yes' : 'No',
+      status: p.reconciled ? 'Yes' : 'No',
+      reconciliationDate: p.reconciled ? day : '',
+      createdBy: creator(p),
+    })
+  })
+
+  const reconciliations = reconciliationsBase.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))
 
   const bankTransactionsBase = [
     ...invoicePayments.filter((row) => row.method === 'bank').map((row) => {
-      const bank = findBank(row.bank_id) || findBank(row.bank_name)
-      return { id: `receipt-${row.id}`, date: dateOnly(row.paid_at), bank: bank?.name ?? row.bank_name ?? '-', bankId: bank?.id ?? row.bank_id, reference: row.reference ?? '-', transactionType: 'Customer Bank Payment', description: 'Customer bank receipt', deposit: n(row.amount), withdrawal: 0, reconciled: row.reconciled ? 'Yes' : 'No', createdBy: creator(row) }
+      const bank = findBank(row.bank_id || row.bank_name, row.reference)
+      const recon = reconByRef.get(`rcv-trf-${row.id}`.toLowerCase())
+      const isRec = recon ? !!recon.reconciled : !!row.reconciled
+      const inv = invoicesById.get(String(row.invoice_id))
+      const custName = customers.get(String(inv?.customer_id))?.name
+      return { id: `receipt-${row.id}`, date: dateOnly(row.paid_at), bank: bank?.name ?? row.bank_name ?? '-', bankId: bank?.id ?? row.bank_id, customerId: inv?.customer_id ?? '', reference: row.reference ?? `RCV-TRF-${row.id}`, transactionType: 'Customer Bank Transfer', description: `Customer bank transfer${custName ? ` - ${custName}` : ''}`, deposit: n(row.amount), withdrawal: 0, reconciled: isRec ? 'Yes' : 'No', createdBy: creator(row) }
     }),
-    ...purchasePayments.filter((row) => row.method === 'bank').map((row) => {
-      const bank = findBank(row.bank_id) || findBank(row.bank_name)
-      return { id: `payment-${row.id}`, date: dateOnly(row.paid_at), bank: bank?.name ?? row.bank_name ?? '-', bankId: bank?.id ?? row.bank_id, reference: row.reference ?? '-', transactionType: 'Vendor Bank Payment', description: 'Vendor bank payment', deposit: 0, withdrawal: n(row.amount), reconciled: row.reconciled ? 'Yes' : 'No', createdBy: creator(row) }
+    ...purchasePayments.filter((row) => row.method === 'bank' || row.method === 'cheque').map((row) => {
+      const isCheque = row.method === 'cheque'
+      const bank = findBank(row.bank_id || row.bank_name, row.reference)
+      const recon = reconByRef.get(`${isCheque ? 'pay-chq' : 'pay-trf'}-${row.id}`.toLowerCase()) ?? (isCheque ? reconByCheque.get(String(row.reference || '').trim().toLowerCase()) : null)
+      const isRec = recon ? !!recon.reconciled : !!row.reconciled
+      const pur = purchasesById.get(String(row.purchase_id))
+      const vendName = vendors.get(String(pur?.vendor_id))?.name
+      return { id: `payment-${row.id}`, date: dateOnly(row.paid_at), bank: bank?.name ?? row.bank_name ?? '-', bankId: bank?.id ?? row.bank_id, vendorId: pur?.vendor_id ?? '', reference: row.reference ?? `${isCheque ? 'PAY-CHQ' : 'PAY-TRF'}-${row.id}`, transactionType: isCheque ? 'Vendor Cheque Payment' : 'Vendor Bank Transfer', description: `${isCheque ? 'Vendor cheque payment' : 'Vendor bank payment'}${vendName ? ` - ${vendName}` : ''}`, deposit: 0, withdrawal: n(row.amount), reconciled: isRec ? 'Yes' : 'No', createdBy: creator(row) }
     }),
     ...cheques.filter((row) => row.status === 'deposited').map((row) => {
-      const bank = findBank(row.deposit_bank_id) || findBank(row.deposit_bank_name) || findBank(row.bank_name)
-      return { id: `cheque-${row.id}`, date: dateOnly(row.deposited_at ?? row.cheque_date), bank: bank?.name ?? row.deposit_bank_name ?? row.bank_name ?? '-', bankId: bank?.id ?? row.deposit_bank_id, reference: row.cheque_number ?? '-', transactionType: 'Deposited Customer Cheque', description: `Cheque from ${customers.get(String(row.customer_id))?.name ?? 'customer'}`, deposit: n(row.amount), withdrawal: 0, reconciled: row.reconciled ? 'Yes' : 'No', createdBy: creator(row) }
+      const bank = findBank(row.deposit_bank_id || row.deposit_bank_name || row.bank_code || row.bank_name, row.cheque_number)
+      const recon = reconByRef.get(`rcv-chq-${row.id}`.toLowerCase()) ?? reconByCheque.get(String(row.cheque_number || '').trim().toLowerCase())
+      const isRec = recon ? !!recon.reconciled : !!row.reconciled
+      return { id: `cheque-${row.id}`, date: dateOnly(row.deposited_at ?? row.cheque_date), bank: bank?.name ?? row.deposit_bank_name ?? row.bank_name ?? '-', bankId: bank?.id ?? row.deposit_bank_id, customerId: row.customer_id ?? '', reference: row.cheque_number ?? `RCV-CHQ-${row.id}`, transactionType: 'Deposited Customer Cheque', description: `Cheque from ${customers.get(String(row.customer_id))?.name ?? 'customer'}`, deposit: n(row.amount), withdrawal: 0, reconciled: isRec ? 'Yes' : 'No', createdBy: creator(row) }
     }),
   ].sort((a, b) => new Date(a.date) - new Date(b.date))
   const bankRunning = new Map()
@@ -258,7 +589,7 @@ export function reportSummary(key, rows) {
   if (key === 'payables') return [['Total Payables', sum(rows, 'purchaseTotal')], ['Total Paid', sum(rows, 'amountPaid')], ['Outstanding', sum(rows, 'outstanding')], ['Current', agingTotals('Current')], ['31-60', agingTotals('31-60')], ['61-90', agingTotals('61-90')], ['91-120', agingTotals('91-120')], ['120+', agingTotals('120+')]]
   if (key === 'cash-book') { const opening = rows.length ? n(rows[0].runningBalance) - n(rows[0].cashIn) + n(rows[0].cashOut) : 0; return [['Opening Cash', opening], ['Total Cash In', sum(rows, 'cashIn')], ['Total Cash Out', sum(rows, 'cashOut')], ['Closing Cash', opening + sum(rows, (r) => r.cashIn - r.cashOut)]] }
   if (key === 'bank-book') { const firstByBank = new Map(); rows.forEach((r) => { const bankKey = String(r.bankId ?? r.bank); if (!firstByBank.has(bankKey)) firstByBank.set(bankKey, r) }); const opening = sum([...firstByBank.values()], (r) => n(r.runningBalance) - n(r.deposit) + n(r.withdrawal)); return [['Opening Balance', opening], ['Deposits', sum(rows, 'deposit')], ['Withdrawals', sum(rows, 'withdrawal')], ['Closing Balance', opening + sum(rows, (r) => r.deposit - r.withdrawal)], ['Unreconciled Amount', sum(rows.filter((r) => r.reconciled !== 'Yes'), 'amount')]] }
-  if (key === 'bank-reconciliation') return [['Total Lines', rows.length], ['Reconciled Amount', sum(rows.filter((r) => r.reconciled === 'Yes'), 'amount')], ['Unreconciled Amount', sum(rows.filter((r) => r.reconciled !== 'Yes'), 'amount')], ['Reconciled Count', rows.filter((r) => r.reconciled === 'Yes').length], ['Unreconciled Count', rows.filter((r) => r.reconciled !== 'Yes').length]]
+  if (key === 'bank-reconciliation') return [['Total Lines', rows.length], ['Money In (Deposits)', sum(rows, 'deposit')], ['Money Out (Payments)', sum(rows, 'withdrawal')], ['Reconciled Amount', sum(rows.filter((r) => r.reconciled === 'Yes'), 'amount')], ['Unreconciled Amount', sum(rows.filter((r) => r.reconciled !== 'Yes'), 'amount')], ['Reconciled Count', rows.filter((r) => r.reconciled === 'Yes').length], ['Unreconciled Count', rows.filter((r) => r.reconciled !== 'Yes').length]]
   if (key === 'cheques') return [['Total Cheque Value', sum(rows, 'amount')], ['In Hand', sum(rows.filter((r) => r.status === 'in hand'), 'amount')], ['Deposited', sum(rows.filter((r) => r.status === 'deposited'), 'amount')], ['Cleared', sum(rows.filter((r) => r.status === 'cleared'), 'amount')], ['Returned', sum(rows.filter((r) => r.status === 'returned'), 'amount')], ['Due Today', sum(rows.filter((r) => r.dueDate === dateOnly(new Date())), 'amount')], ['Upcoming', sum(rows.filter((r) => r.dueDate > dateOnly(new Date())), 'amount')]]
   if (key === 'journals') return [['Total Debit', sum(rows, 'debit')], ['Total Credit', sum(rows, 'credit')], ['Difference', Math.abs(sum(rows, 'debit') - sum(rows, 'credit'))]]
   if (key === 'general-ledger') { const opening = rows.length ? n(rows[0].runningBalance) - n(rows[0].debit) + n(rows[0].credit) : 0; return [['Opening Balance', opening], ['Total Debit', sum(rows, 'debit')], ['Total Credit', sum(rows, 'credit')], ['Closing Balance', opening + sum(rows, (r) => r.debit - r.credit)]] }

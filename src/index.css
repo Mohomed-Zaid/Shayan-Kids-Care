@@ -309,10 +309,22 @@
 }
 
 .pdf-export-document {
-  width: 1120px;
-  padding: 20px;
+  width: 1050px;
+  max-width: 1050px;
+  box-sizing: border-box;
+  padding: 16px;
   background: #ffffff !important;
   color: #0f172a !important;
+}
+
+.pdf-export-document tr {
+  break-inside: avoid !important;
+  page-break-inside: avoid !important;
+}
+
+.pdf-page-break {
+  break-before: page !important;
+  page-break-before: always !important;
 }
 
 .pdf-export-document,

@@ -595,7 +595,7 @@ export default function PayableVendorPage() {
       amount,
       paid_at: effectivePaidAt,
       method: payForm.method,
-      bank_name: payForm.method === 'bank' ? 'Bank' : null,
+      bank_name: payForm.method === 'bank' ? (payForm.bank_name || null) : null,
       reference: payForm.reference.trim() || null,
       note: payForm.note.trim() || null,
     }).select('id, amount, paid_at, method, bank_name, reference, created_at')
@@ -899,7 +899,7 @@ export default function PayableVendorPage() {
                           setPayForm((p) => ({
                             ...p,
                             method: m,
-                            bank_name: m === 'bank' ? 'Bank' : '',
+                            bank_name: m === 'bank' ? (p.bank_name || (banks[0] ? `${banks[0].code} - ${banks[0].name}` : '')) : '',
                           }))
                         }
                         className={`px-3 py-2 rounded-md text-xs font-bold border transition-colors ${
@@ -913,6 +913,22 @@ export default function PayableVendorPage() {
                     ))}
                   </div>
                 </div>
+
+                {payForm.method === 'bank' && (
+                  <div className="sm:col-span-2">
+                    <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Bank</div>
+                    <select
+                      value={payForm.bank_name || ''}
+                      onChange={(e) => setPayForm((p) => ({ ...p, bank_name: e.target.value }))}
+                      className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                    >
+                      <option value="">Select bank</option>
+                      {banks.map((b) => (
+                        <option key={b.id} value={`${b.code} - ${b.name}`}>{b.code} - {b.name}{b.branch ? ` (${b.branch})` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {payForm.method === 'cheque' && (
                   <div className="sm:col-span-2 space-y-2">
