@@ -150,7 +150,19 @@ function bankBalancesAsAt(raw, asAt) {
   const repPayments = raw.rep_commission_payments ?? raw.rep_payments ?? []
   dated(repPayments, asAt).filter((row) => String(row.method).toLowerCase() === 'bank').forEach((row) => add(resolveBankId(row), -n(row.amount)))
   buildExpenseRows(raw).filter((row) => onOrBefore(row.date, asAt) && String(row.paymentMethod).toLowerCase() === 'bank').forEach((row) => add(resolveBankId(row), -n(row.amount)))
-  ;(raw.customer_cheques ?? []).filter((row) => row.deposit_bank_id && onOrBefore(row.deposited_at, asAt) && String(row.status).toLowerCase() !== 'returned').forEach((row) => add(row.deposit_bank_id, row.amount))
+  const reconBankByChequeId = new Map(
+    (raw.bank_reconciliation_items ?? []).map((r) => {
+      const ref = String(r.ref_no || '').trim().toUpperCase()
+      if (ref.startsWith('RCV-CHQ-')) {
+        return [ref.slice(8).toLowerCase(), r.bank_id]
+      }
+      return [null, null]
+    }).filter(([k]) => k)
+  )
+  ;(raw.customer_cheques ?? []).filter((row) => onOrBefore(row.deposited_at, asAt) && String(row.status).toLowerCase() !== 'returned').forEach((row) => {
+    const bankId = row.deposit_bank_id || reconBankByChequeId.get(String(row.id).toLowerCase())
+    if (bankId) add(bankId, row.amount)
+  })
   const details = banks.map((bank) => ({ id: bank.id, code: bank.code ?? '-', bank: bank.name ?? '-', account: bank.account_no ?? '-', balance: money2(movements.get(id(bank.id))) }))
   return { total: money2(sum(details, 'balance')), details }
 }

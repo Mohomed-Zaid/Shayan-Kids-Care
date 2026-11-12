@@ -99,6 +99,7 @@ const navItems = [
       ]},
       { key: 'rep-reports', label: 'Rep & Commission Reports', icon: UserCheck, nested: true, children: [
         { to: '/reports/reps', label: 'Rep Reports Suite' },
+        { to: '/reports/reps/payment-status', label: 'Rep Payment Status (Paid / Unpaid)' },
       ]},
       { to: '/reports/returns-delivery', label: 'Returns & Delivery Reports', icon: Truck },
       { to: '/reports/admin-system', label: 'Admin, Audit & System Reports', icon: Shield },

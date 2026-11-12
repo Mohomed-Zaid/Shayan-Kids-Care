@@ -58,14 +58,22 @@ export function buildRepReportModel(raw) {
     let advance = 0
     rows.sort((a, b) => a.period.localeCompare(b.period)).forEach((row) => {
       row.previousAdvance = advance
-      row.advanceApplied = row.storedAdvanceApplied > 0 ? row.storedAdvanceApplied : Math.min(advance, Math.max(0, row.commissionEarned))
+      row.advanceApplied = row.storedAdvanceApplied > 0
+        ? Math.min(advance + row.storedAdvanceApplied, row.storedAdvanceApplied)
+        : Math.min(advance, Math.max(0, row.commissionEarned))
       const commissionPayable = Math.max(0, row.commissionEarned - row.advanceApplied)
+      row.commissionSettled = Math.min(commissionPayable, row.amountPaid)
       row.remainingDue = Math.max(0, commissionPayable - row.commissionSettled)
+      row.advanceCreated = Math.max(0, row.amountPaid - row.commissionSettled)
       advance = Math.max(0, advance - row.advanceApplied + row.advanceCreated)
       row.finalAdvance = advance
       row.commissionPayable = commissionPayable
       row.finalBalance = row.remainingDue - row.finalAdvance
-      row.status = row.finalAdvance > 0.005 && row.remainingDue <= 0.005 ? 'Advance Available' : row.remainingDue <= 0.005 ? 'Paid' : row.commissionSettled > 0 || row.advanceApplied > 0 ? 'Partial' : 'Unpaid'
+      row.status = row.remainingDue <= 0.005
+        ? (row.advanceApplied > 0.005 || row.finalAdvance > 0.005 ? 'Paid (Advance)' : 'Paid')
+        : row.commissionSettled > 0.005 || row.advanceApplied > 0.005
+        ? 'Partial'
+        : 'Unpaid'
     })
   })
 
@@ -102,7 +110,7 @@ export function buildRepReportModel(raw) {
     return { id: rep.id, repId: rep.id, rep: rep.name || '-', customers: new Set(invs.map((row) => row.customer_id)).size, orders: ords.length, confirmedOrders: ords.filter((row) => ['confirmed','delivered','invoiced'].includes(String(row.status).toLowerCase())).length, invoices: invs.length, quantitySold: sum(invs, (row) => sum(row.items, 'quantity')), sales, grossProfit: sum(invs, 'grossProfit'), averageInvoice: invs.length ? sales / invs.length : 0, collections: sum(invs, 'paid'), outstanding, commissionEarned: sum(period, 'commissionEarned'), commissionPaid: paid, conversionRate: ords.length ? invs.length / ords.length * 100 : 0, returns: sum(returns.filter((row) => String(invoiceMap.get(String(row.invoice_id))?.rep_id) === String(rep.id)), 'total_amount'), lastSaleDate: latest(invs, 'created_at')?.created_at, status: sales <= 0 ? 'No Sales' : 'Active' }
   })
 
-  const advanceRows = reps.map((rep) => { const periods = periodRows.filter((row) => String(row.repId) === String(rep.id)), pays = paymentRows.filter((row) => String(row.repId) === String(rep.id)), due = sum(periods, 'remainingDue'), balance = num(rep.advance_balance); return { id: rep.id, repId: rep.id, rep: rep.name || '-', currentCommissionDue: due, currentAdvanceBalance: balance, advanceCreated: sum(pays, 'advanceCreated'), advanceApplied: sum(periods, 'advanceApplied'), remainingAdvance: balance, netAmountPayable: Math.max(0, due - balance), lastPaymentDate: latest(pays, 'date')?.date, status: balance > 0.005 ? 'Advance Available' : due > 0.005 ? 'Commission Due' : 'Settled' } })
+  const advanceRows = reps.map((rep) => { const periods = periodRows.filter((row) => String(row.repId) === String(rep.id)).sort((a, b) => a.period.localeCompare(b.period)), pays = paymentRows.filter((row) => String(row.repId) === String(rep.id)), due = sum(periods, 'remainingDue'), balance = periods.length > 0 ? num(periods[periods.length - 1].finalAdvance) : num(rep.advance_balance); return { id: rep.id, repId: rep.id, rep: rep.name || '-', currentCommissionDue: due, currentAdvanceBalance: balance, advanceCreated: sum(periods, 'advanceCreated'), advanceApplied: sum(periods, 'advanceApplied'), remainingAdvance: balance, netAmountPayable: Math.max(0, due - balance), lastPaymentDate: latest(pays, 'date')?.date, status: balance > 0.005 ? 'Paid (Advance)' : due > 0.005 ? 'Commission Due' : 'Settled' } })
 
   return { reps, repMap, customers: raw.customers || [], products: raw.products || [], invoices: invoiceRecords, orders, returns, repPayments, salesRows, periodRows, paymentRows, collectionRows, customerRows: [...customerPairs.values()], performanceRows, advanceRows, auditLogs: raw.audit_logs || [], invoiceMap: invoiceRecordMap }
 }
@@ -118,6 +126,106 @@ export function buildRepTransactions(model) {
   const orderIds = new Map(model.orders.map((row) => [String(row.id), row]))
   model.auditLogs.filter((log) => log.action === 'confirm_order').forEach((log) => { const order = orderIds.get(String(log.target_id)); if (order) rows.push({ id: `audit-${log.id}`, date: log.created_at, repId: order.rep_id, rep: model.repMap.get(String(order.rep_id))?.name || '-', type: 'Order Confirmed', reference: log.target_label || orderNo(order), customer: model.customers.find((x) => String(x.id) === String(order.customer_id))?.name || '-', amount: num(order.total), user: actor(log), description: 'Order confirmed' }) })
   return rows.filter((row) => row.date).sort((a, b) => new Date(b.date) - new Date(a.date))
+}
+
+function buildRepPeriodStatusRow(rep, targetYear, monthIndex, repPeriods) {
+  const targetPeriod = `${targetYear}-${String(monthIndex + 1).padStart(2, '0')}`
+  const label = periodLabel(targetPeriod)
+  const periodRow = repPeriods.find((row) => row.period === targetPeriod)
+  const priorPeriods = repPeriods.filter((row) => row.period < targetPeriod)
+  const carryAdvance = priorPeriods.length > 0
+    ? num(priorPeriods[priorPeriods.length - 1].finalAdvance)
+    : repPeriods.length === 0
+    ? num(rep.advance_balance)
+    : 0
+
+  const commissionEarned = num(periodRow?.commissionEarned)
+  const amountPaid = num(periodRow?.amountPaid)
+  const commissionSettled = num(periodRow?.commissionSettled)
+  const advanceApplied = num(periodRow?.advanceApplied)
+  const remainingDue = num(periodRow?.remainingDue)
+  const finalAdvance = periodRow ? num(periodRow.finalAdvance) : carryAdvance
+  const paymentRows = periodRow?.paymentRows || []
+  const lastPay = latest(paymentRows, 'paid_at') || latest(paymentRows, 'created_at')
+  const paymentMethod = [...new Set(paymentRows.map((p) => p.method).filter(Boolean))].join(', ') || '-'
+
+  let status = 'No Commission'
+  let paidThisMonth = 'No Commission'
+  if (commissionEarned > 0.005 || amountPaid > 0.005) {
+    if (remainingDue <= 0.005) {
+      const paidLabel = (advanceApplied > 0.005 || finalAdvance > 0.005) ? 'Paid (Advance)' : 'Paid'
+      status = paidLabel
+      paidThisMonth = paidLabel
+    } else if (commissionSettled > 0.005 || advanceApplied > 0.005) {
+      status = 'Partial'
+      paidThisMonth = 'Partial'
+    } else {
+      status = 'Unpaid'
+      paidThisMonth = 'Unpaid'
+    }
+  }
+
+  return {
+    id: `${rep.id}|${targetPeriod}`,
+    repId: rep.id,
+    rep: rep.name || '-',
+    period: targetPeriod,
+    month: label,
+    monthName: COMMISSION_MONTHS[monthIndex],
+    year: targetYear,
+    monthIndex,
+    invoiceCount: num(periodRow?.invoiceCount),
+    totalSales: num(periodRow?.totalSales),
+    totalReturns: num(periodRow?.totalReturns),
+    netSales: num(periodRow?.netSales),
+    commissionRate: periodRow ? num(periodRow.commissionRate) : getCommissionRate(rep.name) * 100,
+    commissionEarned,
+    previousAdvance: periodRow ? num(periodRow.previousAdvance) : carryAdvance,
+    advanceApplied,
+    commissionPayable: num(periodRow?.commissionPayable),
+    amountPaid,
+    commissionSettled,
+    advanceCreated: num(periodRow?.advanceCreated),
+    remainingDue,
+    finalAdvance,
+    paymentMethod,
+    lastPaymentDate: lastPay?.paid_at || lastPay?.created_at || '',
+    paidThisMonth,
+    status,
+  }
+}
+
+export function buildRepMonthlyPaymentStatus(model, year, monthIndex, now = new Date()) {
+  if (!model) return []
+  const targetYear = Number(year) || now.getFullYear()
+  const isFullYear = monthIndex === 'all' || monthIndex === null || monthIndex === undefined || monthIndex === ''
+  const reps = [...(model.reps || [])].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
+
+  if (!isFullYear) {
+    const targetMonthIndex = Number(monthIndex)
+    return reps.map((rep) => {
+      const repPeriods = (model.periodRows || [])
+        .filter((row) => String(row.repId) === String(rep.id))
+        .sort((a, b) => a.period.localeCompare(b.period))
+      return buildRepPeriodStatusRow(rep, targetYear, targetMonthIndex, repPeriods)
+    })
+  }
+
+  const defaultMaxMonth = targetYear === now.getFullYear() ? now.getMonth() : targetYear > now.getFullYear() ? 0 : 11
+  const rows = []
+  reps.forEach((rep) => {
+    const repPeriods = (model.periodRows || [])
+      .filter((row) => String(row.repId) === String(rep.id))
+      .sort((a, b) => a.period.localeCompare(b.period))
+    const maxDataMonth = repPeriods
+      .filter((row) => Number(row.year) === targetYear)
+      .reduce((max, row) => Math.max(max, Number(row.monthIndex)), -1)
+    const maxMonth = Math.max(defaultMaxMonth, maxDataMonth)
+    for (let m = 0; m <= maxMonth; m += 1) {
+      rows.push(buildRepPeriodStatusRow(rep, targetYear, m, repPeriods))
+    }
+  })
+  return rows
 }
 
 export const inDateRange = (value, from, to) => { const valueDay = day(value); return (!from || valueDay >= from) && (!to || valueDay <= to) }

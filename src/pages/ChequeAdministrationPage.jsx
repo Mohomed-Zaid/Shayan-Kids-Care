@@ -363,9 +363,12 @@ export default function ChequeAdministrationPage() {
     try {
       const { error: err } = await supabase
         .from('customer_cheques')
-        .update({ status: STATUS_DEPOSITED, deposited_at: nowIso, deposit_bank_id: depositBankId })
+        .update({ status: STATUS_DEPOSITED, deposited_at: nowIso })
         .in('id', ids)
       if (err) throw err
+
+      const refNos = selectedRows.map((r) => `RCV-CHQ-${r.id}`)
+      await supabase.from('bank_reconciliation_items').delete().in('ref_no', refNos)
 
       const reconPayload = selectedRows.map((r) => {
         const customerName = r.customers?.name ?? ''

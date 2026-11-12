@@ -181,7 +181,7 @@ export default function BankReconciliationPage() {
       // 2. Fetch deposited customer cheques
       const chequeQuery = supabase
         .from('customer_cheques')
-        .select('id, cheque_date, cheque_number, amount, bank_name, bank_code, deposit_bank_id, deposited_at, status, customers(name)')
+        .select('id, cheque_date, cheque_number, amount, bank_name, bank_code, deposited_at, status, customers(name)')
         .eq('status', 'deposited')
         .limit(2000)
 
@@ -222,8 +222,7 @@ export default function BankReconciliationPage() {
         let s = r.reconciled ? 100 : 0
         const refU = String(r.ref_no || '').trim().toUpperCase()
         if (refU.startsWith('RCV-CHQ-')) {
-          const chq = chequesByIdMap.get(String(r.ref_no || '').trim().slice(8))
-          if (chq?.deposit_bank_id && String(r.bank_id) === String(chq.deposit_bank_id)) s += 50
+          if (r.bank_id && String(r.bank_id) === String(activeBankId)) s += 50
         }
         return s
       }
@@ -262,15 +261,6 @@ export default function BankReconciliationPage() {
 
       // Helper to check if a row in bank_reconciliation_items matches the target bank
       const matchesTargetBank = (row) => {
-        // If it's a customer cheque deposit with an explicit deposit_bank_id, strictly respect deposit_bank_id
-        const refU = String(row.ref_no || '').trim().toUpperCase()
-        if (refU.startsWith('RCV-CHQ-')) {
-          const chq = chequesByIdMap.get(String(row.ref_no || '').trim().slice(8))
-          if (chq?.deposit_bank_id) {
-            return String(chq.deposit_bank_id) === String(activeBankId)
-          }
-        }
-
         if (String(row.bank_id) === String(activeBankId)) return true
         if (targetCode && String(row.bank_id).toLowerCase() === targetCode) return true
         if (targetBankCode && String(row.bank_id) === targetBankCode) return true
@@ -291,10 +281,9 @@ export default function BankReconciliationPage() {
 
       // 1. Identify missing customer cheques for this bank
       const missingCheques = depositedCheques.filter((c) => {
-        const matchesBank = c.deposit_bank_id
-          ? String(c.deposit_bank_id) === String(activeBankId)
-          : (targetBankCode && String(c.bank_code) === targetBankCode) ||
-            matchesPaymentToBank(c.bank_name, c.cheque_number, targetBank)
+        const matchesBank =
+          (targetBankCode && String(c.bank_code) === targetBankCode) ||
+          matchesPaymentToBank(c.bank_name, c.cheque_number, targetBank)
 
         if (!matchesBank) return false
 

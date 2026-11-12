@@ -182,6 +182,7 @@ export function exportToPDF(elementId, filename = 'report.pdf', options = {}) {
 
   const orientation = options.orientation ?? (element.scrollWidth > 900 ? 'landscape' : 'portrait');
   const format = options.format ?? 'a4';
+  cloned.classList.add(`pdf-orientation-${orientation}`);
   const opt = {
     margin: options.margin ?? 0.25,
     filename: filename,
@@ -192,7 +193,7 @@ export function exportToPDF(elementId, filename = 'report.pdf', options = {}) {
       backgroundColor: '#ffffff',
       scrollX: 0,
       scrollY: 0,
-      windowWidth: Math.max(cloned.scrollWidth, cloned.offsetWidth, 1060),
+      windowWidth: Math.max(cloned.scrollWidth, cloned.offsetWidth, orientation === 'landscape' ? 1074 : 746),
     },
     jsPDF: { unit: 'in', format, orientation },
     pagebreak: { mode: ['css', 'legacy'], before: ['.pdf-page-break'], avoid: ['tr', '.pdf-avoid-break'] },
