@@ -165,24 +165,6 @@ export default function InvoiceEditPage() {
       return
     }
 
-    // Check stock availability (accounting for original quantities)
-    const stockErrors = []
-    for (const l of cleanedLines) {
-      const product = productById.get(l.product_id)
-      const available = product?.stock ?? 0
-      const originalQty = originalItems
-        .filter((oi) => String(oi.product_id) === String(l.product_id))
-        .reduce((sum, oi) => sum + (oi.quantity ?? 0), 0)
-      const needed = l.quantity - originalQty
-      if (needed > available) {
-        stockErrors.push(`${product?.name ?? 'Product'}: requested ${l.quantity}, only ${available + originalQty} available (${originalQty} already on invoice)`)
-      }
-    }
-    if (stockErrors.length > 0) {
-      setError('Insufficient stock: ' + stockErrors.join('; '))
-      return
-    }
-
     setSaving(true)
     try {
       if (linkedOrderId) {
@@ -207,14 +189,6 @@ export default function InvoiceEditPage() {
         navigate(`/invoices/${id}`, { replace: true })
         return
       }
-
-      // Restore stock from original items
-      const restoreStocks = originalItems.map((oi) => {
-        const product = productById.get(oi.product_id)
-        const currentStock = product?.stock ?? 0
-        return supabase.from('products').update({ stock: currentStock + (oi.quantity ?? 0) }).eq('id', oi.product_id)
-      })
-      await Promise.all(restoreStocks)
 
       // Update invoice header
       const { error: invErr } = await supabase
@@ -246,16 +220,30 @@ export default function InvoiceEditPage() {
       const { error: itemsErr } = await supabase.from('invoice_items').insert(itemsPayload)
       if (itemsErr) throw itemsErr
 
-      // Deduct stock for new items
-      const deductStocks = cleanedLines.map((l) => {
-        const product = productById.get(l.product_id)
-        const currentStock = (product?.stock ?? 0) + originalItems
-          .filter((oi) => String(oi.product_id) === String(l.product_id))
-          .reduce((sum, oi) => sum + (oi.quantity ?? 0), 0)
-        const newStock = Math.max(0, currentStock - l.quantity)
-        return supabase.from('products').update({ stock: newStock }).eq('id', l.product_id)
-      })
-      await Promise.all(deductStocks)
+      // Adjust stock (allow negative stock for backorders)
+      const oldQtyByProduct = new Map()
+      for (const oi of originalItems) {
+        if (!oi.product_id) continue
+        oldQtyByProduct.set(oi.product_id, (oldQtyByProduct.get(oi.product_id) || 0) + Number(oi.quantity || 0))
+      }
+      const newQtyByProduct = new Map()
+      for (const l of cleanedLines) {
+        if (!l.product_id) continue
+        newQtyByProduct.set(l.product_id, (newQtyByProduct.get(l.product_id) || 0) + Number(l.quantity || 0))
+      }
+      const allProductIds = new Set([...oldQtyByProduct.keys(), ...newQtyByProduct.keys()])
+      const stockUpdates = []
+      for (const pId of allProductIds) {
+        const product = productById.get(pId)
+        const currentStock = product?.stock ?? 0
+        const delta = (oldQtyByProduct.get(pId) || 0) - (newQtyByProduct.get(pId) || 0)
+        if (delta !== 0) {
+          stockUpdates.push(
+            supabase.from('products').update({ stock: currentStock + delta }).eq('id', pId)
+          )
+        }
+      }
+      await Promise.all(stockUpdates)
 
       toast.success('Invoice updated successfully')
       logAction({ action: 'edit_invoice', targetType: 'invoice', targetId: id })

@@ -310,20 +310,6 @@ export default function InvoiceCreatePage() {
       return
     }
 
-    // Check stock availability
-    const stockErrors = []
-    for (const l of cleanedLines) {
-      const product = productById.get(l.product_id)
-      const available = product?.stock ?? 0
-      if (l.quantity > available) {
-        stockErrors.push(`${product?.name ?? 'Product'}: requested ${l.quantity}, only ${available} in stock`)
-      }
-    }
-    if (stockErrors.length > 0) {
-      setError('Insufficient stock: ' + stockErrors.join('; '))
-      return
-    }
-
     setSaving(true)
     try {
       const { data: invoice, error: invErr } = await supabase
@@ -353,12 +339,16 @@ export default function InvoiceCreatePage() {
       const { error: itemsErr } = await supabase.from('invoice_items').insert(itemsPayload)
       if (itemsErr) throw itemsErr
 
-      // Decrease stock for each product
-      const stockUpdates = cleanedLines.map((l) => {
-        const product = productById.get(l.product_id)
+      // Decrease stock for each product (allowing negative stock for backorders)
+      const qtyByProduct = new Map()
+      for (const l of cleanedLines) {
+        qtyByProduct.set(l.product_id, (qtyByProduct.get(l.product_id) || 0) + Number(l.quantity || 0))
+      }
+      const stockUpdates = Array.from(qtyByProduct.entries()).map(([pId, qty]) => {
+        const product = productById.get(pId)
         const currentStock = product?.stock ?? 0
-        const newStock = Math.max(0, currentStock - l.quantity)
-        return supabase.from('products').update({ stock: newStock }).eq('id', l.product_id)
+        const newStock = currentStock - qty
+        return supabase.from('products').update({ stock: newStock }).eq('id', pId)
       })
       await Promise.all(stockUpdates)
 
