@@ -181,3 +181,4 @@ const USER_MAP = {
 4. Deploy — Vercel auto-detects Vite
 
 If deploys fail with “not a member of the team”, invite the GitHub user as a **Vercel team member** (or connect their GitHub under Vercel account settings), or deploy from an account that owns the Vercel project.
+done
