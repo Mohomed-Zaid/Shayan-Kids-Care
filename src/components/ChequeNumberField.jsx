@@ -8,12 +8,16 @@ const BASE_INPUT =
  * Auto-formatted cheque number input (XXXXXX-XXXX-XXX) with inline validation.
  * onChange receives { cheque_number, bank_code, bank_name }.
  */
-export default function ChequeNumberField({ value, onChange, label = 'Cheque Number', className = '', error = '' }) {
+export default function ChequeNumberField({ value, onChange, onComplete = null, inputRef = null, label = 'Cheque Number', className = '', error = '' }) {
   const validation = useMemo(() => getChequeNumberValidation(value), [value])
 
   const handleChange = (e) => {
-    const { formatted, bankCode, bankName } = parseChequeNumberInput(e.target.value)
+    const prevDigits = String(value || '').replace(/[^0-9]/g, '')
+    const { formatted, digits, bankCode, bankName } = parseChequeNumberInput(e.target.value)
     onChange({ cheque_number: formatted, bank_code: bankCode, bank_name: bankName })
+    if (digits.length === 13 && prevDigits.length < 13 && onComplete) {
+      onComplete()
+    }
   }
 
   const borderClass = error
@@ -26,6 +30,7 @@ export default function ChequeNumberField({ value, onChange, label = 'Cheque Num
         <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">{label}</div>
       ) : null}
       <input
+        ref={inputRef}
         type="text"
         inputMode="numeric"
         autoComplete="off"

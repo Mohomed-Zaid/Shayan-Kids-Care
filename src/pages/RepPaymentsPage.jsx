@@ -103,6 +103,7 @@ export default function RepPaymentsPage() {
     bank_name_cheque: '',
     sendSms: true,
   })
+  const payAmountRef = useRef(null)
 
   const [receiptData, setReceiptData] = useState(null)
   const [histOpen, setHistOpen] = useState(false)
@@ -883,6 +884,7 @@ export default function RepPaymentsPage() {
                       Payment amount
                     </label>
                     <input
+                      ref={payAmountRef}
                       value={payForm.amount}
                       onChange={(e) => {
                         const raw = e.target.value.replace(/[^0-9.]/g, '')
@@ -969,6 +971,10 @@ export default function RepPaymentsPage() {
                     <ChequeNumberField
                       label="Cheque number"
                       value={payForm.cheque_number}
+                      onComplete={() => {
+                        payAmountRef.current?.focus()
+                        payAmountRef.current?.select?.()
+                      }}
                       onChange={({ cheque_number, bank_name }) =>
                         setPayForm((p) => ({
                           ...p,

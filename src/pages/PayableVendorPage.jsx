@@ -61,6 +61,8 @@ export default function PayableVendorPage() {
   ])
 
   const [payHistOpen, setPayHistOpen] = useState(false)
+  const chequeAmountRefs = useRef({})
+  const chequeNumberRefs = useRef({})
   const [payHistPurchaseId, setPayHistPurchaseId] = useState('')
   const [editingPaymentId, setEditingPaymentId] = useState('')
   const [editPayForm, setEditPayForm] = useState({ paid_at: '', amount: '' })
@@ -984,8 +986,14 @@ export default function PayableVendorPage() {
                                   : ''
                                 return (
                                   <ChequeNumberField
+                                    inputRef={(el) => { chequeNumberRefs.current[idx] = el }}
                                     value={c.cheque_number}
                                     error={chequeError}
+                                    onComplete={() => {
+                                      const el = chequeAmountRefs.current[idx]
+                                      el?.focus()
+                                      el?.select?.()
+                                    }}
                                     onChange={({ cheque_number, bank_code, bank_name }) =>
                                       setCheques((prev) =>
                                         prev.map((x, i) =>
@@ -1002,6 +1010,7 @@ export default function PayableVendorPage() {
                             <div className="sm:col-span-2">
                               <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Amount</div>
                               <input
+                                ref={(el) => { chequeAmountRefs.current[idx] = el }}
                                 value={c.amount}
                                 onChange={(e) => {
                                   const raw = e.target.value.replace(/[^0-9.]/g, '')
@@ -1012,12 +1021,29 @@ export default function PayableVendorPage() {
                                     prev.map((x, i) => (i === idx ? { ...x, amount: formatted } : x))
                                   )
                                 }}
+                                onKeyDown={(e) => {
+                                  if (e.key !== 'Enter') return
+                                  e.preventDefault()
+                                  const nextIdx = cheques.length
+                                  setCheques((prev) => [
+                                    ...prev,
+                                    {
+                                      cheque_date: new Date().toISOString().slice(0, 10),
+                                      cheque_number: '',
+                                      amount: '',
+                                    },
+                                  ])
+                                  setTimeout(() => {
+                                    chequeNumberRefs.current[nextIdx]?.focus()
+                                  }, 0)
+                                }}
                                 placeholder="0.00"
                                 className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
                               />
                             </div>
                           </div>
 
+                          {idx === cheques.length - 1 && (
                           <div className="grid grid-cols-1 sm:grid-cols-7 gap-2">
                             <div className="sm:col-span-2">
                               <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Bank Code</div>
@@ -1038,6 +1064,7 @@ export default function PayableVendorPage() {
                               />
                             </div>
                           </div>
+                          )}
 
                           <div className="flex justify-end">
                             {cheques.length > 1 && (
