@@ -1009,6 +1009,7 @@ export default function PayableVendorPage() {
                             </div>
                             <div className="sm:col-span-2">
                               <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Amount</div>
+                              <div className="flex items-center gap-1.5">
                               <input
                                 ref={(el) => { chequeAmountRefs.current[idx] = el }}
                                 value={c.amount}
@@ -1040,6 +1041,18 @@ export default function PayableVendorPage() {
                                 placeholder="0.00"
                                 className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
                               />
+                              {cheques.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setCheques((prev) => prev.filter((_, i) => i !== idx))}
+                                  title="Remove cheque"
+                                  aria-label="Remove cheque"
+                                  className="shrink-0 p-2 rounded-lg border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                >
+                                  <X size={16} />
+                                </button>
+                              )}
+                              </div>
                             </div>
                           </div>
 
@@ -1065,18 +1078,6 @@ export default function PayableVendorPage() {
                             </div>
                           </div>
                           )}
-
-                          <div className="flex justify-end">
-                            {cheques.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => setCheques((prev) => prev.filter((_, i) => i !== idx))}
-                                className="px-3 py-2 rounded-lg text-xs font-bold border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                              >
-                                Remove
-                              </button>
-                            )}
-                          </div>
                         </div>
                       ))}
                     </div>

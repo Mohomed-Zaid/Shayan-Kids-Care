@@ -18,7 +18,7 @@ import ChequeNumberField, { ChequeBankNameDisplay } from '../components/ChequeNu
 import CompanyPhoneLines from '../components/CompanyPhoneLines'
 import ReceiptPaymentStatus from '../components/ReceiptPaymentStatus'
 import ControlledDateField from '../components/ControlledDateField'
-import { Search, Eye, FileText, Filter, Plus, RotateCcw } from 'lucide-react'
+import { Search, Eye, FileText, Filter, Plus, RotateCcw, X } from 'lucide-react'
 import html2pdf from 'html2pdf.js'
 import { sendSingleSMS } from '../lib/sms'
 import { calculateAgingDays, getAgingBucket, getAgingColorClasses, calculateAgingSummary } from '../lib/agingCalculations'
@@ -1061,37 +1061,50 @@ export default function ReceivablesPage() {
 
                             <div className="sm:col-span-2">
                               <div className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1">Cheque Amount</div>
-                              <input
-                                ref={(el) => { chequeAmountRefs.current[idx] = el }}
-                                value={c.amount}
-                                onChange={(e) => {
-                                  const raw = e.target.value.replace(/[^0-9.]/g, '')
-                                  const parts = raw.split('.')
-                                  const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
-                                  const formatted = parts.length > 1 ? intPart + '.' + parts[1].slice(0, 2) : intPart
-                                  setCheques((prev) => prev.map((x, i) => (i === idx ? { ...x, amount: formatted } : x)))
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key !== 'Enter') return
-                                  e.preventDefault()
-                                  const nextIdx = cheques.length
-                                  setCheques((prev) => [
-                                    ...prev,
-                                    {
-                                      cheque_date: new Date().toISOString().slice(0, 10),
-                                      cheque_number: '',
-                                      bank_code: '',
-                                      bank_name: '',
-                                      amount: '',
-                                    },
-                                  ])
-                                  setTimeout(() => {
-                                    chequeNumberRefs.current[nextIdx]?.focus()
-                                  }, 0)
-                                }}
-                                placeholder="0.00"
-                                className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
-                              />
+                              <div className="flex items-center gap-1.5">
+                                <input
+                                  ref={(el) => { chequeAmountRefs.current[idx] = el }}
+                                  value={c.amount}
+                                  onChange={(e) => {
+                                    const raw = e.target.value.replace(/[^0-9.]/g, '')
+                                    const parts = raw.split('.')
+                                    const intPart = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+                                    const formatted = parts.length > 1 ? intPart + '.' + parts[1].slice(0, 2) : intPart
+                                    setCheques((prev) => prev.map((x, i) => (i === idx ? { ...x, amount: formatted } : x)))
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key !== 'Enter') return
+                                    e.preventDefault()
+                                    const nextIdx = cheques.length
+                                    setCheques((prev) => [
+                                      ...prev,
+                                      {
+                                        cheque_date: new Date().toISOString().slice(0, 10),
+                                        cheque_number: '',
+                                        bank_code: '',
+                                        bank_name: '',
+                                        amount: '',
+                                      },
+                                    ])
+                                    setTimeout(() => {
+                                      chequeNumberRefs.current[nextIdx]?.focus()
+                                    }, 0)
+                                  }}
+                                  placeholder="0.00"
+                                  className="w-full px-3 py-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white"
+                                />
+                                {cheques.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setCheques((prev) => prev.filter((_, i) => i !== idx))}
+                                    title="Remove cheque"
+                                    aria-label="Remove cheque"
+                                    className="shrink-0 p-2 rounded-lg border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                  >
+                                    <X size={16} />
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -1118,17 +1131,6 @@ export default function ReceivablesPage() {
                             </div>
                           )}
 
-                          <div className="flex justify-end">
-                            {cheques.length > 1 ? (
-                              <button
-                                type="button"
-                                onClick={() => setCheques((prev) => prev.filter((_, i) => i !== idx))}
-                                className="px-3 py-2 rounded-lg text-xs font-bold border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                              >
-                                Remove
-                              </button>
-                            ) : null}
-                          </div>
                         </div>
                       ))}
                     </div>
