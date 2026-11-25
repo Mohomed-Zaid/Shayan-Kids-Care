@@ -284,6 +284,10 @@ export default function ReceivableCustomerPage() {
     return paymentsForCustomer.filter((p) => String(p.method || '').toLowerCase() === 'cheque')
   }, [paymentsForCustomer])
 
+  const inHandCheques = useMemo(() => {
+    return customerCheques.filter((c) => c.status === 'in_hand')
+  }, [customerCheques])
+
   const handedOverCheques = useMemo(() => {
     return customerCheques.filter((c) => c.status === 'handed_over' || c.status === 'returned')
   }, [customerCheques])
@@ -820,6 +824,28 @@ export default function ReceivableCustomerPage() {
           Add Payment
         </button>
       </div>
+
+      {inHandCheques.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 p-3 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl text-xs">
+          <span className="font-semibold text-emerald-800 dark:text-emerald-300">
+            Cheques In Hand ({inHandCheques.length}):
+          </span>
+          {inHandCheques.map((c) => (
+            <div
+              key={c.id}
+              className="inline-flex items-center gap-2 px-2.5 py-1 bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800/60 rounded-lg shadow-xs"
+            >
+              <span className="font-mono font-medium text-slate-800 dark:text-slate-200">
+                {c.cheque_number}
+              </span>
+              {c.cheque_date ? (
+                <span className="text-slate-500 dark:text-slate-400">{c.cheque_date}</span>
+              ) : null}
+              <span className="font-semibold text-slate-900 dark:text-white">{fmt(c.amount)}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {canHandoverAndRestore && handedOverCheques.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl text-xs">

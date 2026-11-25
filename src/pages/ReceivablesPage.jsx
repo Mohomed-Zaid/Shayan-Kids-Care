@@ -553,21 +553,23 @@ export default function ReceivablesPage() {
         const payload = []
         let chequeRemaining = totalAmount
         for (const c of chequeRows) {
-          let chequeAlloc = c.amount
+          let chequeAlloc = Math.round(Number(c.amount) * 100) / 100
           for (const p of payments) {
-            if (chequeAlloc <= 0) break
-            const alloc = Math.min(chequeAlloc, p.amount)
+            if (chequeAlloc <= 0.0001) break
+            if (p.amount <= 0.0001) continue
+            const alloc = Math.round(Math.min(chequeAlloc, p.amount) * 100) / 100
+            if (alloc <= 0) continue
             payload.push({
               invoice_id: p.invoice_id,
-              amount: Math.round(alloc * 100) / 100,
+              amount: alloc,
               paid_at: c.cheque_date,
               method: 'cheque',
               bank_name: c.bank_name || null,
               reference: c.cheque_number,
               note: payForm.note.trim() || null,
             })
-            p.amount -= alloc
-            chequeAlloc -= alloc
+            p.amount = Math.round((p.amount - alloc) * 100) / 100
+            chequeAlloc = Math.round((chequeAlloc - alloc) * 100) / 100
           }
         }
         const reg = await registerReceivableChequesInHand(supabase, {
